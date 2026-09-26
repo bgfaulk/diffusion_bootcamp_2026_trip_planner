@@ -9,3 +9,4 @@ data/
 node_modules/
 .env*.local
 vercel-env-pull.log
+.vercel

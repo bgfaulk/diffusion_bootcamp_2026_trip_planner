@@ -2,7 +2,7 @@ import { getUser } from "@/lib/auth";
 import { ensureSchema, getSql } from "@/lib/db";
 
 export async function GET() {
-  if (!process.env.DIFFUSION_DATABASE_URL && !process.env.DATABASE_URL) return Response.json({ user: null });
+  if (!process.env.DIFFUSION_DATABASE_URL && !process.env.DIFFUSION_DATABASE_DATABASE_URL && !process.env.DATABASE_URL) return Response.json({ user: null });
   await ensureSchema();
   const user = await getUser();
   if (!user) return Response.json({ user: null });
