@@ -1,10 +1,21 @@
 import { requireUser } from "@/lib/auth";
 import { asString, jsonError } from "@/lib/validation";
 
+function googleReferer(request: Request) {
+  const referer = request.headers.get("referer");
+  if (referer) {
+    try {
+      return `${new URL(referer).origin}/`;
+    } catch {}
+  }
+  const host = request.headers.get("host");
+  return host ? `https://${host}/` : "http://localhost:3000/";
+}
+
 export async function POST(request: Request) {
   try {
     await requireUser();
-    const key = process.env.GOOGLE_MAPS_API_KEY;
+    const key = process.env.GOOGLE_MAPS_API_KEY?.trim();
     if (!key) throw new Error("Google Maps API key is not configured");
     const body = await request.json();
     const placeId = asString(body.placeId, 160);
@@ -12,10 +23,14 @@ export async function POST(request: Request) {
     const response = await fetch(`https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}`, {
       headers: {
         "X-Goog-Api-Key": key,
-        "X-Goog-FieldMask": "id,formattedAddress,location,displayName"
+        "X-Goog-FieldMask": "id,formattedAddress,location,displayName",
+        "Referer": googleReferer(request)
       }
     });
-    if (!response.ok) throw new Error("Google Place details failed");
+    if (!response.ok) {
+      console.warn("Google Place details failed", response.status, await response.text());
+      throw new Error(`Google Place details failed (${response.status})`);
+    }
     const data = await response.json();
     return Response.json({
       placeId: data.id,
