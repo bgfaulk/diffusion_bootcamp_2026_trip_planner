@@ -32,110 +32,115 @@ export function hasDatabaseUrl() {
 export async function ensureSchema() {
   if (schemaReady) return;
   const sql = getSql();
-  await sql`
-    CREATE TABLE IF NOT EXISTS users (
-      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      email TEXT UNIQUE NOT NULL,
-      password_hash TEXT NOT NULL,
-      password_salt TEXT NOT NULL,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-    )
-  `;
-  await sql`
-    CREATE TABLE IF NOT EXISTS sessions (
-      token_hash TEXT PRIMARY KEY,
-      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      expires_at TIMESTAMPTZ NOT NULL,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-    )
-  `;
-  await sql`
-    CREATE TABLE IF NOT EXISTS settings (
-      user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-      profile_name TEXT,
-      trip_name TEXT,
-      home_address TEXT,
-      home_place_id TEXT,
-      home_lat DOUBLE PRECISION,
-      home_lng DOUBLE PRECISION,
-      training_location TEXT,
-      training_place_id TEXT,
-      training_lat DOUBLE PRECISION,
-      training_lng DOUBLE PRECISION,
-      theme TEXT NOT NULL DEFAULT 'light',
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-    )
-  `;
-  await sql`
-    CREATE TABLE IF NOT EXISTS list_items (
-      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      page TEXT NOT NULL,
-      title TEXT NOT NULL,
-      checked BOOLEAN NOT NULL DEFAULT false,
-      position INTEGER NOT NULL DEFAULT 0,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-    )
-  `;
-  await sql`
-    CREATE TABLE IF NOT EXISTS photos (
-      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      spot TEXT NOT NULL,
-      caption TEXT,
-      content_type TEXT NOT NULL,
-      image_base64 TEXT NOT NULL,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-    )
-  `;
-  await sql`
-    CREATE TABLE IF NOT EXISTS itinerary (
-      user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-      instructions TEXT,
-      response TEXT,
-      saved_plan TEXT,
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-    )
-  `;
-  await sql`
-    CREATE TABLE IF NOT EXISTS trip_info (
-      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      category TEXT NOT NULL,
-      title TEXT NOT NULL,
-      provider TEXT,
-      confirmation_number TEXT,
-      start_at TEXT,
-      end_at TEXT,
-      address TEXT,
-      phone TEXT,
-      notes TEXT,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-    )
-  `;
-  await sql`
-    CREATE TABLE IF NOT EXISTS trip_documents (
-      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      label TEXT NOT NULL,
-      file_name TEXT NOT NULL,
-      content_type TEXT NOT NULL,
-      file_base64 TEXT NOT NULL,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-    )
-  `;
-  await sql`
-    CREATE TABLE IF NOT EXISTS trip_import (
-      user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-      instructions TEXT,
-      response TEXT,
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-    )
-  `;
-  schemaReady = true;
+  await sql`SELECT pg_advisory_lock(2026092601)`;
+  try {
+    await sql`
+      CREATE TABLE IF NOT EXISTS users (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        email TEXT UNIQUE NOT NULL,
+        password_hash TEXT NOT NULL,
+        password_salt TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )
+    `;
+    await sql`
+      CREATE TABLE IF NOT EXISTS sessions (
+        token_hash TEXT PRIMARY KEY,
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        expires_at TIMESTAMPTZ NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )
+    `;
+    await sql`
+      CREATE TABLE IF NOT EXISTS settings (
+        user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        profile_name TEXT,
+        trip_name TEXT,
+        home_address TEXT,
+        home_place_id TEXT,
+        home_lat DOUBLE PRECISION,
+        home_lng DOUBLE PRECISION,
+        training_location TEXT,
+        training_place_id TEXT,
+        training_lat DOUBLE PRECISION,
+        training_lng DOUBLE PRECISION,
+        theme TEXT NOT NULL DEFAULT 'light',
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )
+    `;
+    await sql`
+      CREATE TABLE IF NOT EXISTS list_items (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        page TEXT NOT NULL,
+        title TEXT NOT NULL,
+        checked BOOLEAN NOT NULL DEFAULT false,
+        position INTEGER NOT NULL DEFAULT 0,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )
+    `;
+    await sql`
+      CREATE TABLE IF NOT EXISTS photos (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        spot TEXT NOT NULL,
+        caption TEXT,
+        content_type TEXT NOT NULL,
+        image_base64 TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )
+    `;
+    await sql`
+      CREATE TABLE IF NOT EXISTS itinerary (
+        user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        instructions TEXT,
+        response TEXT,
+        saved_plan TEXT,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )
+    `;
+    await sql`
+      CREATE TABLE IF NOT EXISTS trip_info (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        category TEXT NOT NULL,
+        title TEXT NOT NULL,
+        provider TEXT,
+        confirmation_number TEXT,
+        start_at TEXT,
+        end_at TEXT,
+        address TEXT,
+        phone TEXT,
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )
+    `;
+    await sql`
+      CREATE TABLE IF NOT EXISTS trip_documents (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        label TEXT NOT NULL,
+        file_name TEXT NOT NULL,
+        content_type TEXT NOT NULL,
+        file_base64 TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )
+    `;
+    await sql`
+      CREATE TABLE IF NOT EXISTS trip_import (
+        user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        instructions TEXT,
+        response TEXT,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )
+    `;
+    schemaReady = true;
+  } finally {
+    await sql`SELECT pg_advisory_unlock(2026092601)`;
+  }
 }
 
 export async function seedStarterItems(userId: string) {
