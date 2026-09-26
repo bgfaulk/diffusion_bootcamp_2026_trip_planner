@@ -1,11 +1,24 @@
 import { getUser } from "@/lib/auth";
 import { ensureSchema, getSql, hasDatabaseUrl } from "@/lib/db";
 
+function emptyBootstrap() {
+  return Response.json({
+    user: null,
+    settings: null,
+    items: [],
+    photos: {},
+    itinerary: null,
+    tripInfo: [],
+    tripDocuments: [],
+    tripImport: null
+  });
+}
+
 export async function GET() {
-  if (!hasDatabaseUrl()) return Response.json({ user: null });
+  if (!hasDatabaseUrl()) return emptyBootstrap();
   await ensureSchema();
   const user = await getUser();
-  if (!user) return Response.json({ user: null });
+  if (!user) return emptyBootstrap();
   const sql = getSql();
   const [settings, items, photos, itinerary, tripInfo, tripDocuments, tripImport] = await Promise.all([
     sql`SELECT * FROM settings WHERE user_id = ${user.id}`,

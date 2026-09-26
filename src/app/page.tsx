@@ -48,6 +48,17 @@ type AppState = {
   tripImport: null | { instructions?: string; response?: string };
 };
 
+const emptyAppState: AppState = {
+  user: null,
+  settings: null,
+  items: [],
+  photos: {},
+  itinerary: null,
+  tripInfo: [],
+  tripDocuments: [],
+  tripImport: null
+};
+
 const pageLabels: Record<string, string> = {
   overview: "Overview",
   prechecks: "Pre-checks",
@@ -85,7 +96,7 @@ async function api(path: string, options: RequestInit = {}) {
 }
 
 export default function Home() {
-  const [data, setData] = useState<AppState>({ user: null, settings: null, items: [], photos: {}, itinerary: null, tripInfo: [], tripDocuments: [], tripImport: null });
+  const [data, setData] = useState<AppState>(emptyAppState);
   const [page, setPage] = useState("overview");
   const [profileOpen, setProfileOpen] = useState(false);
   const [loginMode, setLoginMode] = useState<"login" | "reset">("login");
@@ -95,7 +106,7 @@ export default function Home() {
 
   async function load() {
     const next = await api("/api/bootstrap");
-    setData(next);
+    setData(normalizeAppState(next));
     if (next.settings?.theme) document.documentElement.dataset.theme = next.settings.theme;
   }
 
@@ -105,7 +116,7 @@ export default function Home() {
   const profileName = data.settings?.profile_name || data.user?.email?.split("@")[0] || "Traveler";
   const tripName = data.settings?.trip_name || "San Francisco trip planner";
   const initials = profileName.charAt(0).toUpperCase();
-  const complete = data.items.filter(item => item.checked).length;
+  const complete = (data.items || []).filter(item => item.checked).length;
 
   async function signIn(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -184,6 +195,20 @@ export default function Home() {
       {viewer && <PhotoViewer spot={viewer} photos={data.photos} onClose={() => setViewer(null)} />}
     </div>
   );
+}
+
+function normalizeAppState(next: Partial<AppState>): AppState {
+  return {
+    ...emptyAppState,
+    ...next,
+    settings: next.settings || null,
+    items: Array.isArray(next.items) ? next.items : [],
+    photos: next.photos && typeof next.photos === "object" ? next.photos : {},
+    itinerary: next.itinerary || null,
+    tripInfo: Array.isArray(next.tripInfo) ? next.tripInfo : [],
+    tripDocuments: Array.isArray(next.tripDocuments) ? next.tripDocuments : [],
+    tripImport: next.tripImport || null
+  };
 }
 
 function LoginScreen({ mode, setMode, onSubmit, error }: { mode: "login" | "reset"; setMode: (mode: "login" | "reset") => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void; error: string }) {
@@ -574,15 +599,14 @@ function PhotoViewer({ spot, photos, onClose }: { spot: string; photos: AppState
 }
 
 function SettingsPage({ settings, saveSettings }: { settings: Settings; saveSettings: (form: HTMLFormElement) => Promise<void> }) {
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteText, setDeleteText] = useState("");
   async function deleteAccount() {
-    const first = window.confirm("Delete all trip planner data for this account? This cannot be undone.");
-    if (!first) return;
-    const second = window.confirm("Final confirmation: this removes the account, checklists, trip info, PDFs, photos, and itinerary from the database.");
-    if (!second) return;
+    if (deleteText !== "DELETE") return;
     await api("/api/account", { method: "DELETE" });
     window.location.reload();
   }
-  return <section className="page active"><header className="page-header"><p className="eyebrow">Profile</p><h1>Settings</h1></header><SettingsForm settings={settings} onSubmit={saveSettings} /><div className="danger-panel"><h2>Delete account data</h2><p className="muted">Remove this account and all saved trip planner data from the database.</p><button className="btn danger" onClick={deleteAccount}>Delete my account data</button></div></section>;
+  return <section className="page active"><header className="page-header"><p className="eyebrow">Profile</p><h1>Settings</h1></header><SettingsForm settings={settings} onSubmit={saveSettings} /><div className="danger-panel"><h2>Delete account data</h2><p className="muted">Remove this account and all saved trip planner data from the database.</p><button className="btn danger" onClick={() => setDeleteOpen(true)}>Delete my account data</button></div>{deleteOpen && <div className="modal-backdrop"><section className="modal confirm-modal"><button className="modal-x" onClick={() => setDeleteOpen(false)}>×</button><p className="eyebrow">Danger zone</p><h2>Delete account data?</h2><p>This removes the account, checklists, trip information, PDFs, photos, and itinerary from the database. Type DELETE to confirm.</p><label>Confirmation<input value={deleteText} onChange={event => setDeleteText(event.target.value)} placeholder="DELETE" /></label><div className="button-row"><button className="btn" onClick={() => setDeleteOpen(false)}>Cancel</button><button className="btn danger" disabled={deleteText !== "DELETE"} onClick={deleteAccount}>Delete permanently</button></div></section></div>}</section>;
 }
 
 function WizardPage({ settings, saveSettings, goTripInfo }: { settings: Settings; saveSettings: (form: HTMLFormElement) => Promise<void>; goTripInfo: () => void }) {
