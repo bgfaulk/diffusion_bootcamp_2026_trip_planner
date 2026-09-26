@@ -29,7 +29,7 @@ cp .env.example .env.local
 
 Set:
 
-- `DATABASE_URL` from Neon
+- `DIFFUSION_DATABASE_URL` from Neon
 - `GOOGLE_MAPS_API_KEY` from Google Cloud
 - `SESSION_SECRET` to a long random string
 
