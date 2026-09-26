@@ -574,7 +574,15 @@ function PhotoViewer({ spot, photos, onClose }: { spot: string; photos: AppState
 }
 
 function SettingsPage({ settings, saveSettings }: { settings: Settings; saveSettings: (form: HTMLFormElement) => Promise<void> }) {
-  return <section className="page active"><header className="page-header"><p className="eyebrow">Profile</p><h1>Settings</h1></header><SettingsForm settings={settings} onSubmit={saveSettings} /></section>;
+  async function deleteAccount() {
+    const first = window.confirm("Delete all trip planner data for this account? This cannot be undone.");
+    if (!first) return;
+    const second = window.confirm("Final confirmation: this removes the account, checklists, trip info, PDFs, photos, and itinerary from the database.");
+    if (!second) return;
+    await api("/api/account", { method: "DELETE" });
+    window.location.reload();
+  }
+  return <section className="page active"><header className="page-header"><p className="eyebrow">Profile</p><h1>Settings</h1></header><SettingsForm settings={settings} onSubmit={saveSettings} /><div className="danger-panel"><h2>Delete account data</h2><p className="muted">Remove this account and all saved trip planner data from the database.</p><button className="btn danger" onClick={deleteAccount}>Delete my account data</button></div></section>;
 }
 
 function WizardPage({ settings, saveSettings, goTripInfo }: { settings: Settings; saveSettings: (form: HTMLFormElement) => Promise<void>; goTripInfo: () => void }) {
