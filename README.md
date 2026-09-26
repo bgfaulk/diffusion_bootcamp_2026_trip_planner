@@ -1,48 +1,55 @@
-# Local Trip Planner
+# Diffusion Bootcamp 2026 Trip Planner
 
-A private, local-first trip dashboard with:
+A Vercel-ready trip planner for short-lived training trips and San Francisco itinerary planning.
 
-- SQLite-backed checklists and settings
-- Generic trip setup wizard
-- Mobile-friendly dashboard available on the same Wi-Fi
-- SF-themed starter pages and photo gallery
+- Email/password login with first-login account creation
+- Password update from the login screen for short-lived use
+- Neon Postgres-backed settings, lists, photos, and generated itinerary content
+- Google Places-powered address lookup for wizard/settings fields
+- Light/dark theme toggle
+- Profile dropdown, settings, setup wizard, and guarded API routes
 - Custom checklist items, delete actions, and checked items moved out of the way
-- Local teardown flow for deleting the database and removing the local app folder
+- San Francisco itinerary planner handoff modal for ChatGPT
 
-This repository intentionally contains no personal booking information, traveler names, PDFs, or private trip data.
+This repository intentionally contains no personal booking information, traveler names, PDFs, or private trip data. Runtime data belongs in Neon and Vercel environment variables, not git.
 
-## Run locally
+## Setup
 
-Mac/Linux:
+Install dependencies:
 
 ```bash
-python3 app.py
+npm install
 ```
 
-Windows:
+Copy env placeholders:
 
-```powershell
-py app.py
+```bash
+cp .env.example .env.local
 ```
 
-Then open:
+Set:
 
-```text
-http://localhost:8767
+- `DATABASE_URL` from Neon
+- `GOOGLE_MAPS_API_KEY` from Google Cloud
+- `SESSION_SECRET` to a long random string
+
+Run:
+
+```bash
+npm run dev
 ```
 
-The app shows the same-network phone URL after it starts.
+Open `http://localhost:3000`.
 
-## Data
+## Vercel
 
-Runtime data is written to:
+Use Vercel Marketplace Neon when possible, then pull env vars:
 
-```text
-data/trip_planner.sqlite3
+```bash
+vercel link
+vercel env pull .env.local --yes
 ```
 
-Do not commit the `data/` folder.
+## Google APIs
 
-## Sharing
-
-For non-technical users, publish packaged Mac/Windows downloads through GitHub Releases. Each user gets their own local SQLite database on their own computer.
+Enable Places API (New). The app calls Google from server routes, so the API key is not exposed to the browser.

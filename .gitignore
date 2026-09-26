@@ -5,3 +5,7 @@ data/
 *.sqlite3
 *.db
 *.log
+.next/
+node_modules/
+.env*.local
+vercel-env-pull.log
