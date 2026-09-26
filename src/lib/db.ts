@@ -6,13 +6,27 @@ export const pageKeys = new Set<PageKey>(["prechecks", "packing", "departure", "
 
 let schemaReady = false;
 
+function envValue(name: string) {
+  const value = process.env[name]?.trim();
+  if (!value || value === "\"\"" || value === "''") return "";
+  return value;
+}
+
 export function getSql() {
   const url =
-    process.env.DIFFUSION_DATABASE_URL ||
-    process.env.DIFFUSION_DATABASE_DATABASE_URL ||
-    process.env.DATABASE_URL;
+    envValue("DIFFUSION_DATABASE_URL") ||
+    envValue("DIFFUSION_DATABASE_DATABASE_URL") ||
+    envValue("DATABASE_URL");
   if (!url) throw new Error("DIFFUSION_DATABASE_URL, DIFFUSION_DATABASE_DATABASE_URL, or DATABASE_URL is not configured");
   return neon(url);
+}
+
+export function hasDatabaseUrl() {
+  return Boolean(
+    envValue("DIFFUSION_DATABASE_URL") ||
+    envValue("DIFFUSION_DATABASE_DATABASE_URL") ||
+    envValue("DATABASE_URL")
+  );
 }
 
 export async function ensureSchema() {
@@ -82,6 +96,42 @@ export async function ensureSchema() {
       instructions TEXT,
       response TEXT,
       saved_plan TEXT,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `;
+  await sql`
+    CREATE TABLE IF NOT EXISTS trip_info (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      category TEXT NOT NULL,
+      title TEXT NOT NULL,
+      provider TEXT,
+      confirmation_number TEXT,
+      start_at TEXT,
+      end_at TEXT,
+      address TEXT,
+      phone TEXT,
+      notes TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `;
+  await sql`
+    CREATE TABLE IF NOT EXISTS trip_documents (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      label TEXT NOT NULL,
+      file_name TEXT NOT NULL,
+      content_type TEXT NOT NULL,
+      file_base64 TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `;
+  await sql`
+    CREATE TABLE IF NOT EXISTS trip_import (
+      user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      instructions TEXT,
+      response TEXT,
       updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
     )
   `;

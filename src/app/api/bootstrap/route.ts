@@ -1,13 +1,13 @@
 import { getUser } from "@/lib/auth";
-import { ensureSchema, getSql } from "@/lib/db";
+import { ensureSchema, getSql, hasDatabaseUrl } from "@/lib/db";
 
 export async function GET() {
-  if (!process.env.DIFFUSION_DATABASE_URL && !process.env.DIFFUSION_DATABASE_DATABASE_URL && !process.env.DATABASE_URL) return Response.json({ user: null });
+  if (!hasDatabaseUrl()) return Response.json({ user: null });
   await ensureSchema();
   const user = await getUser();
   if (!user) return Response.json({ user: null });
   const sql = getSql();
-  const [settings, items, photos, itinerary] = await Promise.all([
+  const [settings, items, photos, itinerary, tripInfo, tripDocuments, tripImport] = await Promise.all([
     sql`SELECT * FROM settings WHERE user_id = ${user.id}`,
     sql`SELECT * FROM list_items WHERE user_id = ${user.id} ORDER BY checked ASC, position ASC, created_at ASC`,
     sql`
@@ -17,7 +17,10 @@ export async function GET() {
         ON latest.spot = p.spot AND latest.latest = p.created_at
       WHERE p.user_id = ${user.id}
     `,
-    sql`SELECT instructions, response, saved_plan FROM itinerary WHERE user_id = ${user.id}`
+    sql`SELECT instructions, response, saved_plan FROM itinerary WHERE user_id = ${user.id}`,
+    sql`SELECT * FROM trip_info WHERE user_id = ${user.id} ORDER BY created_at DESC`,
+    sql`SELECT id, label, file_name, content_type, created_at FROM trip_documents WHERE user_id = ${user.id} ORDER BY created_at DESC`,
+    sql`SELECT instructions, response FROM trip_import WHERE user_id = ${user.id}`
   ]);
   return Response.json({
     user,
@@ -28,6 +31,13 @@ export async function GET() {
       caption: photo.caption,
       imageUrl: `data:${photo.content_type};base64,${photo.image_base64}`
     }])),
-    itinerary: itinerary[0] || null
+    itinerary: itinerary[0] || null,
+    tripInfo,
+    tripDocuments: tripDocuments.map((document: any) => ({
+      ...document,
+      viewUrl: `/api/trip-documents/${document.id}`,
+      downloadUrl: `/api/trip-documents/${document.id}?download=1`
+    })),
+    tripImport: tripImport[0] || null
   });
 }

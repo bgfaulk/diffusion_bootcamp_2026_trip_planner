@@ -6,7 +6,9 @@ import { validateEmail, validatePassword } from "./validation";
 const cookieName = "trip_session";
 
 function secret() {
-  return process.env.SESSION_SECRET || "development-only-session-secret";
+  const value = process.env.SESSION_SECRET?.trim();
+  if (!value || value === "\"\"" || value === "''") return "development-only-session-secret";
+  return value;
 }
 
 export function hashPassword(password: string, salt = crypto.randomBytes(16).toString("hex")) {

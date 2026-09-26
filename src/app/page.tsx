@@ -3,6 +3,27 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 
 type Item = { id: string; page: string; title: string; checked: boolean; position: number };
+type TripInfo = {
+  id: string;
+  category: "flight" | "hotel" | "rental" | "training" | "insurance" | "other";
+  title: string;
+  provider?: string;
+  confirmation_number?: string;
+  start_at?: string;
+  end_at?: string;
+  address?: string;
+  phone?: string;
+  notes?: string;
+};
+type TripDocument = {
+  id: string;
+  label: string;
+  file_name: string;
+  content_type: string;
+  created_at: string;
+  viewUrl: string;
+  downloadUrl: string;
+};
 type Settings = {
   profile_name?: string;
   trip_name?: string;
@@ -22,6 +43,9 @@ type AppState = {
   items: Item[];
   photos: Record<string, { id: string; caption: string; imageUrl: string }>;
   itinerary: null | { instructions?: string; response?: string; saved_plan?: string };
+  tripInfo: TripInfo[];
+  tripDocuments: TripDocument[];
+  tripImport: null | { instructions?: string; response?: string };
 };
 
 const pageLabels: Record<string, string> = {
@@ -30,6 +54,7 @@ const pageLabels: Record<string, string> = {
   packing: "Packing",
   departure: "Departure Day",
   explore: "Explore San Francisco",
+  tripInfo: "Trip Information",
   gallery: "Photo Route",
   return: "Return Day",
   settings: "Settings",
@@ -60,7 +85,7 @@ async function api(path: string, options: RequestInit = {}) {
 }
 
 export default function Home() {
-  const [data, setData] = useState<AppState>({ user: null, settings: null, items: [], photos: {}, itinerary: null });
+  const [data, setData] = useState<AppState>({ user: null, settings: null, items: [], photos: {}, itinerary: null, tripInfo: [], tripDocuments: [], tripImport: null });
   const [page, setPage] = useState("overview");
   const [profileOpen, setProfileOpen] = useState(false);
   const [loginMode, setLoginMode] = useState<"login" | "reset">("login");
@@ -127,7 +152,7 @@ export default function Home() {
           <div><strong>Trip Planner</strong><span>{tripName}</span></div>
         </div>
         <nav className="primary-nav">
-          {["overview", "prechecks", "packing", "departure", "explore", "gallery", "return"].map(key => (
+          {["overview", "prechecks", "packing", "departure", "explore", "tripInfo", "gallery", "return"].map(key => (
             <button key={key} className={page === key ? "active" : ""} onClick={() => setPage(key)}>{pageLabels[key]}</button>
           ))}
         </nav>
@@ -149,9 +174,10 @@ export default function Home() {
         {page === "overview" && <Overview tripName={tripName} settings={data.settings} openItems={data.items.length - complete} complete={complete} photos={Object.keys(data.photos).length} />}
         {listPages.includes(page) && <ListPage pageKey={page} items={data.items} reload={load} />}
         {page === "explore" && <ExplorePage items={data.items.filter(item => item.page === "explore")} itinerary={data.itinerary} openModal={() => setItineraryOpen(true)} reload={load} />}
+        {page === "tripInfo" && <TripInfoPage tripInfo={data.tripInfo} tripDocuments={data.tripDocuments} tripImport={data.tripImport} reload={load} />}
         {page === "gallery" && <Gallery photos={data.photos} openViewer={setViewer} reload={load} />}
         {page === "settings" && <SettingsPage settings={data.settings} saveSettings={saveSettings} />}
-        {page === "wizard" && <WizardPage settings={data.settings} saveSettings={saveSettings} />}
+        {page === "wizard" && <WizardPage settings={data.settings} saveSettings={saveSettings} goTripInfo={() => setPage("tripInfo")} />}
       </main>
 
       {itineraryOpen && <ItineraryModal items={data.items.filter(item => item.page === "explore")} itinerary={data.itinerary} onClose={() => setItineraryOpen(false)} reload={load} />}
@@ -315,6 +341,209 @@ Practical notes:
 Keep it mobile-readable, specific, and ready to save into the app.`;
 }
 
+function TripInfoPage({ tripInfo, tripDocuments, tripImport, reload }: { tripInfo: TripInfo[]; tripDocuments: TripDocument[]; tripImport: AppState["tripImport"]; reload: () => Promise<void> }) {
+  const [importOpen, setImportOpen] = useState(false);
+  const grouped = tripInfo.reduce<Record<string, TripInfo[]>>((groups, item) => {
+    groups[item.category] = [...(groups[item.category] || []), item];
+    return groups;
+  }, {});
+
+  async function addBooking(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    await api("/api/trip-info", { method: "POST", body: JSON.stringify(tripInfoPayload(event.currentTarget)) });
+    event.currentTarget.reset();
+    await reload();
+  }
+
+  async function uploadPdf(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    await api("/api/trip-documents", { method: "POST", body: new FormData(event.currentTarget) });
+    event.currentTarget.reset();
+    await reload();
+  }
+
+  async function removeBooking(id: string) {
+    await api("/api/trip-info", { method: "DELETE", body: JSON.stringify({ id }) });
+    await reload();
+  }
+
+  async function removeDocument(id: string) {
+    await api("/api/trip-documents", { method: "DELETE", body: JSON.stringify({ id }) });
+    await reload();
+  }
+
+  return (
+    <section className="page active">
+      <header className="page-header"><p className="eyebrow">Travel details</p><h1>Trip Information</h1></header>
+      <div className="callout">
+        <h2>Keep booking details in your own account</h2>
+        <p>Add flights, hotels, rental cars, training addresses, insurance policy notes, and other reservations here. Nothing personal needs to live in the shared repo.</p>
+        <div className="button-row"><button className="btn primary" onClick={() => setImportOpen(true)}>Import with ChatGPT</button></div>
+      </div>
+
+      <form className="trip-form" onSubmit={addBooking}>
+        <label>Type<select name="category" defaultValue="flight"><option value="flight">Flight</option><option value="hotel">Hotel</option><option value="rental">Rental car</option><option value="training">Training</option><option value="insurance">Insurance</option><option value="other">Other</option></select></label>
+        <label>Title<input name="title" placeholder="Outbound flight, hotel stay, rental car..." required maxLength={120} /></label>
+        <label>Provider<input name="provider" placeholder="Airline, hotel, rental company..." maxLength={120} /></label>
+        <label>Confirmation number<input name="confirmationNumber" maxLength={120} /></label>
+        <label>Start<input name="startAt" placeholder="Date/time or pickup time" maxLength={120} /></label>
+        <label>End<input name="endAt" placeholder="Date/time or return time" maxLength={120} /></label>
+        <label>Address<input name="address" placeholder="Address, terminal, hotel, or office" maxLength={260} /></label>
+        <label>Phone<input name="phone" placeholder="Support or front desk number" maxLength={80} /></label>
+        <label className="wide">Notes<textarea name="notes" placeholder="Cancellation rules, warnings, loyalty numbers, pickup instructions..." maxLength={1200} /></label>
+        <button className="btn primary">Add trip detail</button>
+      </form>
+
+      <div className="booking-grid">
+        {["flight", "hotel", "rental", "training", "insurance", "other"].map(category => (
+          <section className="booking-section" key={category}>
+            <h2>{categoryTitle(category)}</h2>
+            {(grouped[category] || []).length ? grouped[category].map(item => (
+              <article className="booking-card" key={item.id}>
+                <div><strong>{item.title}</strong>{item.provider && <span>{item.provider}</span>}</div>
+                {item.confirmation_number && <p><b>Confirmation:</b> {item.confirmation_number}</p>}
+                {(item.start_at || item.end_at) && <p><b>When:</b> {[item.start_at, item.end_at].filter(Boolean).join(" to ")}</p>}
+                {item.address && <p><b>Address:</b> <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.address)}`} target="_blank" rel="noreferrer">{item.address}</a></p>}
+                {item.phone && <p><b>Phone:</b> <a href={`tel:${item.phone}`}>{item.phone}</a></p>}
+                {item.notes && <p>{item.notes}</p>}
+                <button className="delete-item" onClick={() => removeBooking(item.id)}>Delete</button>
+              </article>
+            )) : <p className="muted">No {categoryTitle(category).toLowerCase()} details yet.</p>}
+          </section>
+        ))}
+      </div>
+
+      <section className="documents-panel">
+        <div>
+          <h2>Insurance or protection PDFs</h2>
+          <p className="muted">Upload a policy or protection PDF so it can be viewed or downloaded from the trip.</p>
+        </div>
+        <form className="document-form" onSubmit={uploadPdf}>
+          <label>Label<input name="label" placeholder="Travel protection policy" required maxLength={120} /></label>
+          <label>PDF<input name="document" type="file" accept="application/pdf" required /></label>
+          <button className="btn primary">Save PDF</button>
+        </form>
+        <div className="document-list">
+          {tripDocuments.map(document => (
+            <article className="document-row" key={document.id}>
+              <div><strong>{document.label}</strong><span>{document.file_name}</span></div>
+              <div className="button-row"><a className="btn" href={document.viewUrl} target="_blank" rel="noreferrer">View</a><a className="btn" href={document.downloadUrl}>Download</a><button className="delete-item" onClick={() => removeDocument(document.id)}>Delete</button></div>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      {importOpen && <TripImportModal tripImport={tripImport} onClose={() => setImportOpen(false)} reload={reload} />}
+    </section>
+  );
+}
+
+function TripImportModal({ tripImport, onClose, reload }: { tripImport: AppState["tripImport"]; onClose: () => void; reload: () => Promise<void> }) {
+  const [instructions, setInstructions] = useState(tripImport?.instructions || defaultTripImportInstructions());
+  const [response, setResponse] = useState(tripImport?.response || "");
+  const prompt = useMemo(() => buildTripImportPrompt(instructions), [instructions]);
+
+  async function persist(nextInstructions = instructions, nextResponse = response) {
+    await api("/api/trip-import", { method: "POST", body: JSON.stringify({ instructions: nextInstructions, response: nextResponse }) });
+  }
+
+  async function saveRecords() {
+    await persist();
+    const records = parseTripRecords(response);
+    if (!records.length) throw new Error("Paste the JSON records from ChatGPT before saving");
+    for (const record of records) {
+      await api("/api/trip-info", { method: "POST", body: JSON.stringify(record) });
+    }
+    await reload();
+    onClose();
+  }
+
+  return (
+    <div className="modal-backdrop">
+      <section className="modal">
+        <button className="modal-x" onClick={onClose}>×</button>
+        <h2>Import Trip Information</h2>
+        <p className="muted">Use this to ask ChatGPT to review travel emails you provide or connect there, then paste the returned JSON back into this app.</p>
+        <label>Instructions<textarea value={instructions} onChange={event => setInstructions(event.target.value)} onBlur={() => persist()} /></label>
+        <div className="button-row"><button className="btn" onClick={() => setInstructions(defaultTripImportInstructions())}>Use suggested instructions</button><button className="btn primary" onClick={() => window.open(`https://chatgpt.com/?q=${encodeURIComponent(prompt)}`, "_blank")}>Open ChatGPT with prompt</button></div>
+        <label>Paste ChatGPT JSON response<textarea value={response} onChange={event => setResponse(event.target.value)} onBlur={() => persist()} placeholder='{"records":[{"category":"flight","title":"Outbound flight","provider":"Airline","confirmationNumber":"ABC123"}]}' /></label>
+        <div className="button-row"><button className="btn" onClick={onClose}>Cancel</button><button className="btn primary" onClick={saveRecords}>Save imported details</button></div>
+      </section>
+    </div>
+  );
+}
+
+function tripInfoPayload(form: HTMLFormElement) {
+  const data = new FormData(form);
+  return {
+    category: String(data.get("category") || "other"),
+    title: String(data.get("title") || ""),
+    provider: String(data.get("provider") || ""),
+    confirmationNumber: String(data.get("confirmationNumber") || ""),
+    startAt: String(data.get("startAt") || ""),
+    endAt: String(data.get("endAt") || ""),
+    address: String(data.get("address") || ""),
+    phone: String(data.get("phone") || ""),
+    notes: String(data.get("notes") || "")
+  };
+}
+
+function categoryTitle(category: string) {
+  return ({ flight: "Flights", hotel: "Hotel", rental: "Rental Car", training: "Training", insurance: "Insurance", other: "Other" } as Record<string, string>)[category] || "Other";
+}
+
+function defaultTripImportInstructions() {
+  return "Find flight, hotel, rental car, training, insurance, and other reservation details. Include confirmation numbers, dates/times, addresses, phone numbers, and practical warnings like pickup times that do not match flight arrival times.";
+}
+
+function buildTripImportPrompt(instructions: string) {
+  return `Review my travel details and return only JSON that can be imported into my trip planner.
+
+Instructions:
+${instructions}
+
+Use this exact schema:
+{
+  "records": [
+    {
+      "category": "flight | hotel | rental | training | insurance | other",
+      "title": "Short label",
+      "provider": "Company name",
+      "confirmationNumber": "Confirmation, reservation, policy, or record locator",
+      "startAt": "Date/time text",
+      "endAt": "Date/time text",
+      "address": "Address or location text",
+      "phone": "Phone number",
+      "notes": "Important instructions or warnings"
+    }
+  ]
+}
+
+Return valid JSON only. Do not include markdown fences. If a field is unknown, use an empty string.`;
+}
+
+function parseTripRecords(response: string) {
+  try {
+    const parsed = JSON.parse(response);
+    const source = Array.isArray(parsed) ? parsed : parsed.records;
+    if (!Array.isArray(source)) return [];
+    const valid = new Set(["flight", "hotel", "rental", "training", "insurance", "other"]);
+    return source.map((item: any) => ({
+      category: valid.has(String(item.category)) ? String(item.category) : "other",
+      title: String(item.title || "").slice(0, 120),
+      provider: String(item.provider || "").slice(0, 120),
+      confirmationNumber: String(item.confirmationNumber || item.confirmation_number || "").slice(0, 120),
+      startAt: String(item.startAt || item.start_at || "").slice(0, 120),
+      endAt: String(item.endAt || item.end_at || "").slice(0, 120),
+      address: String(item.address || "").slice(0, 260),
+      phone: String(item.phone || "").slice(0, 80),
+      notes: String(item.notes || "").slice(0, 1200)
+    })).filter((item: any) => item.title);
+  } catch {
+    return [];
+  }
+}
+
 function Gallery({ photos, openViewer, reload }: { photos: AppState["photos"]; openViewer: (spot: string) => void; reload: () => Promise<void> }) {
   async function upload(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -348,8 +577,8 @@ function SettingsPage({ settings, saveSettings }: { settings: Settings; saveSett
   return <section className="page active"><header className="page-header"><p className="eyebrow">Profile</p><h1>Settings</h1></header><SettingsForm settings={settings} onSubmit={saveSettings} /></section>;
 }
 
-function WizardPage({ settings, saveSettings }: { settings: Settings; saveSettings: (form: HTMLFormElement) => Promise<void> }) {
-  return <section className="page active"><header className="page-header"><p className="eyebrow">Setup</p><h1>Setup Wizard</h1></header><div className="callout"><p>This wizard personalizes the map and app labels. Home address is optional; it helps estimate your route context and personalize the custom map metadata.</p></div><SettingsForm settings={settings} onSubmit={saveSettings} wizard /></section>;
+function WizardPage({ settings, saveSettings, goTripInfo }: { settings: Settings; saveSettings: (form: HTMLFormElement) => Promise<void>; goTripInfo: () => void }) {
+  return <section className="page active"><header className="page-header"><p className="eyebrow">Setup</p><h1>Setup Wizard</h1></header><div className="callout"><p>This wizard personalizes the map and app labels. Home address is optional; it helps estimate your route context and personalize the custom map metadata.</p></div><SettingsForm settings={settings} onSubmit={saveSettings} wizard /><div className="callout"><h2>Add booking documents</h2><p>Next, add flights, hotel stays, rental cars, training addresses, and any insurance or protection PDFs. The app works on mobile once deployed, so these details can travel with the user.</p><div className="button-row"><button className="btn primary" onClick={goTripInfo}>Open Trip Information</button></div></div></section>;
 }
 
 function SettingsForm({ settings, onSubmit, wizard = false }: { settings: Settings; onSubmit: (form: HTMLFormElement) => Promise<void>; wizard?: boolean }) {
