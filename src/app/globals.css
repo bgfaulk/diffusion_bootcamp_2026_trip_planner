@@ -983,6 +983,10 @@ a { color:var(--accent-dark); font-weight:800; }
   .trip-stat-divider { display:none; }
   .trip-stat.rank { min-width:0; }
   .trip-bar-toggle { align-self:center; }
+  /* Organizer health card: the rows already show every check is OK, so the "All within thresholds" pill goes
+     on phones to keep the title on one line. A problem or "No check yet" still shows its pill. */
+  .health-status.ok { display:none; }
+  .health-card h2 { white-space:nowrap; }
   :root[data-theme="nirvana"] .trip-bar-stats .trip-stat { padding:10px 12px; border-top-color:var(--cyan-line); }
   :root[data-theme="nirvana"] .trip-bar-stats .trip-stat:nth-of-type(odd) { padding-left:0; }
 }
