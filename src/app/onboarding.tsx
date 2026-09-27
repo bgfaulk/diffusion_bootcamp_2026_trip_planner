@@ -9,7 +9,15 @@ import { passwordChecks } from "@/lib/validation";
 import { chimeEnabled, chimeReady, playChimeNote, primeChime, saveChimeEnabled } from "@/lib/chime";
 import { buildWizardPrompt, extractJson, interestOptions, normalizePlan, sampleResponse, trainingAddress, trainingDetail, type EmailAccess, type WizardAnswers } from "@/lib/plan";
 
-type AuthStep = "signin" | "create" | "reset" | "forgot";
+type AuthStep = "welcome" | "signin" | "create" | "reset" | "forgot";
+// Set once an account has been created or signed into on this device. Until then the login page leads with
+// "Create an account" and doesn't show a password field at all.
+const knownCookie = "trip_known";
+function knownDevice() { return new RegExp(`(?:^|; )${knownCookie}=`).test(document.cookie) || rememberedEmail() !== ""; }
+function rememberKnown() {
+  const secure = location.protocol === "https:" ? "; Secure" : "";
+  document.cookie = `${knownCookie}=1; Max-Age=${60 * 60 * 24 * 365}; Path=/; SameSite=Lax${secure}`;
+}
 
 const emailCookie = "trip_email";
 const rememberDays = 7;
@@ -39,7 +47,7 @@ function rememberEmail(email: string) {
 
 // One form for both signing in and creating an account. The server answers a bad sign-in the same way
 // whether the email is unknown or the password is wrong, so nothing here can tell people apart either.
-export function LoginScreen({ onSignedIn }: { onSignedIn: () => Promise<void> }) {
+export function LoginScreen({ onSignedIn, notice = "" }: { onSignedIn: () => Promise<void>; notice?: string }) {
   const [step, setStep] = useState<AuthStep>("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -55,6 +63,7 @@ export function LoginScreen({ onSignedIn }: { onSignedIn: () => Promise<void> })
     const link = resetLinkFromUrl();
     if (link) { setEmail(link.email); setResetToken(link.token); setStep("reset"); return; }
     setEmail(current => current || rememberedEmail());
+    if (!knownDevice()) setStep("welcome");
   }, []);
 
   const newPassword = step === "create" || step === "reset";
@@ -92,6 +101,7 @@ export function LoginScreen({ onSignedIn }: { onSignedIn: () => Promise<void> })
     try {
       await api("/api/auth", { method: "POST", body: JSON.stringify({ email, password, intent: step, website, token: resetToken, inviteCode }) });
       rememberEmail(email);
+      rememberKnown();
       if (step === "reset") history.replaceState(null, "", location.pathname);
       await onSignedIn();
     } catch (err) {
@@ -100,7 +110,7 @@ export function LoginScreen({ onSignedIn }: { onSignedIn: () => Promise<void> })
     }
   }
 
-  const heading = { signin: "Sign in", create: "Create your account", reset: "Set a new password", forgot: "Reset your password" }[step];
+  const heading = { welcome: "Welcome", signin: "Sign in", create: "Create your account", reset: "Set a new password", forgot: "Reset your password" }[step];
 
   return (
     <main className="login-page">
@@ -108,9 +118,17 @@ export function LoginScreen({ onSignedIn }: { onSignedIn: () => Promise<void> })
         <p className="eyebrow">ABC Diffusion Bootcamp Trip Planner</p>
         <AbcMark />
         <h1>{heading}</h1>
+        {notice && <p className="notice" role="status">{notice}</p>}
         {/* Honeypot: hidden from people and screen readers, so only bots fill it in. */}
         <label className="honeypot" aria-hidden="true">Website<input tabIndex={-1} autoComplete="off" value={website} onChange={event => setWebsite(event.target.value)} /></label>
-        {step === "forgot" && sentTo ? (
+        {step === "welcome" ? (
+          <div className="stack">
+            <p className="muted">Planning the ABC Diffusion Bootcamp trip starts with an account. You&apos;ll need the invite code from the trip organizer.</p>
+            <label>Email<input id="username" name="username" type="email" maxLength={254} autoFocus autoComplete="username" value={email} onChange={event => setEmail(event.target.value)} /></label>
+            <button type="button" className="btn primary" onClick={() => goTo("create")}>Create an account</button>
+            <button type="button" className="btn" onClick={() => goTo("signin")}>I already have an account</button>
+          </div>
+        ) : step === "forgot" && sentTo ? (
           <div className="stack">
             <p className="muted">If <strong>{sentTo}</strong> has an account, a reset link is on its way. It works once and expires in 24 hours. Check spam if it doesn&apos;t show up in a minute.</p>
           </div>
@@ -151,12 +169,18 @@ export function LoginScreen({ onSignedIn }: { onSignedIn: () => Promise<void> })
         </form>
         )}
         {step === "signin" && (
-          <>
-            <button type="button" className="link-button" onClick={() => goTo("forgot")}>Forgot your password? Email me a reset link</button>
-            <button type="button" className="link-button" onClick={() => goTo("create")}>First time here? Create an account</button>
-          </>
+          <div className="login-actions">
+            <button type="button" className="link-button" onClick={() => goTo("forgot")}>Forgot your password?</button>
+            <p className="muted">First time here?</p>
+            <button type="button" className="btn" onClick={() => goTo("create")}>Create an account</button>
+          </div>
         )}
-        {step === "create" && <button type="button" className="link-button" onClick={() => goTo("signin")}>Already have an account? Sign in</button>}
+        {step === "create" && (
+          <div className="login-actions">
+            <p className="muted">Already have an account?</p>
+            <button type="button" className="btn" onClick={() => goTo("signin")}>Sign in instead</button>
+          </div>
+        )}
         {step === "forgot" && <button type="button" className="link-button" onClick={() => goTo("signin")}>Back to sign in</button>}
         {step === "reset" && <button className="link-button" onClick={() => { setResetToken(""); history.replaceState(null, "", location.pathname); goTo("signin"); }}>Back to sign in</button>}
       </section>

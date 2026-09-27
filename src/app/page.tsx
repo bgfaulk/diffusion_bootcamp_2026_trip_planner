@@ -13,6 +13,7 @@ import { NirvanaBackdrop } from "./nirvana-backdrop";
 import { PageIcon } from "./page-icons";
 import { OrganizerPage } from "./organizer";
 import { useWeather, WeatherPanel } from "./weather";
+import { IdleWarning, useIdleTimeout } from "./idle-timeout";
 import { photoSpots } from "@/lib/photo-spots";
 import { applyFx, applyTheme, storedFx, storedTheme, THEMES, themeLabels, type Theme } from "@/lib/theme";
 import { buildTripModel, countdown, dayKey, daysBetween, fmtDay, fmtMinutes, fmtShort, keyToDate, parseItinerary, parseWhen, type DayEvent, type ParsedPlan, type TimedBooking, type TripModel } from "@/lib/trip-time";
@@ -132,6 +133,9 @@ export default function Home() {
   // last theme used on this device. Grid effects are a per-device preference.
   const [theme, setThemeState] = useState<Theme>("light");
   const [fx, setFx] = useState(true);
+  // Shown on the login page after an inactivity sign-out.
+  const [signOutNotice, setSignOutNotice] = useState("");
+  const idle = useIdleTimeout(Boolean(data.user), () => { setSignOutNotice("You were signed out after an hour without activity."); void signOut(); });
 
   function apply(next: Partial<AppState>) {
     setData(normalizeAppState(next));
@@ -237,6 +241,7 @@ export default function Home() {
   }
 
   async function signOut() {
+    idle.stay(); // clears any open warning
     await api("/api/auth", { method: "DELETE" }).catch(() => {});
     rememberSession(false);
     setWizardOpen(false);
@@ -292,11 +297,12 @@ export default function Home() {
 
   if (entering) return <AbcLoader done={enterDone} failed={false} onFinish={() => setEntering(false)} onFailed={() => setEntering(false)} messages={enterMessages} />;
   if (!loaded) return null;
-  if (!data.user) return <>{backdrop(false)}<LoginScreen onSignedIn={enterAfterSignIn} /></>;
+  if (!data.user) return <>{backdrop(false)}<LoginScreen onSignedIn={async () => { setSignOutNotice(""); await enterAfterSignIn(); }} notice={signOutNotice} /></>;
+  const idleModal = idle.secondsLeft !== null ? <IdleWarning secondsLeft={idle.secondsLeft} onStay={idle.stay} onSignOut={signOut} /> : null;
   const settings = data.settings;
   const answers = parseAnswers(settings?.planning_answers);
   const mode = settings?.planning_mode;
-  if (choosingPlan || (!mode && !answers.dismissed)) return <>{backdrop(false)}<PlanningChoice onChoose={choosePlanning} onLater={setUpLater} onSignOut={signOut} /></>;
+  if (choosingPlan || (!mode && !answers.dismissed)) return <>{backdrop(false)}<PlanningChoice onChoose={choosePlanning} onLater={setUpLater} onSignOut={signOut} />{idleModal}</>;
   // The wizard only shows until setup is finished. It resumes on the saved step (including after
   // signing out and back in) unless they chose to leave it; "Finish setup" brings them back.
   if (mode && (wizardOpen || (!answers.completed && !answers.dismissed))) {
@@ -325,15 +331,15 @@ export default function Home() {
         onSwitchMode={choosePlanning}
         onBackToChoice={async () => { await load(); setWizardOpen(false); setChoosingPlan(true); }}
         onSignOut={signOut}
-      /></>
+      />{idleModal}</>
     );
   }
 
   return (
-    <>{backdrop(true)}<div className="app-shell">
+    <>{backdrop(true)}{idleModal}<div className="app-shell">
       <aside className={compact ? "sidebar collapsed" : "sidebar"}>
         <div className="brand">
-          <AbcMark small />
+          <button type="button" className="brand-home" onClick={() => { setPage("overview"); setProfileOpen(false); window.scrollTo({ top: 0 }); }} aria-label="Go to Overview" title="Overview"><AbcMark small /></button>
           {!compact && <span className="brand-divider" aria-hidden="true" />}
           {!compact && <div><strong>Trip Planner</strong><span>{tripName}</span></div>}
           <button type="button" className="sidebar-toggle" onClick={toggleSidebar} aria-expanded={!compact} aria-label={compact ? "Expand sidebar" : "Collapse sidebar"} title={compact ? "Expand sidebar" : "Collapse sidebar"}>
