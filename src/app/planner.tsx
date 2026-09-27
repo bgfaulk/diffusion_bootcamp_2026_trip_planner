@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/lib/client";
 import { buildWizardPrompt, extractJson, parseAnswers, trainingAgenda, type WizardAnswers } from "@/lib/plan";
 import { AbcLoader, AbcMark, ActionMenu, DestinationField, InterestFields, LoginScreen, PlanningChoice, SetupWizard, TravelerFields, TripDateFields } from "./onboarding";
@@ -16,6 +16,8 @@ import { useWeather, WeatherPanel } from "./weather";
 import { IdleWarning, useIdleTimeout } from "./idle-timeout";
 import { notify } from "./toast";
 import { UserGuide } from "./user-guide";
+import { ExtraItemsNote, ProgressBlock, StarCells, StarsProvider, useStars, useStarsRefresh, type StarsPayload } from "./stars";
+import { PRIZE_NOTE, starRules, type LeaderRow, type StarState } from "@/lib/stars-rules";
 import { WhatsAppModal } from "./whatsapp-modal";
 import { photoSpots } from "@/lib/photo-spots";
 import { bookingEvent, buildIcs, downloadIcs, slug, trainingEvents, tripWindowEvent, type CalendarEvent } from "@/lib/calendar";
@@ -23,7 +25,7 @@ import { formatBytes, MAX_PHOTO_EDGE, preparePhoto, type PreparedPhoto } from "@
 import { applyFx, applyTheme, storedFx, storedTheme, THEMES, themeLabels, type Theme } from "@/lib/theme";
 import { buildTripModel, countdown, dayKey, daysBetween, fmtDay, fmtMinutes, fmtShort, keyToDate, parseItinerary, parseWhen, type DayEvent, type ParsedPlan, type TimedBooking, type TripModel } from "@/lib/trip-time";
 
-type Item = { id: string; page: string; title: string; checked: boolean; position: number };
+type Item = { id: string; page: string; title: string; checked: boolean; position: number; source?: string };
 type TripInfo = {
   id: string;
   category: "flight" | "hotel" | "rental" | "training" | "insurance" | "other";
@@ -68,10 +70,12 @@ type AppState = {
   tripDocuments: TripDocument[];
   notifications: Notice[];
   links: { whatsapp: string };
+  stars: StarState | null;
+  leaderboard: LeaderRow[];
 };
 type Notice = { id: string; kind: string; title: string; body: string | null; data: string | null; read_at: string | null; created_at: string };
 type NoticeAction = "setup" | "settings" | "guide" | "whatsapp" | "tripInfo" | "theme" | "photos" | "bug";
-type NoticeData = { rows?: [string, string][]; advice?: string[]; steps?: { text: string; action?: NoticeAction; label?: string }[] };
+type NoticeData = { rows?: [string, string][]; advice?: string[]; steps?: { text: string; action?: NoticeAction; label?: string }[]; explainer?: boolean; rules?: string[]; note?: string };
 function noticeData(notice: Notice): NoticeData | null { try { return notice.data ? JSON.parse(notice.data) : null; } catch { return null; } }
 
 const emptyAppState: AppState = {
@@ -83,7 +87,9 @@ const emptyAppState: AppState = {
   tripInfo: [],
   tripDocuments: [],
   notifications: [],
-  links: { whatsapp: "" }
+  links: { whatsapp: "" },
+  stars: null,
+  leaderboard: []
 };
 
 // Per-device hint that a session exists, so the loader can start before bootstrap answers.
@@ -188,6 +194,8 @@ export default function Home() {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [bugOpen, setBugOpen] = useState(false);
   const [whatsAppOpen, setWhatsAppOpen] = useState(false);
+  // A short animation on the star cells and the progress-bar star right after an award.
+  const [burst, setBurst] = useState(false);
   const [settingsTab, setSettingsTab] = useState<"profile" | "details" | "account" | "guide">("profile");
   // Theme mirrors the account setting once loaded; before that (and on the login screen) it is the
   // last theme used on this device. Grid effects are a per-device preference.
@@ -199,6 +207,7 @@ export default function Home() {
 
   function apply(next: Partial<AppState>) {
     setData(normalizeAppState(next));
+    celebrate(next.stars?.newAwards);
     if (next.settings?.theme) { applyTheme(next.settings.theme); setThemeState(next.settings.theme); }
     // The loading-screen sound setting is mirrored onto this device so the next boot loader honors it
     // before the account data has arrived.
@@ -216,6 +225,38 @@ export default function Home() {
   // Checklist edits change one row; apply them to local state instead of refetching every table.
   function patchItems(update: (items: Item[]) => Item[]) {
     setData(current => ({ ...current, items: update(current.items) }));
+  }
+
+  // Stars (see lib/stars.ts). Awards arrive on bootstrap or from /api/stars; each new one gets a toast.
+  // The first award also creates a notification, so the list is refetched to light up the badge.
+  const celebrate = useCallback((awards?: StarState["newAwards"] | null) => {
+    if (!awards?.length) return;
+    for (const award of awards) notify.success(`+${award.stars} star${award.stars === 1 ? "" : "s"}: ${award.label}`);
+    setBurst(true);
+    setTimeout(() => setBurst(false), 1400);
+  }, []);
+  const absorbStars = useCallback(async (next: Partial<StarsPayload>) => {
+    setData(current => ({ ...current, stars: next.stars ?? current.stars, leaderboard: Array.isArray(next.leaderboard) ? next.leaderboard : current.leaderboard }));
+    if (next.stars?.newAwards?.length) {
+      celebrate(next.stars.newAwards);
+      try {
+        const { notifications } = await api("/api/notifications");
+        setData(current => ({ ...current, notifications }));
+      } catch {}
+    }
+  }, [celebrate]);
+  const refreshStars = useCallback(async () => {
+    try { await absorbStars((await api("/api/stars")) as StarsPayload); } catch {}
+  }, [absorbStars]);
+  async function markGuideRead() {
+    try {
+      const next = (await api("/api/guide-read", { method: "POST" })) as StarsPayload;
+      const earned = Boolean(next.stars?.newAwards?.length);
+      await absorbStars(next);
+      if (!earned) notify.success("Thanks for reading the guide.");
+    } catch (err) {
+      notify.error(err, "Could not save that");
+    }
   }
 
   async function enterAfterSignIn() {
@@ -441,7 +482,7 @@ export default function Home() {
   }
 
   return (
-    <>{backdrop(true)}{idleModal}<div className="app-shell">
+    <StarsProvider value={{ stars: data.stars, leaderboard: data.leaderboard, burst, refreshStars }}>{backdrop(true)}{idleModal}<div className="app-shell">
       <aside className={compact ? "sidebar collapsed" : "sidebar"}>
         <div className="brand">
           <button type="button" className="brand-home" onClick={() => { setPage("overview"); setProfileOpen(false); window.scrollTo({ top: 0 }); }} aria-label="Go to Overview" title="Overview"><AbcMark small /></button>
@@ -500,12 +541,12 @@ export default function Home() {
             <button type="button" className="banner-x" onClick={dismissBanner} aria-label="Hide this reminder" title="Hide this reminder. Finish setup stays in your account menu.">×</button>
           </div>
         )}
-        {page === "overview" && <Overview tripName={tripName} settings={data.settings} answers={answers} itinerary={data.itinerary} tripInfo={data.tripInfo} goTo={setPage} />}
+        {page === "overview" && <Overview tripName={tripName} settings={data.settings} answers={answers} itinerary={data.itinerary} tripInfo={data.tripInfo} goTo={setPage} owner={Boolean(data.user.owner)} />}
         {listPages.includes(page) && <ListPage pageKey={page} items={data.items} onItems={patchItems} />}
         {page === "explore" && <ExplorePage items={data.items.filter(item => item.page === "explore")} itinerary={data.itinerary} startDate={answers.startDate} openModal={() => setItineraryOpen(true)} reload={load} onItems={patchItems} />}
         {page === "tripInfo" && <TripInfoPage tripInfo={data.tripInfo} tripDocuments={data.tripDocuments} reload={load} answers={answers} settings={data.settings} email={data.user.email} />}
         {page === "gallery" && <Gallery photos={data.photos} openViewer={setViewer} reload={load} />}
-        {page === "settings" && <SettingsPage settings={data.settings} saveSettings={saveSettings} reload={load} tab={settingsTab} onTab={setSettingsTab} />}
+        {page === "settings" && <SettingsPage settings={data.settings} saveSettings={saveSettings} reload={load} tab={settingsTab} onTab={setSettingsTab} guideReadAt={data.stars?.flags.guideReadAt ?? null} onGuideRead={markGuideRead} />}
         {page === "organizer" && data.user.owner && <OrganizerPage userId={data.user.id} />}
       </main>
 
@@ -526,7 +567,7 @@ export default function Home() {
       }} />}
       {bugOpen && <ReportBugModal onClose={() => setBugOpen(false)} />}
       {whatsAppOpen && <WhatsAppModal url={data.links.whatsapp} onClose={() => setWhatsAppOpen(false)} />}
-    </div></>
+    </div></StarsProvider>
   );
 }
 
@@ -541,7 +582,9 @@ function normalizeAppState(next: Partial<AppState>): AppState {
     links: { whatsapp: typeof next.links?.whatsapp === "string" ? next.links.whatsapp : "" },
     itinerary: next.itinerary || null,
     tripInfo: Array.isArray(next.tripInfo) ? next.tripInfo : [],
-    tripDocuments: Array.isArray(next.tripDocuments) ? next.tripDocuments : []
+    tripDocuments: Array.isArray(next.tripDocuments) ? next.tripDocuments : [],
+    stars: next.stars && typeof next.stars === "object" ? next.stars : null,
+    leaderboard: Array.isArray(next.leaderboard) ? next.leaderboard : []
   };
 }
 
@@ -560,8 +603,10 @@ function overviewNow() {
 
 // The Overview answers "what's happening today?" Before the trip it previews day 1; during the trip it shows
 // that day's bookings and itinerary stops; everything else is compact facts and stats built from the data.
-function Overview({ tripName, settings, answers, itinerary, tripInfo, goTo }: { tripName: string; settings: Settings; answers: WizardAnswers; itinerary: AppState["itinerary"]; tripInfo: TripInfo[]; goTo: (page: string) => void }) {
+function Overview({ tripName, settings, answers, itinerary, tripInfo, goTo, owner }: { tripName: string; settings: Settings; answers: WizardAnswers; itinerary: AppState["itinerary"]; tripInfo: TripInfo[]; goTo: (page: string) => void; owner: boolean }) {
   const [barOpen, setBarOpen] = useState(false);
+  const { stars } = useStars();
+  useStarsRefresh();
   const [now, setNow] = useState(overviewNow);
   // Re-evaluate once a minute so finished items move to "Earlier today" as the day goes on.
   useEffect(() => { const timer = setInterval(() => setNow(overviewNow()), 60 * 1000); return () => clearInterval(timer); }, []);
@@ -595,13 +640,14 @@ function Overview({ tripName, settings, answers, itinerary, tripInfo, goTo }: { 
           ) : <span className="muted">{trip.phase === "after" ? `All done. The trip wrapped up ${trip.endKey ? fmtDay(trip.endKey) : ""}.` : "Nothing scheduled yet. Add bookings or build an itinerary."}</span>}
         </div>
       </div>
-      {(trip.stats.length > 0 || facts.length > 0) && (
+      {(trip.stats.length > 0 || facts.length > 0 || stars) && (
         <section className={barOpen ? "trip-bar open" : "trip-bar"}>
           <button type="button" className="trip-bar-summary" aria-expanded={barOpen} aria-controls="trip-bar-details" onClick={() => setBarOpen(open => !open)}>
             <span className="trip-bar-stats">
               {trip.stats.length ? trip.stats.map(stat => (
                 <span className="trip-stat" key={stat.label} title={stat.note}><span className="eyebrow">{stat.label}</span><strong>{stat.value}</strong></span>
               )) : <span className="muted">Trip details</span>}
+              <StarCells owner={owner} />
             </span>
             <span className="trip-bar-toggle" title={barOpen ? "Hide trip details" : "Show trip details"}>
               <span className="visually-hidden">{barOpen ? "Hide trip details" : "Show trip details"}</span>
@@ -711,8 +757,6 @@ function ListPage({ pageKey, items, onItems }: { pageKey: string; items: Item[];
   const visible = items.filter(item => item.page === pageKey);
   const done = visible.filter(item => item.checked).length;
   const total = visible.length;
-  const percent = total ? Math.round((done / total) * 100) : 0;
-  const status = !total ? "Add your first item" : done === total ? "All done" : `${total - done} to go`;
   return (
     <section className="page active">
       <header className="checklist-hero">
@@ -721,11 +765,7 @@ function ListPage({ pageKey, items, onItems }: { pageKey: string; items: Item[];
           <h1>{pageLabels[pageKey]}</h1>
           <AddItemForm pageKey={pageKey} onItems={onItems} />
         </div>
-        <div className="progress-block" role="group" aria-label="Progress">
-          <strong>{done}<small>of {total} done</small></strong>
-          <div className="progress-bar" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent}><i style={{ width: `${percent}%` }} /></div>
-          <span>{status}</span>
-        </div>
+        <ProgressBlock pageKey={pageKey} done={done} total={total} />
       </header>
       <Checklist pageKey={pageKey} items={items} onItems={onItems} />
     </section>
@@ -733,6 +773,7 @@ function ListPage({ pageKey, items, onItems }: { pageKey: string; items: Item[];
 }
 
 function AddItemForm({ pageKey, onItems, placeholder = "Add an item" }: { pageKey: string; onItems: ItemsPatch; placeholder?: string }) {
+  const { refreshStars } = useStars();
   async function add(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
@@ -742,11 +783,13 @@ function AddItemForm({ pageKey, onItems, placeholder = "Add an item" }: { pageKe
       const { item } = await api("/api/items", { method: "POST", body: JSON.stringify({ page: pageKey, title }) });
       form.reset();
       onItems(items => [...items, item]);
+      notify.success("Item added");
+      void refreshStars();
     } catch (err) {
       notify.error(err, "Couldn't add that item");
     }
   }
-  return <form className="item-form" onSubmit={add}><input name="title" placeholder={placeholder} maxLength={180} aria-label={placeholder} /><button className="btn primary">Add</button></form>;
+  return <><form className="item-form" onSubmit={add}><input name="title" placeholder={placeholder} maxLength={180} aria-label={placeholder} /><button className="btn primary">Add</button></form><ExtraItemsNote /></>;
 }
 
 // Open items first; finished ones collapse into a "Done" group underneath so the list stays about what's left.
@@ -776,12 +819,15 @@ function ChecklistBody({ pageKey, items, onItems, placeholder = "Add an item" }:
 }
 
 function ChecklistItem({ item, onItems }: { item: Item; onItems: ItemsPatch }) {
+  const { refreshStars } = useStars();
   async function toggle() {
     const checked = !item.checked;
     // Flip it right away and move it to the end of its new group, which is where the server puts it too.
     onItems(items => [...items.filter(other => other.id !== item.id), { ...item, checked }]);
     try {
       await api("/api/items", { method: "PATCH", body: JSON.stringify({ id: item.id, checked }) });
+      notify.success(checked ? "Checked off" : "Unchecked");
+      void refreshStars();
     } catch (err) {
       onItems(items => items.map(other => (other.id === item.id ? { ...other, checked: !checked } : other)));
       notify.error(err, "Couldn't save that check");
@@ -791,6 +837,8 @@ function ChecklistItem({ item, onItems }: { item: Item; onItems: ItemsPatch }) {
     try {
       await api("/api/items", { method: "DELETE", body: JSON.stringify({ id: item.id }) });
       onItems(items => items.filter(other => other.id !== item.id));
+      notify.success("Item deleted");
+      void refreshStars();
     } catch (err) {
       notify.error(err, "Couldn't delete that item");
     }
@@ -843,7 +891,7 @@ function ExplorePage({ items, itinerary, startDate, openModal, reload, onItems }
           )}
         </TabPanel>
       )}
-      {tab === "places" && <TabPanel id="places"><ChecklistBody pageKey="explore" items={items} onItems={onItems} placeholder="Add a place you want to visit" /></TabPanel>}
+      {tab === "places" && <TabPanel id="places"><ProgressBlock pageKey="explore" done={items.filter(item => item.checked).length} total={items.length} inline /><ChecklistBody pageKey="explore" items={items} onItems={onItems} placeholder="Add a place you want to visit" /></TabPanel>}
       {confirmClear && (
         <div className="modal-backdrop" onClick={() => setConfirmClear(false)}>
           <section className="modal confirm-modal" role="dialog" aria-modal="true" onClick={event => event.stopPropagation()}>
@@ -1373,11 +1421,19 @@ function NotificationsModal({ items, done, onChange, onClose, onAction }: { item
   }
   if (open) {
     const details = noticeData(open);
-    const kindLabel = open.kind === "health" ? "Application health" : open.kind === "signup" ? "New attendee" : open.kind === "welcome" ? "Getting started" : "Notice";
+    const kindLabel = open.kind === "health" ? "Application health" : open.kind === "signup" ? "New attendee" : open.kind === "welcome" ? "Getting started" : open.kind === "stars" ? "Stars" : "Notice";
     return (
       <FormModal eyebrow={kindLabel} title={open.title} onClose={onClose}>
         <p className="muted">{fmtWhen(open.created_at)}</p>
         {open.body && <p className="notice-body">{open.body}</p>}
+        {details?.explainer ? (
+          <div className="stars-explainer">
+            <h3 className="notice-h3">How to earn stars</h3>
+            <ul className="how-to">{(details.rules?.length ? details.rules : starRules()).map(line => <li key={line}>{line}</li>)}</ul>
+            <p className="notice-note">{details.note || PRIZE_NOTE}</p>
+            <div className="button-row"><button type="button" className="btn primary" onClick={() => onAction("guide")}>Read the guide</button></div>
+          </div>
+        ) : null}
         {details?.steps?.length ? (() => {
           const remaining = details.steps!.filter(step => !step.action || !done.has(step.action));
           const finished = details.steps!.filter(step => step.action && done.has(step.action));
@@ -1419,7 +1475,7 @@ function NotificationsModal({ items, done, onChange, onClose, onAction }: { item
               <button type="button" className="notice-open" onClick={() => show(notice)} aria-label={`Open ${notice.title}`}>
                 <strong>{notice.title}</strong>
                 {notice.body && <p>{notice.body}</p>}
-                <time dateTime={notice.created_at}>{fmtWhen(notice.created_at)}{notice.read_at ? "" : " · New"}{notice.kind === "health" ? " · Health" : notice.kind === "signup" ? " · New attendee" : notice.kind === "welcome" ? " · Getting started" : ""}</time>
+                <time dateTime={notice.created_at}>{fmtWhen(notice.created_at)}{notice.read_at ? "" : " · New"}{notice.kind === "health" ? " · Health" : notice.kind === "signup" ? " · New attendee" : notice.kind === "welcome" ? " · Getting started" : notice.kind === "stars" ? " · Stars" : ""}</time>
               </button>
               <button type="button" className="check-remove" aria-label={`Delete ${notice.title}`} disabled={Boolean(busy)} onClick={() => run(notice.id, () => api("/api/notifications", { method: "DELETE", body: JSON.stringify({ id: notice.id }) }))}>×</button>
             </li>
@@ -1458,7 +1514,7 @@ function ReportBugModal({ onClose }: { onClose: () => void }) {
           ))}
         </div>
         <label>{kind === "bug" ? "What happened?" : "What's on your mind?"}<textarea value={message} onChange={event => setMessage(event.target.value)} rows={5} maxLength={4000} required placeholder={kind === "bug" ? "What were you doing, what did you expect, and what happened instead?" : "Tell us what you'd like to see."} /></label>
-        <p className="muted">This goes straight to the trip organizer&rsquo;s email, along with your account email and the page you were on.</p>
+        <p className="muted">This is saved for the trip organizer (and emailed to them) along with your account email and the page you were on. A bug that gets fixed, or an idea that gets accepted, earns you 5 stars, up to five times each.</p>
         {error && <p className="error">{error}</p>}
         <div className="button-row"><button className="btn primary" disabled={busy}>{busy ? "Sending..." : "Send"}</button><button type="button" className="btn" onClick={onClose}>Cancel</button></div>
       </form>
@@ -1467,7 +1523,7 @@ function ReportBugModal({ onClose }: { onClose: () => void }) {
 }
 
 type SettingsTab = "profile" | "details" | "account" | "guide";
-function SettingsPage({ settings, saveSettings, reload, tab: controlledTab, onTab }: { settings: Settings; saveSettings: (form: HTMLFormElement) => Promise<void>; reload: () => Promise<void>; tab?: SettingsTab; onTab?: (tab: SettingsTab) => void }) {
+function SettingsPage({ settings, saveSettings, reload, tab: controlledTab, onTab, guideReadAt, onGuideRead }: { settings: Settings; saveSettings: (form: HTMLFormElement) => Promise<void>; reload: () => Promise<void>; tab?: SettingsTab; onTab?: (tab: SettingsTab) => void; guideReadAt?: string | null; onGuideRead?: () => Promise<void> }) {
   const [ownTab, setOwnTab] = useState<SettingsTab>("profile");
   const tab = controlledTab ?? ownTab;
   const setTab = onTab ?? setOwnTab;
@@ -1479,7 +1535,7 @@ function SettingsPage({ settings, saveSettings, reload, tab: controlledTab, onTa
     await api("/api/account", { method: "DELETE" });
     window.location.reload();
   }
-  return <section className="page active"><header className="page-header"><p className="eyebrow">Profile</p><h1>Settings</h1></header><Tabs label="Settings sections" active={tab} onChange={setTab} tabs={[{ key: "profile", label: "Profile" }, { key: "details", label: "Trip details" }, { key: "account", label: "Account" }, { key: "guide", label: "User Guide" }]} />{tab === "profile" && <TabPanel id="profile"><SettingsForm settings={settings} onSubmit={saveSettings} /></TabPanel>}{tab === "details" && <TabPanel id="details"><TripDetailsPanel settings={settings} reload={reload} /></TabPanel>}{tab === "guide" && <TabPanel id="guide"><UserGuide /></TabPanel>}{tab === "account" && <TabPanel id="account"><div className="danger-panel"><h2>Delete account data</h2><p className="muted">Remove this account and all saved trip planner data from the database.</p><button className="btn danger" onClick={() => setDeleteOpen(true)}>Delete my account data</button></div></TabPanel>}{deleteOpen && <div className="modal-backdrop"><section className="modal confirm-modal"><button className="modal-x" onClick={() => setDeleteOpen(false)}>×</button><p className="eyebrow">Danger zone</p><h2>Delete account data?</h2><p>This removes the account, checklists, trip information, PDFs, photos, and itinerary from the database. Type DELETE to confirm.</p><label>Confirmation<input value={deleteText} onChange={event => setDeleteText(event.target.value)} placeholder="DELETE" /></label><div className="button-row"><button className="btn" onClick={() => setDeleteOpen(false)}>Cancel</button><button className="btn danger" disabled={deleteText !== "DELETE"} onClick={deleteAccount}>Delete permanently</button></div></section></div>}</section>;
+  return <section className="page active"><header className="page-header"><p className="eyebrow">Profile</p><h1>Settings</h1></header><Tabs label="Settings sections" active={tab} onChange={setTab} tabs={[{ key: "profile", label: "Profile" }, { key: "details", label: "Trip details" }, { key: "account", label: "Account" }, { key: "guide", label: "User Guide" }]} />{tab === "profile" && <TabPanel id="profile"><SettingsForm settings={settings} onSubmit={saveSettings} /></TabPanel>}{tab === "details" && <TabPanel id="details"><TripDetailsPanel settings={settings} reload={reload} /></TabPanel>}{tab === "guide" && <TabPanel id="guide"><UserGuide readAt={guideReadAt ?? null} onRead={onGuideRead} /></TabPanel>}{tab === "account" && <TabPanel id="account"><div className="danger-panel"><h2>Delete account data</h2><p className="muted">Remove this account and all saved trip planner data from the database.</p><button className="btn danger" onClick={() => setDeleteOpen(true)}>Delete my account data</button></div></TabPanel>}{deleteOpen && <div className="modal-backdrop"><section className="modal confirm-modal"><button className="modal-x" onClick={() => setDeleteOpen(false)}>×</button><p className="eyebrow">Danger zone</p><h2>Delete account data?</h2><p>This removes the account, checklists, trip information, PDFs, photos, and itinerary from the database. Type DELETE to confirm.</p><label>Confirmation<input value={deleteText} onChange={event => setDeleteText(event.target.value)} placeholder="DELETE" /></label><div className="button-row"><button className="btn" onClick={() => setDeleteOpen(false)}>Cancel</button><button className="btn danger" disabled={deleteText !== "DELETE"} onClick={deleteAccount}>Delete permanently</button></div></section></div>}</section>;
 }
 
 function SettingsForm({ settings, onSubmit }: { settings: Settings; onSubmit: (form: HTMLFormElement) => Promise<void> }) {

@@ -27,7 +27,7 @@ export const POST = withAudit("plan.import", async (request, ctx) => {
       if (!titles.length) continue;
       queries.push(sql`DELETE FROM list_items WHERE user_id = ${user.id} AND page = ${page}`);
       titles.forEach((title, index) => {
-        queries.push(sql`INSERT INTO list_items (user_id, page, title, position) VALUES (${user.id}, ${page}, ${encryptText(title)}, ${index + 1})`);
+        queries.push(sql`INSERT INTO list_items (user_id, page, title, position, source) VALUES (${user.id}, ${page}, ${encryptText(title)}, ${index + 1}, 'import')`);
       });
     }
 

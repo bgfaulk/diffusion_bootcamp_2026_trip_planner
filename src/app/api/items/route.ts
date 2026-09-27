@@ -2,6 +2,7 @@ import { requireUser } from "@/lib/auth";
 import { withAudit } from "@/lib/audit";
 import { decryptText, encryptText } from "@/lib/crypto";
 import { getSql, pageKeys } from "@/lib/db";
+import { CUSTOM_LIMIT } from "@/lib/stars-rules";
 import { asString, errorResponse, fail, requireString } from "@/lib/validation";
 
 export const POST = withAudit("items.add", async (request, ctx) => {
@@ -13,9 +14,13 @@ export const POST = withAudit("items.add", async (request, ctx) => {
     const title = encryptText(requireString(body.title, "Item", 180));
     const sql = getSql();
     const positionRows = await sql`SELECT COALESCE(MAX(position), 0)::int + 1 AS next FROM list_items WHERE user_id = ${user.id} AND page = ${page}`;
+    // Only the first five items a person ever adds count for stars (lib/stars.ts). The lifetime counter
+    // decides, never the request body, so deleting and re-adding can't mint new counted items.
+    const counter = await sql`UPDATE users SET custom_items_created = custom_items_created + 1 WHERE id = ${user.id} RETURNING custom_items_created`;
+    const source = Number(counter[0]?.custom_items_created || 0) <= CUSTOM_LIMIT ? "custom" : "extra";
     const item = await sql`
-      INSERT INTO list_items (user_id, page, title, position)
-      VALUES (${user.id}, ${page}, ${title}, ${Number(positionRows[0].next)})
+      INSERT INTO list_items (user_id, page, title, position, source)
+      VALUES (${user.id}, ${page}, ${title}, ${Number(positionRows[0].next)}, ${source})
       RETURNING *
     `;
     return Response.json({ item: { ...item[0], title: decryptText(item[0].title) } });

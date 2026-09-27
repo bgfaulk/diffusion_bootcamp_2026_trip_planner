@@ -5,6 +5,7 @@ import { getUser } from "@/lib/auth";
 import { withTraffic } from "@/lib/audit";
 import { decryptRow, decryptText } from "@/lib/crypto";
 import { ensureSchema, getSql, hasDatabaseUrl } from "@/lib/db";
+import { starsFor } from "@/lib/stars";
 
 function emptyBootstrap() {
   return Response.json({
@@ -16,7 +17,9 @@ function emptyBootstrap() {
     photos: {},
     itinerary: null,
     tripInfo: [],
-    tripDocuments: []
+    tripDocuments: [],
+    stars: null,
+    leaderboard: []
   });
 }
 
@@ -45,11 +48,17 @@ export const GET = withTraffic("bootstrap", async (_request, ctx) => {
     sql`SELECT id, label, file_name, content_type, created_at FROM trip_documents WHERE user_id = ${user.id} ORDER BY created_at DESC`,
     sql`SELECT id, kind, title, body, data, read_at, created_at FROM notifications WHERE user_id = ${user.id} ORDER BY created_at DESC LIMIT 100`
   ]);
+  const settingsRow = settings[0] ? decryptRow(settings[0], ["profile_name", "trip_name", "home_address", "home_place_id", "training_location", "training_place_id", "planning_answers", "calendar_guest"]) : null;
+  // Stars settle on every load, so anything earned through a save that reloads (profile, trip details,
+  // an import) shows up right here. Never fails the load.
+  const starState = await starsFor(user.id, { items: items as any, settings: settingsRow as any, tripInfoCount: tripInfo.length }).catch(error => { console.error("stars", error); return { stars: null, leaderboard: [] }; });
   return Response.json({
     user,
     // Shared links handed only to signed-in attendees (kept out of the public repo).
     links: { whatsapp: process.env.WHATSAPP_GROUP_URL?.trim() || "" },
-    settings: settings[0] ? decryptRow(settings[0], ["profile_name", "trip_name", "home_address", "home_place_id", "training_location", "training_place_id", "planning_answers", "calendar_guest"]) : null,
+    settings: settingsRow,
+    stars: starState.stars,
+    leaderboard: starState.leaderboard,
     items: items.map((item: any) => ({ ...item, title: decryptText(item.title) })),
     photos: Object.fromEntries(photos.map((photo: any) => [photo.spot, {
       id: photo.id,

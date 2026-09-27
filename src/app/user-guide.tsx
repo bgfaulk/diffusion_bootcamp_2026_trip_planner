@@ -1,17 +1,29 @@
 // The User Guide shown on Settings > User Guide. Plain prose for attendees: what the planner is, how to get
 // in, what each page and control is for, and what changed recently. Keep it current when features change.
 
+import { useState } from "react";
+import { CUSTOM_BONUS, CUSTOM_LIMIT, FIXED, MIN_ITEMS_FOR_UNLOCK, PAGE_CAP, PRIZE_NOTE } from "@/lib/stars-rules";
+
 export const APP_URL = "https://diffusion-bootcamp-2026-trip-planne.vercel.app";
 export const GUIDE_UPDATED = "September 27, 2026";
 
-export function UserGuide() {
+// `readAt` and `onRead` drive the "I've read the guide" box at the bottom, which is worth stars (see the Stars
+// section below). The first tick is the one that counts; the box stays ticked afterwards.
+export function UserGuide({ readAt = null, onRead }: { readAt?: string | null; onRead?: () => Promise<void> }) {
+  const [busy, setBusy] = useState(false);
+  async function tick() {
+    if (readAt || busy || !onRead) return;
+    setBusy(true);
+    try { await onRead(); } finally { setBusy(false); }
+  }
   return (
     <article className="callout guide">
       <h2>What this planner is</h2>
       <p>
         The ABC Fitness Diffusion Bootcamp Trip Planner keeps everything for the San Francisco training trip in one place: your bookings,
         your checklists, a day-by-day itinerary, the local weather, and a photo route to fill in along the way. Each attendee has a private
-        account, and everything you save is stored encrypted under it. Nothing you enter is shared with other attendees.
+        account, and everything you save is stored encrypted under it. Nothing you enter is shared with other attendees, apart from
+        your display name and star count on the rankings (see Stars below).
       </p>
       <p>
         Reach it at <a href={APP_URL}>{APP_URL}</a>. It works in any browser, on a computer or a phone, and there is nothing to install.
@@ -80,7 +92,7 @@ export function UserGuide() {
         <li><strong>Notifications.</strong> Notices from the trip organizer land here, and a count on your initial shows how many are unread. Mark them all as read, delete one at a time, or clear them all.</li>
         <li><strong>Themes.</strong> &ldquo;Theme&rdquo; in the account menu opens a picker for Light, Dark, or Digital Nirvana. Digital Nirvana adds a &ldquo;Grid effects&rdquo; switch for the animated backdrop.</li>
         <li><strong>ABC WhatsApp.</strong> The group chat&rsquo;s invite link and a QR code, so you can open the group or add someone standing next to you.</li>
-        <li><strong>Report Bug.</strong> Found something broken, or have an idea? &ldquo;Report Bug&rdquo; in the account menu sends your note straight to the trip organizer&rsquo;s email.</li>
+        <li><strong>Report Bug.</strong> Found something broken, or have an idea? &ldquo;Report Bug&rdquo; in the account menu saves your note for the trip organizer and emails it to them. A bug that gets fixed, or an idea that gets accepted, earns you stars.</li>
         <li><strong>Loading chime.</strong> The A-B-C letters on the loading screen play three notes. Browsers only allow sound after you have tapped or typed on the page, so a cold start may be silent. Mute it in Settings or with the sound button on the loading screen.</li>
         <li><strong>Save messages.</strong> Every save, add, or delete shows a short message at the bottom of the screen: green when it worked, red with the reason when it did not.</li>
         <li><strong>Web addresses.</strong> Each page has its own address, so you can bookmark one, refresh without losing your place, and use the back button.</li>
@@ -88,9 +100,26 @@ export function UserGuide() {
         <li><strong>On a phone.</strong> The pages sit in a bar along the bottom of the screen that scrolls sideways. Your account menu is the initial at the top right.</li>
       </ul>
 
+      <h2>Stars</h2>
+      <p>
+        Stars are points for getting ready for the trip. The Overview strip shows your total, how close you are to 100% of what you can earn,
+        and a Rank cell that cycles through everyone with stars, starting from first place. {PRIZE_NOTE}
+      </p>
+      <ul>
+        <li><strong>Checklists.</strong> Every item you check off on Pre-checks, Packing, Departure Day, Return Day, or Places to visit adds a waiting star to that page&rsquo;s progress bar (1 per item, up to {PAGE_CAP} per list). When every item on the list is checked, the waiting stars unlock into your total. A list needs at least {MIN_ITEMS_FOR_UNLOCK} items, and the stars you get are the items on the list at that moment, so finish the list rather than shrinking it.</li>
+        <li><strong>Your own items.</strong> The first {CUSTOM_LIMIT} items you ever add by hand count like any other. Check all {CUSTOM_LIMIT} off for a {CUSTOM_BONUS}-star bonus. Items added after that still count toward finishing a list but earn nothing.</li>
+        <li><strong>Profile:</strong> a display name, home address, and training location in Settings earn {FIXED.profile} stars.</li>
+        <li><strong>Trip details:</strong> your start and end dates plus at least one booking earn {FIXED.trip} stars.</li>
+        <li><strong>This guide:</strong> tick the box at the bottom of this page for {FIXED.guide} stars.</li>
+        <li><strong>Bugs and ideas:</strong> a bug report the organizer fixes earns {FIXED.bug} stars, and feedback the organizer accepts earns {FIXED.feedback}, each up to {FIXED.reportCap} times. You get a notification when that happens.</li>
+        <li><strong>Once earned, stars stay.</strong> Unchecking an item or deleting one never takes stars away, and each award can only be earned once. The organizer is not ranked.</li>
+      </ul>
+
       <h2>What&rsquo;s new</h2>
       <p className="muted">Updated {GUIDE_UPDATED}.</p>
       <ul>
+        <li>Stars: earn points for finishing checklists, filling in your profile and trip details, reading this guide, and reporting bugs or ideas the organizer acts on. The Overview shows your total, your distance to 100%, and the rankings; checklist pages show the stars waiting to unlock.</li>
+        <li>Bug reports and feedback are now kept for the organizer, who can mark them fixed or accepted from the Organizer page.</li>
         <li>Add to calendar is back: Trip Information downloads calendar files for the whole trip, one booking, or the training days, and Settings has a calendar guest who gets invited on every event.</li>
         <li>The sidebar groups pages into Get ready, Travel days, and On the trip. Each group folds away, and the forecast sits under its own divider.</li>
         <li>Address fields say so when suggestions are unavailable, and the booking form&rsquo;s Address field offers suggestions too.</li>
@@ -109,6 +138,12 @@ export function UserGuide() {
         <li>The setup wizard leads with pasting your confirmation emails into ChatGPT and explains when ChatGPT can search your email directly.</li>
         <li>Phone layout: a slimmer top bar, and the page bar stays at the bottom in every theme.</li>
       </ul>
+
+      <label className={readAt ? "check-toggle guide-read done" : "check-toggle guide-read"}>
+        <input type="checkbox" className="visually-hidden" checked={Boolean(readAt)} disabled={Boolean(readAt) || busy || !onRead} onChange={tick} />
+        <span className="check-box" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg></span>
+        <span className="check-title">{readAt ? `You read the guide. ${FIXED.guide} stars earned.` : `I have read the guide (${FIXED.guide} stars)`}</span>
+      </label>
     </article>
   );
 }
