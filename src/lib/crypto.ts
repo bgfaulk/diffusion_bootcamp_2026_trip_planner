@@ -1,15 +1,25 @@
 import crypto from "node:crypto";
 
 const prefix = "enc:v1:";
+const devSecret = "development-only-session-secret";
 
+// Sessions and the at-rest encryption key both derive from SESSION_SECRET, so a production deploy
+// without it must fail loudly rather than run on the well-known development value.
 export function sessionSecret() {
   const value = process.env.SESSION_SECRET?.trim();
-  if (!value || value === "\"\"" || value === "''") return "development-only-session-secret";
+  if (!value || value === "\"\"" || value === "''") {
+    if (process.env.NODE_ENV === "production") throw new Error("SESSION_SECRET is not configured");
+    return devSecret;
+  }
   return value;
 }
 
+// The key is a hash of the secret; derive it once per secret instead of on every field.
+let cached: { secret: string; key: Buffer } | null = null;
 function key() {
-  return crypto.createHash("sha256").update(sessionSecret()).digest();
+  const secret = sessionSecret();
+  if (!cached || cached.secret !== secret) cached = { secret, key: crypto.createHash("sha256").update(secret).digest() };
+  return cached.key;
 }
 
 export function encryptText(value: string | null | undefined) {

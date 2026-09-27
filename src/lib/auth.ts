@@ -1,19 +1,24 @@
 import { cookies } from "next/headers";
 import crypto from "node:crypto";
+import { promisify } from "node:util";
 import { sessionSecret as secret } from "./crypto";
 import { ensureSchema, getSql, seedStarterItems } from "./db";
 import { AppError, validateEmail, validatePassword } from "./validation";
 
 const cookieName = "trip_session";
+const pbkdf2 = promisify(crypto.pbkdf2);
 
-export function hashPassword(password: string, salt = crypto.randomBytes(16).toString("hex")) {
-  const hash = crypto.pbkdf2Sync(password, salt, 120000, 32, "sha256").toString("hex");
+// PBKDF2 takes ~100 ms on purpose; running it on the thread pool keeps that from stalling every other
+// request on the instance while someone signs in.
+export async function hashPassword(password: string, salt = crypto.randomBytes(16).toString("hex")) {
+  const hash = (await pbkdf2(password, salt, 120000, 32, "sha256")).toString("hex");
   return { salt, hash };
 }
 
-export function verifyPassword(password: string, salt: string, hash: string) {
-  const candidate = hashPassword(password, salt).hash;
-  return crypto.timingSafeEqual(Buffer.from(candidate, "hex"), Buffer.from(hash, "hex"));
+export async function verifyPassword(password: string, salt: string, hash: string) {
+  const candidate = (await hashPassword(password, salt)).hash;
+  const expected = Buffer.from(hash, "hex");
+  return candidate.length === hash.length && crypto.timingSafeEqual(Buffer.from(candidate, "hex"), expected);
 }
 
 function hashToken(token: string) {
@@ -39,22 +44,24 @@ export async function createOrLogin(emailValue: unknown, passwordValue: unknown,
   if (intent === "create" && users.length) throw new AppError("An account already exists for this email. Sign in instead.");
   if (intent !== "create" && !users.length) throw new AppError("No account found for this email", 401);
   if (!users.length) {
-    const { salt, hash } = hashPassword(password);
+    const { salt, hash } = await hashPassword(password);
     const inserted = await sql`INSERT INTO users (email, password_hash, password_salt) VALUES (${email}, ${hash}, ${salt}) RETURNING id`;
     userId = String(inserted[0].id);
     await seedStarterItems(userId);
   } else {
     const user = users[0] as { id: string; password_hash: string; password_salt: string };
     if (intent === "reset") {
-      const { salt, hash } = hashPassword(password);
+      const { salt, hash } = await hashPassword(password);
       await sql`UPDATE users SET password_hash = ${hash}, password_salt = ${salt}, updated_at = now() WHERE id = ${user.id}`;
-    } else if (!verifyPassword(password, user.password_salt, user.password_hash)) {
+    } else if (!(await verifyPassword(password, user.password_salt, user.password_hash))) {
       throw new AppError("Email or password did not match", 401);
     }
     userId = user.id;
   }
   const token = crypto.randomBytes(32).toString("base64url");
   const tokenHash = hashToken(token);
+  // Sign-in is rare enough to double as the moment expired sessions get swept out.
+  await sql`DELETE FROM sessions WHERE expires_at < now()`;
   await sql`INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (${tokenHash}, ${userId}, now() + interval '7 days')`;
   const jar = await cookies();
   jar.set(cookieName, token, {
