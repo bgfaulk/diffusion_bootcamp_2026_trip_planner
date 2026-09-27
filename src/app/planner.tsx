@@ -360,6 +360,14 @@ export default function Home() {
   const settings = data.settings;
   const answers = parseAnswers(settings?.planning_answers);
   const mode = settings?.planning_mode;
+  // Tour steps the account has already taken care of; the welcome notice hides these. "setup" matters most:
+  // its button relaunches the wizard, which must never be offered once setup is complete.
+  const tourDone = new Set<NoticeAction>();
+  if (answers.completed) tourDone.add("setup");
+  if (settings?.profile_name?.trim() && settings?.home_address?.trim() && settings?.training_location?.trim()) tourDone.add("settings");
+  if (data.tripInfo.length) tourDone.add("tripInfo");
+  if (photoSpots.every(([id]) => data.photos[id])) tourDone.add("photos");
+  if (theme !== "light") tourDone.add("theme");
   if (choosingPlan || (!mode && !answers.dismissed)) return <>{backdrop(false)}<PlanningChoice onChoose={choosePlanning} onLater={setUpLater} onSignOut={signOut} />{idleModal}</>;
   // The wizard only shows until setup is finished. It resumes on the saved step (including after
   // signing out and back in) unless they chose to leave it; "Finish setup" brings them back.
@@ -452,7 +460,7 @@ export default function Home() {
       {itineraryOpen && <ItineraryModal items={data.items.filter(item => item.page === "explore")} itinerary={data.itinerary} answers={answers} hasTripData={Boolean(data.itinerary?.saved_plan) || data.tripInfo.length > 0} onClose={() => setItineraryOpen(false)} reload={load} />}
       {viewer && <PhotoViewer spot={viewer} photos={data.photos} onClose={() => setViewer(null)} onDeleted={load} />}
       {themeOpen && <ThemeModal theme={theme} fx={fx} onTheme={chooseTheme} onFx={toggleFx} onClose={() => setThemeOpen(false)} />}
-      {notificationsOpen && <NotificationsModal items={data.notifications} onChange={list => setData(current => ({ ...current, notifications: list }))} onClose={() => setNotificationsOpen(false)} onAction={action => {
+      {notificationsOpen && <NotificationsModal items={data.notifications} done={tourDone} onChange={list => setData(current => ({ ...current, notifications: list }))} onClose={() => setNotificationsOpen(false)} onAction={action => {
         setNotificationsOpen(false);
         if (action === "setup") void resumeSetup();
         else if (action === "settings") { setSettingsTab("profile"); setPage("settings"); }
@@ -1260,7 +1268,7 @@ function fmtWhen(value: string) {
   return new Date(value).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
-function NotificationsModal({ items, onChange, onClose, onAction }: { items: Notice[]; onChange: (list: Notice[]) => void; onClose: () => void; onAction: (action: NoticeAction) => void }) {
+function NotificationsModal({ items, done, onChange, onClose, onAction }: { items: Notice[]; done: Set<NoticeAction>; onChange: (list: Notice[]) => void; onClose: () => void; onAction: (action: NoticeAction) => void }) {
   const [busy, setBusy] = useState("");
   const [openId, setOpenId] = useState<string | null>(null);
   const unread = items.filter(notice => !notice.read_at).length;
@@ -1289,16 +1297,25 @@ function NotificationsModal({ items, onChange, onClose, onAction }: { items: Not
       <FormModal eyebrow={kindLabel} title={open.title} onClose={onClose}>
         <p className="muted">{fmtWhen(open.created_at)}</p>
         {open.body && <p className="notice-body">{open.body}</p>}
-        {details?.steps?.length ? (
-          <ol className="notice-steps">
-            {details.steps.map((step, index) => (
-              <li key={index}>
-                <span>{step.text}</span>
-                {step.action && <button type="button" className="btn" onClick={() => onAction(step.action!)}>{step.label || "Open"}</button>}
-              </li>
-            ))}
-          </ol>
-        ) : null}
+        {details?.steps?.length ? (() => {
+          const remaining = details.steps!.filter(step => !step.action || !done.has(step.action));
+          const finished = details.steps!.filter(step => step.action && done.has(step.action));
+          return (
+            <>
+              {remaining.length ? (
+                <ol className="notice-steps">
+                  {remaining.map((step, index) => (
+                    <li key={index}>
+                      <span>{step.text}</span>
+                      {step.action && <button type="button" className="btn" onClick={() => onAction(step.action!)}>{step.label || "Open"}</button>}
+                    </li>
+                  ))}
+                </ol>
+              ) : <p className="notice-body">You&rsquo;ve already taken care of everything on this list.</p>}
+              {finished.length > 0 && <p className="muted">Already done: {finished.map(step => step.label).join(", ")}.</p>}
+            </>
+          );
+        })() : null}
         {details?.rows?.length ? <dl className="notice-rows">{details.rows.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl> : null}
         {details?.advice?.length ? <div><h3 className="notice-h3">What to do</h3><ul className="how-to">{details.advice.map(line => <li key={line}>{line}</li>)}</ul></div> : null}
         <div className="button-row">
