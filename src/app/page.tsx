@@ -4,7 +4,7 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/lib/client";
 import { buildWizardPrompt, extractJson, parseAnswers, trainingAgenda, type WizardAnswers } from "@/lib/plan";
 import { AbcLoader, AbcMark, ActionMenu, DestinationField, InterestFields, LoginScreen, PlanningChoice, SetupWizard, TravelerFields, TripDateFields } from "./onboarding";
-import { primeChime } from "@/lib/chime";
+import { primeChime, setChimeEnabled } from "@/lib/chime";
 import { PlaceInput } from "./place-input";
 import { TabPanel, Tabs } from "./tabs";
 import { JsonFileInput } from "./json-file-input";
@@ -13,6 +13,7 @@ import { NirvanaBackdrop } from "./nirvana-backdrop";
 import { PageIcon } from "./page-icons";
 import { OrganizerPage } from "./organizer";
 import { useWeather, WeatherPanel } from "./weather";
+import { IdleWarning, useIdleTimeout } from "./idle-timeout";
 import { photoSpots } from "@/lib/photo-spots";
 import { applyFx, applyTheme, storedFx, storedTheme, THEMES, themeLabels, type Theme } from "@/lib/theme";
 import { buildTripModel, countdown, dayKey, daysBetween, fmtDay, fmtMinutes, fmtShort, keyToDate, parseItinerary, parseWhen, type DayEvent, type ParsedPlan, type TimedBooking, type TripModel } from "@/lib/trip-time";
@@ -49,6 +50,7 @@ type Settings = {
   theme?: Theme;
   planning_mode?: "ai" | "manual" | null;
   planning_answers?: string;
+  chime_muted?: boolean;
 } | null;
 type AppState = {
   user: null | { id: string; email: string; owner?: boolean };
@@ -131,10 +133,16 @@ export default function Home() {
   // last theme used on this device. Grid effects are a per-device preference.
   const [theme, setThemeState] = useState<Theme>("light");
   const [fx, setFx] = useState(true);
+  // Shown on the login page after an inactivity sign-out.
+  const [signOutNotice, setSignOutNotice] = useState("");
+  const idle = useIdleTimeout(Boolean(data.user), () => { setSignOutNotice("You were signed out after an hour without activity."); void signOut(); });
 
   function apply(next: Partial<AppState>) {
     setData(normalizeAppState(next));
     if (next.settings?.theme) { applyTheme(next.settings.theme); setThemeState(next.settings.theme); }
+    // The loading-screen sound setting is mirrored onto this device so the next boot loader honors it
+    // before the account data has arrived.
+    if (typeof next.settings?.chime_muted === "boolean") setChimeEnabled(!next.settings.chime_muted);
   }
 
   async function loadState() {
@@ -233,6 +241,7 @@ export default function Home() {
   }
 
   async function signOut() {
+    idle.stay(); // clears any open warning
     await api("/api/auth", { method: "DELETE" }).catch(() => {});
     rememberSession(false);
     setWizardOpen(false);
@@ -288,11 +297,12 @@ export default function Home() {
 
   if (entering) return <AbcLoader done={enterDone} failed={false} onFinish={() => setEntering(false)} onFailed={() => setEntering(false)} messages={enterMessages} />;
   if (!loaded) return null;
-  if (!data.user) return <>{backdrop(false)}<LoginScreen onSignedIn={enterAfterSignIn} /></>;
+  if (!data.user) return <>{backdrop(false)}<LoginScreen onSignedIn={async () => { setSignOutNotice(""); await enterAfterSignIn(); }} notice={signOutNotice} /></>;
+  const idleModal = idle.secondsLeft !== null ? <IdleWarning secondsLeft={idle.secondsLeft} onStay={idle.stay} onSignOut={signOut} /> : null;
   const settings = data.settings;
   const answers = parseAnswers(settings?.planning_answers);
   const mode = settings?.planning_mode;
-  if (choosingPlan || (!mode && !answers.dismissed)) return <>{backdrop(false)}<PlanningChoice onChoose={choosePlanning} onLater={setUpLater} onSignOut={signOut} /></>;
+  if (choosingPlan || (!mode && !answers.dismissed)) return <>{backdrop(false)}<PlanningChoice onChoose={choosePlanning} onLater={setUpLater} onSignOut={signOut} />{idleModal}</>;
   // The wizard only shows until setup is finished. It resumes on the saved step (including after
   // signing out and back in) unless they chose to leave it; "Finish setup" brings them back.
   if (mode && (wizardOpen || (!answers.completed && !answers.dismissed))) {
@@ -321,15 +331,15 @@ export default function Home() {
         onSwitchMode={choosePlanning}
         onBackToChoice={async () => { await load(); setWizardOpen(false); setChoosingPlan(true); }}
         onSignOut={signOut}
-      /></>
+      />{idleModal}</>
     );
   }
 
   return (
-    <>{backdrop(true)}<div className="app-shell">
+    <>{backdrop(true)}{idleModal}<div className="app-shell">
       <aside className={compact ? "sidebar collapsed" : "sidebar"}>
         <div className="brand">
-          <AbcMark small />
+          <button type="button" className="brand-home" onClick={() => { setPage("overview"); setProfileOpen(false); window.scrollTo({ top: 0 }); }} aria-label="Go to Overview" title="Overview"><AbcMark small /></button>
           {!compact && <span className="brand-divider" aria-hidden="true" />}
           {!compact && <div><strong>Trip Planner</strong><span>{tripName}</span></div>}
           <button type="button" className="sidebar-toggle" onClick={toggleSidebar} aria-expanded={!compact} aria-label={compact ? "Expand sidebar" : "Collapse sidebar"} title={compact ? "Expand sidebar" : "Collapse sidebar"}>
@@ -1026,6 +1036,7 @@ function SettingsPage({ settings, saveSettings, reload }: { settings: Settings; 
 }
 
 function SettingsForm({ settings, onSubmit }: { settings: Settings; onSubmit: (form: HTMLFormElement) => Promise<void> }) {
+  const [chimeMuted, setChimeMuted] = useState(Boolean(settings?.chime_muted));
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     await onSubmit(event.currentTarget);
@@ -1037,6 +1048,13 @@ function SettingsForm({ settings, onSubmit }: { settings: Settings; onSubmit: (f
       <AddressField label={<span>Home address <span className="help" title="Optional. It helps personalize the route map and itinerary context.">?</span></span>} name="home" defaultAddress={settings?.home_address || ""} defaultPlaceId={settings?.home_place_id || ""} />
       <AddressField label="Training location" name="training" defaultAddress={settings?.training_location || ""} defaultPlaceId={settings?.training_place_id || ""} />
       <input type="hidden" name="theme" value={settings?.theme || "light"} />
+      <label className="check-toggle wide">
+        <input type="checkbox" className="visually-hidden" checked={chimeMuted} onChange={event => setChimeMuted(event.target.checked)} />
+        <span className="check-box" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg></span>
+        <span><span className="check-title">Mute the loading screen</span><br /><span className="muted">Turns off the A-B-C chime that plays while your trip loads. The sound button on the loading screen changes this too.</span></span>
+      </label>
+      {/* Always posted as "true"/"false" so a save from this form sets the flag either way. */}
+      <input type="hidden" name="chimeMuted" value={String(chimeMuted)} />
       <button className="btn primary">Save settings</button>
     </form>
   );

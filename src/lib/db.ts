@@ -75,6 +75,7 @@ export async function ensureSchema() {
     `,
     sql`ALTER TABLE settings ADD COLUMN IF NOT EXISTS planning_mode TEXT`,
     sql`ALTER TABLE settings ADD COLUMN IF NOT EXISTS planning_answers TEXT`,
+    sql`ALTER TABLE settings ADD COLUMN IF NOT EXISTS chime_muted BOOLEAN NOT NULL DEFAULT false`,
     sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS suspended_at TIMESTAMPTZ`,
     sql`
       CREATE TABLE IF NOT EXISTS list_items (

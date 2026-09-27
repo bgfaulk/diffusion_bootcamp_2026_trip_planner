@@ -74,6 +74,8 @@ h2 { font-size: 24px; }
 .sidebar > .profile { grid-row:4; align-self:end; }
 .sidebar > * { min-width:0; }
 .brand div { min-width:0; }
+.brand-home { display:grid; padding:0; border:0; border-radius:10px; background:none; cursor:pointer; }
+.brand-home:focus-visible { outline:2px solid var(--accent); outline-offset:4px; }
 .brand strong { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .sidebar-toggle { position:absolute; right:-4px; top:50%; transform:translateY(-50%); display:grid; place-items:center; width:30px; height:30px; border:1px solid var(--line); border-radius:50%; background:var(--panel); color:var(--muted); }
 .sidebar-toggle:hover, .sidebar-toggle:focus-visible { color:var(--ink); border-color:var(--accent); }
@@ -92,7 +94,9 @@ h2 { font-size: 24px; }
 .sidebar.collapsed .profile-button { grid-template-columns:1fr; justify-items:center; padding:8px 0; }
 .sidebar.collapsed .profile-popover { left:0; right:auto; width:270px; z-index:6; }
 /* Weather */
-.weather { display:grid; gap:10px; align-content:start; min-height:0; overflow:auto; padding:14px; border:1px solid var(--line); border-radius:var(--radius); background:var(--soft); }
+/* No panel around the forecast: it floats in the sidebar. It still scrolls when the sidebar is short, without a scrollbar. */
+.weather { display:grid; gap:10px; align-content:start; min-height:0; overflow:auto; padding:6px 4px; scrollbar-width:none; }
+.weather::-webkit-scrollbar { display:none; }
 .weather-note { font-size:13px; }
 .weather-now { display:flex; align-items:center; gap:8px; }
 .weather-now img { width:48px; height:48px; flex:none; }
@@ -216,6 +220,12 @@ a { color:var(--accent-dark); font-weight:800; }
 .login-card { width:min(560px, 100%); padding:28px; display:grid; gap:16px; }
 .stack { display:grid; gap:12px; }
 .link-button { border:0; background:transparent; color:var(--accent-dark); text-align:left; font-weight:800; }
+/* The choices under the login form: a real button for the other path, a plain link for password reset. */
+.login-actions { display:grid; gap:10px; padding-top:14px; border-top:1px solid var(--line); }
+.login-actions .link-button { justify-self:start; }
+.login-actions p { margin:4px 0 -4px; font-weight:750; }
+.notice { padding:10px 12px; border-radius:8px; background:var(--soft); color:var(--ink); font-weight:650; }
+.idle-count { font-variant-numeric:tabular-nums; }
 .error { color:var(--danger); font-weight:800; }
 .modal-backdrop { position:fixed; inset:0; z-index:100; display:grid; place-items:center; padding:18px; background:rgba(29,37,40,.72); }
 .modal, .viewer { width:min(920px,100%); max-height:92vh; overflow:auto; padding:20px; display:grid; gap:14px; position:relative; }
@@ -368,9 +378,12 @@ a { color:var(--accent-dark); font-weight:800; }
 /* Phones: the sidebar becomes a slim top bar (brand + avatar) and the primary nav a bottom rail that scrolls
    sideways, so the page content starts at the top of the screen instead of under a stack of buttons. */
 @media (max-width: 900px) {
-  .app-shell { grid-template-columns:1fr; }
+  /* Two explicit rows: the top bar takes its own height and the content gets the rest. Without this the
+     shell's min-height:100vh is shared between two auto rows, so a short page grows the top bar. */
+  .app-shell { grid-template-columns:1fr; grid-template-rows:auto minmax(0, 1fr); align-content:start; }
   .app-shell:has(.sidebar.collapsed) { grid-template-columns:1fr; }
-  /* backdrop-filter would make the sidebar the containing block for the fixed rail below, so the bar goes opaque here. */
+  /* backdrop-filter would make the sidebar the containing block for the fixed rail below, so the bar goes opaque here.
+     (Digital Nirvana's more specific sidebar rule re-adds a blur; its phone override sits next to that rule.) */
   .sidebar, .sidebar.collapsed { position:sticky; top:0; z-index:15; height:auto; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 14px; border-right:0; border-bottom:1px solid var(--line); background:var(--panel); backdrop-filter:none; }
   .sidebar .brand, .sidebar.collapsed .brand { flex:1; min-width:0; flex-direction:row; gap:12px; padding:0; }
   .sidebar-toggle { display:none; }
@@ -386,6 +399,11 @@ a { color:var(--accent-dark); font-weight:800; }
   .nav-label { flex:none; text-align:center; white-space:nowrap; overflow-wrap:normal; }
   .nav-count, .sidebar.collapsed .nav-count { position:absolute; top:4px; right:6px; min-width:18px; padding:0 5px; font-size:10px; line-height:16px; }
   .content { padding:14px 14px calc(88px + env(safe-area-inset-bottom)); }
+  /* Page titles keep whole words; when the title and its action button can't share the width the button wraps below. */
+  .page-header-row { flex-wrap:wrap; align-items:start; }
+  .page-header-row > div { flex:1 1 230px; }
+  .page-header-row h1 { overflow-wrap:normal; }
+  .page-header-row > .btn, .page-header-row > .action-menu { margin-bottom:0; }
   .settings-grid, .trip-form, .document-form, .choice-grid, .wizard-grid { grid-template-columns:1fr; }
   .choice-card, .wizard-card { padding:20px; }
   .wizard-page { padding:16px; }
@@ -491,7 +509,7 @@ a { color:var(--accent-dark); font-weight:800; }
 
 /* panels: glow border + inner glow; big cards get diagonal corner accents, leaf cards get cut corners */
 :root[data-theme="nirvana"] :is(.callout, .settings-grid, .trip-form, .booking-section, .documents-panel, .login-card, .modal, .viewer, .choice-card, .wizard-card) {
-  position:relative; background:var(--panel); border:1px solid var(--cyan-dim); box-shadow:inset 0 0 28px rgba(0,229,255,.1); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px);
+  position:relative; background:var(--panel); border:1px solid var(--cyan-dim); box-shadow:inset 0 0 28px rgba(0,229,255,.1); backdrop-filter:blur(6px);
 }
 :root[data-theme="nirvana"] :is(.trip-form.compact, .booking-section, .documents-panel, .settings-grid) { border-color:var(--cyan-line); box-shadow:inset 0 0 18px rgba(0,229,255,.06); }
 :root[data-theme="nirvana"] :is(.callout, .login-card) { clip-path:var(--cut); }
@@ -499,7 +517,7 @@ a { color:var(--accent-dark); font-weight:800; }
 :root[data-theme="nirvana"] :is(.wizard-card, .choice-card, .modal, .viewer)::after { content:""; position:absolute; width:22px; height:2px; background:var(--cyan); box-shadow:0 0 10px var(--cyan); pointer-events:none; }
 :root[data-theme="nirvana"] :is(.wizard-card, .choice-card, .modal, .viewer)::before { top:10px; left:6px; transform:rotate(-45deg); transform-origin:left; }
 :root[data-theme="nirvana"] :is(.wizard-card, .choice-card, .modal, .viewer)::after { bottom:10px; right:6px; transform:rotate(-45deg); transform-origin:right; }
-:root[data-theme="nirvana"] .modal-backdrop { background:rgba(2,4,9,.78); backdrop-filter:blur(3px); -webkit-backdrop-filter:blur(3px); }
+:root[data-theme="nirvana"] .modal-backdrop { background:rgba(2,4,9,.78); backdrop-filter:blur(3px); }
 :root[data-theme="nirvana"] .modal-x { border:1px solid var(--cyan-line); background:none; color:var(--cyan); }
 :root[data-theme="nirvana"] .modal-x:hover { color:var(--orange); border-color:var(--orange); }
 
@@ -519,7 +537,7 @@ a { color:var(--accent-dark); font-weight:800; }
 :root[data-theme="nirvana"] :is(.booking-card span, .document-row span, .wizard-list li span) { color:var(--muted); }
 
 /* chips */
-:root[data-theme="nirvana"] :is(.checklist-hero, .check-card, .check-empty) { position:relative; background:var(--panel); border:1px solid var(--cyan-line); box-shadow:inset 0 0 18px rgba(0,229,255,.06); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px); }
+:root[data-theme="nirvana"] :is(.checklist-hero, .check-card, .check-empty) { position:relative; background:var(--panel); border:1px solid var(--cyan-line); box-shadow:inset 0 0 18px rgba(0,229,255,.06); backdrop-filter:blur(6px); }
 :root[data-theme="nirvana"] .checklist-hero { border-color:var(--cyan-dim); box-shadow:inset 0 0 28px rgba(0,229,255,.1); clip-path:var(--cut); }
 :root[data-theme="nirvana"] .check-card { clip-path:var(--cut-xs); }
 :root[data-theme="nirvana"] .check-card:hover { border-color:var(--cyan); }
@@ -538,7 +556,7 @@ a { color:var(--accent-dark); font-weight:800; }
 :root[data-theme="nirvana"] .delete-item { font-size:.76rem; font-weight:400; letter-spacing:.14em; text-transform:uppercase; }
 :root[data-theme="nirvana"] .check-empty { border-style:dashed; }
 :root[data-theme="nirvana"] .check-empty.all-done { border-color:var(--cyan-dim); color:var(--cyan); }
-:root[data-theme="nirvana"] :is(.plan-summary, .plan-day, .plan-notes, .plan-prose) { position:relative; background:var(--panel); border:1px solid var(--cyan-line); box-shadow:inset 0 0 18px rgba(0,229,255,.06); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px); }
+:root[data-theme="nirvana"] :is(.plan-summary, .plan-day, .plan-notes, .plan-prose) { position:relative; background:var(--panel); border:1px solid var(--cyan-line); box-shadow:inset 0 0 18px rgba(0,229,255,.06); backdrop-filter:blur(6px); }
 :root[data-theme="nirvana"] .plan-summary { border-color:var(--cyan-dim); clip-path:var(--cut); }
 :root[data-theme="nirvana"] .plan-day .day-list li { background:rgba(2,8,14,.7); }
 :root[data-theme="nirvana"] .plan-meta { font-weight:400; letter-spacing:.16em; color:var(--cyan-dim); }
@@ -553,14 +571,19 @@ a { color:var(--accent-dark); font-weight:800; }
 :root[data-theme="nirvana"] .chip-add input { min-height:38px; padding:7px 14px; clip-path:var(--cut-xs); }
 
 /* sidebar + profile menu */
-:root[data-theme="nirvana"] .sidebar { background:rgba(2,6,12,.86); border-right:1px solid var(--cyan-line); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); }
+:root[data-theme="nirvana"] .sidebar { background:rgba(2,6,12,.86); border-right:1px solid var(--cyan-line); backdrop-filter:blur(8px); }
+@media (max-width: 900px) {
+  /* Phones: no blur (it would trap the fixed bottom rail inside the top bar) and the side border becomes a bottom one. */
+  :root[data-theme="nirvana"] .sidebar { background:rgba(2,6,12,.96); border-right:0; border-bottom-color:var(--cyan-line); backdrop-filter:none; }
+}
 :root[data-theme="nirvana"] .brand-divider { background:var(--cyan-line); }
 :root[data-theme="nirvana"] .brand strong { display:block; font-family:var(--display); font-size:.74rem; letter-spacing:.12em; text-transform:uppercase; }
 :root[data-theme="nirvana"] .brand div span { font-size:.84rem; margin-top:3px; }
 :root[data-theme="nirvana"] .primary-nav { gap:4px; }
 :root[data-theme="nirvana"] .sidebar-toggle { border-radius:0; border-color:var(--cyan-line); background:rgba(2,7,13,.9); color:var(--cyan-dim); }
 :root[data-theme="nirvana"] .sidebar-toggle:hover { color:var(--orange); border-color:var(--orange); }
-:root[data-theme="nirvana"] .weather { background:rgba(0,229,255,.03); border-color:var(--cyan-line); box-shadow:inset 0 0 0 1px transparent; clip-path:var(--cut-sm); }
+:root[data-theme="nirvana"] .login-actions { border-top-color:var(--cyan-line); }
+:root[data-theme="nirvana"] .notice { background:rgba(0,229,255,.06); box-shadow:inset 0 0 0 1px var(--cyan-line); border-radius:0; }
 :root[data-theme="nirvana"] .weather-now strong { font-family:var(--display); font-weight:700; text-shadow:0 0 12px rgba(0,229,255,.55); }
 :root[data-theme="nirvana"] :is(.weather-now span, .weather-place, .weather-day) { font-weight:400; letter-spacing:.1em; text-transform:uppercase; font-size:.7rem; color:var(--cyan-dim); }
 :root[data-theme="nirvana"] .weather-days li { border-top-color:var(--cyan-faint); font-size:.8rem; }
@@ -577,7 +600,7 @@ a { color:var(--accent-dark); font-weight:800; }
 :root[data-theme="nirvana"] .profile-button { background:rgba(0,229,255,.04); border:0; box-shadow:inset 0 0 0 1px var(--cyan-line); }
 :root[data-theme="nirvana"] .profile-button:hover { box-shadow:inset 0 0 0 1px var(--cyan); }
 :root[data-theme="nirvana"] .avatar { font-family:var(--display); color:var(--cyan); background:none; border:1px solid var(--cyan-dim); box-shadow:inset 0 0 10px rgba(0,229,255,.25); }
-:root[data-theme="nirvana"] :is(.profile-popover, .action-menu-list, .suggestions) { padding:6px; background:rgba(2,7,13,.96); border:1px solid var(--cyan-dim); box-shadow:0 0 22px rgba(0,229,255,.18); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px); }
+:root[data-theme="nirvana"] :is(.profile-popover, .action-menu-list, .suggestions) { padding:6px; background:rgba(2,7,13,.96); border:1px solid var(--cyan-dim); box-shadow:0 0 22px rgba(0,229,255,.18); backdrop-filter:blur(6px); }
 :root[data-theme="nirvana"] :is(.profile-popover, .action-menu-list, .suggestions) button { border:0; background:none; color:var(--ink); font-size:.95rem; font-weight:400; letter-spacing:.06em; }
 :root[data-theme="nirvana"] :is(.profile-popover, .action-menu-list, .suggestions) button:is(:hover, :focus-visible) { background:rgba(0,229,255,.09); color:var(--cyan); }
 :root[data-theme="nirvana"] :is(.profile-popover .sign-out, .action-menu-list button.danger) { color:var(--red); }
@@ -729,7 +752,7 @@ a { color:var(--accent-dark); font-weight:800; }
   .trip-stat { padding:4px 12px; }
 }
 
-:root[data-theme="nirvana"] :is(.hero-card, .trip-bar, .day-list li) { position:relative; background:var(--panel); border:1px solid var(--cyan-line); box-shadow:inset 0 0 18px rgba(0,229,255,.06); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px); }
+:root[data-theme="nirvana"] :is(.hero-card, .trip-bar, .day-list li) { position:relative; background:var(--panel); border:1px solid var(--cyan-line); box-shadow:inset 0 0 18px rgba(0,229,255,.06); backdrop-filter:blur(6px); }
 :root[data-theme="nirvana"] .hero-card { border-color:var(--cyan-dim); box-shadow:inset 0 0 28px rgba(0,229,255,.1); clip-path:var(--cut); }
 :root[data-theme="nirvana"] .hero-card h1 { font-size:clamp(1.3rem, 2.4vw, 2rem); letter-spacing:.1em; overflow-wrap:normal; }
 :root[data-theme="nirvana"] .hero-next { border-left-color:var(--cyan-line); }
@@ -759,7 +782,7 @@ a { color:var(--accent-dark); font-weight:800; }
 :root[data-theme="nirvana"] .card-actions { border-top-color:var(--cyan-faint); }
 :root[data-theme="nirvana"] .day-list li.training { border-left-color:rgba(234,251,255,.75); }
 :root[data-theme="nirvana"] .day-list li.training .day-time { color:var(--ink); }
-:root[data-theme="nirvana"] .schedule { position:relative; background:var(--panel); border:1px solid var(--cyan-line); box-shadow:inset 0 0 18px rgba(0,229,255,.06); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px); }
+:root[data-theme="nirvana"] .schedule { position:relative; background:var(--panel); border:1px solid var(--cyan-line); box-shadow:inset 0 0 18px rgba(0,229,255,.06); backdrop-filter:blur(6px); }
 :root[data-theme="nirvana"] .schedule .day-list li { background:rgba(2,8,14,.7); }
 :root[data-theme="nirvana"] :is(.day-time, .day-list em) { font-weight:400; font-size:.76rem; letter-spacing:.14em; text-transform:uppercase; color:var(--cyan-dim); }
 .login-help { margin:14px 0 0; font-size:14px; }
