@@ -325,7 +325,8 @@ export function TripDateFields({ answers, set }: { answers: WizardAnswers; set: 
 export function TravelerFields({ answers, set }: { answers: WizardAnswers; set: SetAnswer }) {
   return (
     <>
-      <label>How many people, including you?<input type="number" min={1} max={20} value={answers.travelerCount} onChange={e => set("travelerCount", Math.max(1, Math.min(20, Number(e.target.value) || 1)))} /></label>
+      {/* Free to be cleared while typing (0 shows as empty); it settles to 1-20 when the field is left. */}
+      <label>How many people, including you?<input type="number" min={1} max={20} inputMode="numeric" value={answers.travelerCount || ""} onChange={e => set("travelerCount", e.target.value === "" ? 0 : Math.min(20, Math.max(0, Math.floor(Number(e.target.value)) || 0)))} onBlur={() => { if (!answers.travelerCount) set("travelerCount", 1); }} /></label>
       <label>Who's coming? (optional)<input value={answers.travelers} onChange={e => set("travelers", e.target.value)} placeholder="Me and my partner Sam" maxLength={240} /></label>
       <label>Kids and their ages (optional)<input value={answers.kids} onChange={e => set("kids", e.target.value)} placeholder="None, or 7 and 10" maxLength={120} /></label>
       <label>Accessibility or mobility needs (optional)<input value={answers.accessibility} onChange={e => set("accessibility", e.target.value)} placeholder="Avoid steep hills, stroller..." maxLength={240} /></label>

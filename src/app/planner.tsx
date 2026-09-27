@@ -16,6 +16,7 @@ import { useWeather, WeatherPanel } from "./weather";
 import { IdleWarning, useIdleTimeout } from "./idle-timeout";
 import { notify } from "./toast";
 import { UserGuide } from "./user-guide";
+import { Help } from "./help";
 import { ExtraItemsNote, ProgressBlock, StarCells, StarsProvider, useStars, useStarsRefresh, type StarsPayload } from "./stars";
 import { PRIZE_NOTE, starRules, type LeaderRow, type StarState } from "@/lib/stars-rules";
 import { WhatsAppModal } from "./whatsapp-modal";
@@ -1550,9 +1551,9 @@ function SettingsForm({ settings, onSubmit }: { settings: Settings; onSubmit: (f
     <form className="settings-grid" onSubmit={submit}>
       <label>Display name<input name="profileName" placeholder="Shown above your email in the menu" defaultValue={settings?.profile_name || ""} maxLength={80} /></label>
       <label>Trip name<input name="tripName" defaultValue={settings?.trip_name || ""} maxLength={120} /></label>
-      <AddressField label={<span>Home address <span className="help" title="Optional. It helps personalize the route map and itinerary context.">?</span></span>} name="home" defaultAddress={settings?.home_address || ""} defaultPlaceId={settings?.home_place_id || ""} />
+      <AddressField label={<span>Home address <Help text="Optional. It helps personalize the route map and itinerary context." /></span>} name="home" defaultAddress={settings?.home_address || ""} defaultPlaceId={settings?.home_place_id || ""} />
       <AddressField label="Training location" name="training" defaultAddress={settings?.training_location || ""} defaultPlaceId={settings?.training_place_id || ""} />
-      <label className="wide"><span>Calendar invite guest <span className="help" title="Optional. Every calendar event you download from Trip Information invites this address, so a partner or assistant gets the same events.">?</span></span><input name="calendarGuest" type="email" placeholder="Someone to invite on every calendar event" defaultValue={settings?.calendar_guest || ""} maxLength={254} /></label>
+      <label className="wide"><span>Calendar invite guest email <Help text="Optional. An email address. Every calendar event you download from Trip Information invites it, so a partner or assistant gets the same events." /></span><input name="calendarGuest" type="email" placeholder="Someone to invite on every calendar event" defaultValue={settings?.calendar_guest || ""} maxLength={254} /></label>
       <input type="hidden" name="theme" value={settings?.theme || "light"} />
       <label className="check-toggle wide">
         <input type="checkbox" className="visually-hidden" checked={chimeMuted} onChange={event => setChimeMuted(event.target.checked)} />
