@@ -103,6 +103,7 @@ export async function ensureSchema() {
     sql`CREATE TABLE IF NOT EXISTS health_alert_state (key TEXT PRIMARY KEY, last_alert_at TIMESTAMPTZ NOT NULL)`,
     sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS suspended_at TIMESTAMPTZ`,
     sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS welcomed_at TIMESTAMPTZ`,
+    sql`ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'activity'`,
     sql`
       CREATE TABLE IF NOT EXISTS list_items (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

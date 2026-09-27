@@ -1,8 +1,8 @@
 import { overview, requireOwner, windowFromParams } from "@/lib/admin";
-import { withAudit } from "@/lib/audit";
+import { withQuiet } from "@/lib/audit";
 import { errorResponse } from "@/lib/validation";
 
-export const GET = withAudit("admin.overview", async (request, ctx) => {
+export const GET = withQuiet("admin.overview", async (request, ctx) => {
   try {
     ctx.user = await requireOwner();
     return Response.json(await overview(windowFromParams(new URL(request.url))));

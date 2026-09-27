@@ -1,5 +1,5 @@
 import { requireUser } from "@/lib/auth";
-import { withAudit } from "@/lib/audit";
+import { withQuiet } from "@/lib/audit";
 import { asString, errorResponse, fail } from "@/lib/validation";
 
 function googleReferer(request: Request) {
@@ -13,7 +13,7 @@ function googleReferer(request: Request) {
   return host ? `https://${host}/` : "http://localhost:3000/";
 }
 
-export const POST = withAudit("places.search", async (request, ctx) => {
+export const POST = withQuiet("places.search", async (request, ctx) => {
   try {
     ctx.user = await requireUser();
     const key = process.env.GOOGLE_MAPS_API_KEY?.trim();

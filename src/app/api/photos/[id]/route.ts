@@ -1,12 +1,12 @@
 import { requireUser } from "@/lib/auth";
-import { withAudit } from "@/lib/audit";
+import { withAudit, withQuiet } from "@/lib/audit";
 import { decryptText } from "@/lib/crypto";
 import { getSql } from "@/lib/db";
 import { errorResponse, fail, requireString } from "@/lib/validation";
 
 // Serves one photo's bytes. Bootstrap only hands the browser this URL, so a page load no longer carries
 // every image as base64 JSON. A photo row never changes after upload, so the browser may cache it for good.
-export const GET = withAudit<{ params: Promise<{ id: string }> }>("photos.view", async (_request, ctx, context) => {
+export const GET = withQuiet<{ params: Promise<{ id: string }> }>("photos.view", async (_request, ctx, context) => {
   try {
     const user = ctx.user = await requireUser();
     const { id: rawId } = await context.params;

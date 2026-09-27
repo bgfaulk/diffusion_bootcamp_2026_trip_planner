@@ -1,5 +1,5 @@
 import { requireUser } from "@/lib/auth";
-import { withAudit } from "@/lib/audit";
+import { withAudit, withTraffic } from "@/lib/audit";
 import { encryptText } from "@/lib/crypto";
 import { getSql } from "@/lib/db";
 import { isTheme } from "@/lib/theme";
@@ -52,7 +52,7 @@ export const POST = withAudit("settings.save", async (request, ctx) => {
 
 // Just the loading-screen sound flag, so the loader's own mute button can save it without touching the
 // rest of the row (or creating a bare one for an account that hasn't saved settings yet).
-export const PATCH = withAudit("settings.chime", async (request, ctx) => {
+export const PATCH = withTraffic("settings.chime", async (request, ctx) => {
   try {
     const user = ctx.user = await requireUser();
     const body = await request.json();

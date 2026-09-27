@@ -2,7 +2,7 @@ import { after } from "next/server";
 import { runHealthCheck } from "@/lib/health";
 import { ensureWelcomed } from "@/lib/welcome";
 import { getUser } from "@/lib/auth";
-import { withAudit } from "@/lib/audit";
+import { withTraffic } from "@/lib/audit";
 import { decryptRow, decryptText } from "@/lib/crypto";
 import { ensureSchema, getSql, hasDatabaseUrl } from "@/lib/db";
 
@@ -20,7 +20,7 @@ function emptyBootstrap() {
   });
 }
 
-export const GET = withAudit("bootstrap", async (_request, ctx) => {
+export const GET = withTraffic("bootstrap", async (_request, ctx) => {
   if (!hasDatabaseUrl()) return emptyBootstrap();
   await ensureSchema();
   const user = ctx.user = await getUser();

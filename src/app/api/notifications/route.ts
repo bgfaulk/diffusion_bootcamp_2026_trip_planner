@@ -1,5 +1,5 @@
 import { requireUser } from "@/lib/auth";
-import { withAudit } from "@/lib/audit";
+import { withQuiet, withTraffic } from "@/lib/audit";
 import { decryptRow } from "@/lib/crypto";
 import { getSql } from "@/lib/db";
 import { errorResponse, fail, requireString } from "@/lib/validation";
@@ -12,7 +12,7 @@ async function listFor(userId: string) {
   return rows.map((row: any) => decryptRow(row, ["title", "body", "data"]));
 }
 
-export const GET = withAudit("notifications.list", async (_request, ctx) => {
+export const GET = withQuiet("notifications.list", async (_request, ctx) => {
   try {
     const user = ctx.user = await requireUser();
     return Response.json({ notifications: await listFor(user.id) });
@@ -22,7 +22,7 @@ export const GET = withAudit("notifications.list", async (_request, ctx) => {
 });
 
 // Mark all (or one) as read.
-export const PATCH = withAudit("notifications.read", async (request, ctx) => {
+export const PATCH = withTraffic("notifications.read", async (request, ctx) => {
   try {
     const user = ctx.user = await requireUser();
     const body = await request.json();
@@ -41,7 +41,7 @@ export const PATCH = withAudit("notifications.read", async (request, ctx) => {
 });
 
 // Delete all (or one).
-export const DELETE = withAudit("notifications.delete", async (request, ctx) => {
+export const DELETE = withTraffic("notifications.delete", async (request, ctx) => {
   try {
     const user = ctx.user = await requireUser();
     const body = await request.json();
