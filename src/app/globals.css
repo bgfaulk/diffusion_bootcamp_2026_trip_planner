@@ -226,6 +226,18 @@ a { color:var(--accent-dark); font-weight:800; }
 .login-actions p { margin:4px 0 -4px; font-weight:750; }
 .notice { padding:10px 12px; border-radius:8px; background:var(--soft); color:var(--ink); font-weight:650; }
 .idle-count { font-variant-numeric:tabular-nums; }
+/* Save feedback: bottom-center messages from notify.success / notify.error (toast.tsx). */
+.toasts { position:fixed; left:50%; bottom:calc(20px + env(safe-area-inset-bottom)); z-index:300; display:grid; gap:8px; width:min(440px, calc(100vw - 32px)); transform:translateX(-50%); pointer-events:none; }
+.toast { display:flex; align-items:center; gap:10px; padding:11px 10px 11px 14px; border-radius:10px; background:var(--ink); color:var(--panel); box-shadow:var(--shadow); font-weight:700; pointer-events:auto; animation:toastIn .2s ease; }
+.toast svg { width:20px; height:20px; flex:none; fill:none; stroke:currentColor; stroke-width:2.2; stroke-linecap:round; stroke-linejoin:round; }
+.toast.success svg { color:#7ad39a; }
+.toast.error { background:#8a2323; color:#fff; }
+.toast span { flex:1; min-width:0; overflow-wrap:anywhere; }
+.toast button { flex:none; border:0; background:none; color:inherit; font-size:22px; line-height:1; padding:0 6px; opacity:.75; cursor:pointer; }
+.toast button:hover { opacity:1; }
+@keyframes toastIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
+@media (max-width: 900px) { .toasts { bottom:calc(92px + env(safe-area-inset-bottom)); } }
+@media (prefers-reduced-motion: reduce) { .toast { animation:none; } }
 .error { color:var(--danger); font-weight:800; }
 .modal-backdrop { position:fixed; inset:0; z-index:100; display:grid; place-items:center; padding:18px; background:rgba(29,37,40,.72); }
 .modal, .viewer { width:min(920px,100%); max-height:92vh; overflow:auto; padding:20px; display:grid; gap:14px; position:relative; }
@@ -594,6 +606,8 @@ a { color:var(--accent-dark); font-weight:800; }
 :root[data-theme="nirvana"] .sidebar-toggle { border-radius:0; border-color:var(--cyan-line); background:rgba(2,7,13,.9); color:var(--cyan-dim); }
 :root[data-theme="nirvana"] .sidebar-toggle:hover { color:var(--orange); border-color:var(--orange); }
 :root[data-theme="nirvana"] .login-actions { border-top-color:var(--cyan-line); }
+:root[data-theme="nirvana"] .toast { border-radius:0; background:rgba(2,7,13,.96); color:var(--ink); border:1px solid var(--cyan); box-shadow:0 0 18px rgba(0,229,255,.25); }
+:root[data-theme="nirvana"] .toast.error { border-color:var(--red); color:#fff; }
 :root[data-theme="nirvana"] .notice { background:rgba(0,229,255,.06); box-shadow:inset 0 0 0 1px var(--cyan-line); border-radius:0; }
 :root[data-theme="nirvana"] .weather-now strong { font-family:var(--display); font-weight:700; text-shadow:0 0 12px rgba(0,229,255,.55); }
 :root[data-theme="nirvana"] :is(.weather-now span, .weather-place, .weather-day) { font-weight:400; letter-spacing:.1em; text-transform:uppercase; font-size:.7rem; color:var(--cyan-dim); }

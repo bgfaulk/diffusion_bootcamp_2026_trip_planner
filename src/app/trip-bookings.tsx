@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import { api } from "@/lib/client";
+import { notify } from "./toast";
 
 export const bookingCategories = ["flight", "hotel", "rental", "training", "insurance", "other"];
 
@@ -37,6 +38,7 @@ export function BookingForm({ onSaved, compact = false, modal = false, category 
       await api("/api/trip-info", { method: "POST", body: JSON.stringify(tripInfoPayload(form)) });
       form.reset();
       await onSaved();
+      notify.success("Booking saved");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save that booking");
     } finally {

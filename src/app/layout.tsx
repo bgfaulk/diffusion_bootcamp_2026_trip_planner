@@ -2,6 +2,7 @@ import "./globals.css";
 import type { Metadata } from "next";
 import { Orbitron, Share_Tech_Mono } from "next/font/google";
 import { FX_KEY, THEME_KEY } from "@/lib/theme";
+import { Toaster } from "./toast";
 
 // Display + body faces for the Digital Nirvana theme. Loaded here so the CSS variables exist on
 // <html>; the other themes keep the system font stack.
@@ -22,7 +23,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeBoot }} />
       </head>
-      <body>{children}</body>
+      <body>{children}<Toaster /></body>
     </html>
   );
 }
