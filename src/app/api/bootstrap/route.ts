@@ -1,4 +1,5 @@
 import { getUser } from "@/lib/auth";
+import { decryptRow, decryptText } from "@/lib/crypto";
 import { ensureSchema, getSql, hasDatabaseUrl } from "@/lib/db";
 
 function emptyBootstrap() {
@@ -37,20 +38,20 @@ export async function GET() {
   ]);
   return Response.json({
     user,
-    settings: settings[0] || null,
-    items,
+    settings: settings[0] ? { ...decryptRow(settings[0], ["profile_name", "trip_name", "home_address", "home_place_id", "training_location", "training_place_id", "planning_answers"]), home_lat: null, home_lng: null, training_lat: null, training_lng: null } : null,
+    items: items.map((item: any) => ({ ...item, title: decryptText(item.title) })),
     photos: Object.fromEntries(photos.map((photo: any) => [photo.spot, {
       id: photo.id,
-      caption: photo.caption,
-      imageUrl: `data:${photo.content_type};base64,${photo.image_base64}`
+      caption: decryptText(photo.caption),
+      imageUrl: `data:${photo.content_type};base64,${decryptText(photo.image_base64)}`
     }])),
-    itinerary: itinerary[0] || null,
-    tripInfo,
+    itinerary: itinerary[0] ? decryptRow(itinerary[0], ["instructions", "response", "saved_plan"]) : null,
+    tripInfo: tripInfo.map((item: any) => decryptRow(item, ["title", "provider", "confirmation_number", "start_at", "end_at", "address", "phone", "notes"])),
     tripDocuments: tripDocuments.map((document: any) => ({
-      ...document,
+      ...decryptRow(document, ["label", "file_name"]),
       viewUrl: `/api/trip-documents/${document.id}`,
       downloadUrl: `/api/trip-documents/${document.id}?download=1`
     })),
-    tripImport: tripImport[0] || null
+    tripImport: tripImport[0] ? decryptRow(tripImport[0], ["instructions", "response"]) : null
   });
 }

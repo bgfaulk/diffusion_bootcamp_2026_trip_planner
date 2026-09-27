@@ -1,4 +1,5 @@
 import { requireUser } from "@/lib/auth";
+import { decryptText } from "@/lib/crypto";
 import { getSql } from "@/lib/db";
 import { jsonError, requireString } from "@/lib/validation";
 
@@ -16,10 +17,11 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     const document = rows[0] as { file_name: string; content_type: string; file_base64: string };
     const url = new URL(request.url);
     const disposition = url.searchParams.get("download") ? "attachment" : "inline";
-    return new Response(Buffer.from(document.file_base64, "base64"), {
+    const fileName = decryptText(document.file_name);
+    return new Response(Buffer.from(decryptText(document.file_base64), "base64"), {
       headers: {
         "Content-Type": document.content_type,
-        "Content-Disposition": `${disposition}; filename="${document.file_name.replace(/"/g, "")}"`
+        "Content-Disposition": `${disposition}; filename="${fileName.replace(/"/g, "")}"`
       }
     });
   } catch (error) {

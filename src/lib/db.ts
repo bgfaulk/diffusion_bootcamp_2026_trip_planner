@@ -1,4 +1,5 @@
 import { neon } from "@neondatabase/serverless";
+import { encryptText } from "./crypto";
 
 export type PageKey = "prechecks" | "packing" | "departure" | "explore" | "gallery" | "return";
 
@@ -69,6 +70,8 @@ export async function ensureSchema() {
         updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
       )
     `;
+    await sql`ALTER TABLE settings ADD COLUMN IF NOT EXISTS planning_mode TEXT`;
+    await sql`ALTER TABLE settings ADD COLUMN IF NOT EXISTS planning_answers TEXT`;
     await sql`
       CREATE TABLE IF NOT EXISTS list_items (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -186,7 +189,7 @@ export async function seedStarterItems(userId: string) {
   };
   for (const [page, titles] of Object.entries(starter) as [PageKey, string[]][]) {
     for (const [index, title] of titles.entries()) {
-      await sql`INSERT INTO list_items (user_id, page, title, position) VALUES (${userId}, ${page}, ${title}, ${index + 1})`;
+      await sql`INSERT INTO list_items (user_id, page, title, position) VALUES (${userId}, ${page}, ${encryptText(title)}, ${index + 1})`;
     }
   }
 }

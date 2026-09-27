@@ -1,4 +1,5 @@
 import { requireUser } from "@/lib/auth";
+import { encryptText } from "@/lib/crypto";
 import { getSql } from "@/lib/db";
 import { asString, jsonError } from "@/lib/validation";
 
@@ -6,8 +7,8 @@ export async function POST(request: Request) {
   try {
     const user = await requireUser();
     const body = await request.json();
-    const instructions = asString(body.instructions, 8000);
-    const response = asString(body.response, 20000);
+    const instructions = encryptText(asString(body.instructions, 8000));
+    const response = encryptText(asString(body.response, 20000));
     await getSql()`
       INSERT INTO trip_import (user_id, instructions, response, updated_at)
       VALUES (${user.id}, ${instructions}, ${response}, now())

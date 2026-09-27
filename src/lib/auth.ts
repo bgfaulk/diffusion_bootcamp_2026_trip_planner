@@ -1,15 +1,10 @@
 import { cookies } from "next/headers";
 import crypto from "node:crypto";
+import { sessionSecret as secret } from "./crypto";
 import { ensureSchema, getSql, seedStarterItems } from "./db";
 import { validateEmail, validatePassword } from "./validation";
 
 const cookieName = "trip_session";
-
-function secret() {
-  const value = process.env.SESSION_SECRET?.trim();
-  if (!value || value === "\"\"" || value === "''") return "development-only-session-secret";
-  return value;
-}
 
 export function hashPassword(password: string, salt = crypto.randomBytes(16).toString("hex")) {
   const hash = crypto.pbkdf2Sync(password, salt, 120000, 32, "sha256").toString("hex");
@@ -25,13 +20,24 @@ function hashToken(token: string) {
   return crypto.createHmac("sha256", secret()).update(token).digest("hex");
 }
 
-export async function createOrLogin(emailValue: unknown, passwordValue: unknown, resetPassword: boolean) {
+export async function emailExists(emailValue: unknown) {
+  await ensureSchema();
+  const email = validateEmail(emailValue);
+  const rows = await getSql()`SELECT 1 FROM users WHERE email = ${email}`;
+  return rows.length > 0;
+}
+
+export type AuthIntent = "signin" | "create" | "reset";
+
+export async function createOrLogin(emailValue: unknown, passwordValue: unknown, intent: AuthIntent) {
   await ensureSchema();
   const sql = getSql();
   const email = validateEmail(emailValue);
-  const password = validatePassword(passwordValue);
+  const password = validatePassword(passwordValue, intent !== "signin");
   const users = await sql`SELECT * FROM users WHERE email = ${email}`;
   let userId: string;
+  if (intent === "create" && users.length) throw new Error("An account already exists for this email. Sign in instead.");
+  if (intent !== "create" && !users.length) throw new Error("No account found for this email");
   if (!users.length) {
     const { salt, hash } = hashPassword(password);
     const inserted = await sql`INSERT INTO users (email, password_hash, password_salt) VALUES (${email}, ${hash}, ${salt}) RETURNING id`;
@@ -39,7 +45,7 @@ export async function createOrLogin(emailValue: unknown, passwordValue: unknown,
     await seedStarterItems(userId);
   } else {
     const user = users[0] as { id: string; password_hash: string; password_salt: string };
-    if (resetPassword) {
+    if (intent === "reset") {
       const { salt, hash } = hashPassword(password);
       await sql`UPDATE users SET password_hash = ${hash}, password_salt = ${salt}, updated_at = now() WHERE id = ${user.id}`;
     } else if (!verifyPassword(password, user.password_salt, user.password_hash)) {
@@ -49,14 +55,14 @@ export async function createOrLogin(emailValue: unknown, passwordValue: unknown,
   }
   const token = crypto.randomBytes(32).toString("base64url");
   const tokenHash = hashToken(token);
-  await sql`INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (${tokenHash}, ${userId}, now() + interval '30 days')`;
+  await sql`INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (${tokenHash}, ${userId}, now() + interval '7 days')`;
   const jar = await cookies();
   jar.set(cookieName, token, {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
     path: "/",
-    maxAge: 60 * 60 * 24 * 30
+    maxAge: 60 * 60 * 24 * 7
   });
   return { userId, email };
 }
