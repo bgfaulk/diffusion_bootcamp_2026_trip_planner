@@ -128,7 +128,7 @@ export default function Home() {
   }
 
   async function loadState() {
-    const next = (await api("/api/bootstrap")) as Partial<AppState>;
+    const next = (await api("/api/bootstrap", { signal: AbortSignal.timeout(20000) })) as Partial<AppState>;
     apply(next);
     return next;
   }
@@ -827,8 +827,9 @@ function TripInfoPage({ tripInfo, tripDocuments, tripImport, reload }: { tripInf
 
   async function uploadPdf(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    await api("/api/trip-documents", { method: "POST", body: new FormData(event.currentTarget) });
-    event.currentTarget.reset();
+    const form = event.currentTarget;
+    await api("/api/trip-documents", { method: "POST", body: new FormData(form) });
+    form.reset();
     await reload();
     setPdfOpen(false);
   }
@@ -970,35 +971,37 @@ function FormModal({ title, eyebrow, onClose, children }: { title: string; eyebr
 function TripImportModal({ tripImport, onClose, reload }: { tripImport: AppState["tripImport"]; onClose: () => void; reload: () => Promise<void> }) {
   const [instructions, setInstructions] = useState(tripImport?.instructions || defaultTripImportInstructions());
   const [response, setResponse] = useState(tripImport?.response || "");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
   const prompt = useMemo(() => buildTripImportPrompt(instructions), [instructions]);
 
   async function persist(nextInstructions = instructions, nextResponse = response) {
-    await api("/api/trip-import", { method: "POST", body: JSON.stringify({ instructions: nextInstructions, response: nextResponse }) });
+    await api("/api/trip-import", { method: "POST", body: JSON.stringify({ instructions: nextInstructions, response: nextResponse }) }).catch(() => {});
   }
 
   async function saveRecords() {
-    await persist();
     const records = parseTripRecords(response);
-    if (!records.length) throw new Error("Paste the JSON records from ChatGPT before saving");
-    for (const record of records) {
-      await api("/api/trip-info", { method: "POST", body: JSON.stringify(record) });
-    }
-    await reload();
-    onClose();
+    if (!records.length) return setError("Paste the JSON records from ChatGPT before saving");
+    setError(""); setBusy(true);
+    try {
+      await persist();
+      for (const record of records) {
+        await api("/api/trip-info", { method: "POST", body: JSON.stringify(record) });
+      }
+      await reload();
+      onClose();
+    } catch (err) { setError(err instanceof Error ? err.message : "Could not save those bookings"); } finally { setBusy(false); }
   }
 
   return (
-    <div className="modal-backdrop">
-      <section className="modal">
-        <button className="modal-x" onClick={onClose}>×</button>
-        <h2>Import Trip Information</h2>
-        <p className="muted">Ask ChatGPT to review the travel emails you provide or connect there. It gives you a trip-bookings.json file to upload here.</p>
-        <label>Instructions<textarea value={instructions} onChange={event => setInstructions(event.target.value)} onBlur={() => persist()} /></label>
-        <div className="button-row"><button className="btn" onClick={() => setInstructions(defaultTripImportInstructions())}>Use suggested instructions</button><button className="btn primary" onClick={() => window.open(`https://chatgpt.com/?q=${encodeURIComponent(prompt)}`, "_blank")}>Open ChatGPT with prompt</button></div>
-        <JsonFileInput value={response} onChange={value => { setResponse(value); persist(instructions, value); }} fileHint="trip-bookings.json" placeholder='{"records":[{"category":"flight","title":"Outbound flight","provider":"Airline","confirmationNumber":"ABC123"}]}' />
-        <div className="button-row"><button className="btn" onClick={onClose}>Cancel</button><button className="btn primary" onClick={saveRecords}>Save imported details</button></div>
-      </section>
-    </div>
+    <FormModal eyebrow="Trip Information" title="Import Trip Information" onClose={onClose}>
+      <p className="muted">Ask ChatGPT to review the travel emails you provide or connect there. It gives you a trip-bookings.json file to upload here. Imported bookings are added to what you already have.</p>
+      <label>Instructions<textarea value={instructions} onChange={event => setInstructions(event.target.value)} onBlur={() => persist()} /></label>
+      <div className="button-row"><button className="btn" type="button" onClick={() => setInstructions(defaultTripImportInstructions())}>Use suggested instructions</button><button className="btn primary" type="button" onClick={() => window.open(`https://chatgpt.com/?q=${encodeURIComponent(prompt)}`, "_blank")}>Open ChatGPT with prompt</button></div>
+      <JsonFileInput value={response} onChange={value => { setResponse(value); persist(instructions, value); }} fileHint="trip-bookings.json" placeholder='{"records":[{"category":"flight","title":"Outbound flight","provider":"Airline","confirmationNumber":"ABC123"}]}' />
+      {error && <p className="error">{error}</p>}
+      <div className="button-row"><button className="btn" type="button" onClick={onClose}>Cancel</button><button className="btn primary" type="button" disabled={busy} onClick={saveRecords}>{busy ? "Saving..." : "Save imported details"}</button></div>
+    </FormModal>
   );
 }
 
@@ -1059,8 +1062,9 @@ function Gallery({ photos, openViewer, reload }: { photos: AppState["photos"]; o
   const [addOpen, setAddOpen] = useState(false);
   async function upload(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    await api("/api/photos", { method: "POST", body: new FormData(event.currentTarget) });
-    event.currentTarget.reset();
+    const form = event.currentTarget;
+    await api("/api/photos", { method: "POST", body: new FormData(form) });
+    form.reset();
     await reload();
     setAddOpen(false);
   }
