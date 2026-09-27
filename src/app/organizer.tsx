@@ -10,7 +10,7 @@ import { RefreshControl, TimeWindowPill } from "./time-window-pill";
 // The Organizer page (OWNER_EMAIL only): how the app is doing, who is registered, and what has been happening.
 // One time window scopes the Overview and Activity tabs; Refresh and auto-refresh reload whichever tab is open.
 
-type OrganizerTab = "overview" | "users" | "activity";
+type OrganizerTab = "overview" | "users" | "notices" | "activity";
 
 export function OrganizerPage({ userId }: { userId: string }) {
   const [tab, setTab] = useState<OrganizerTab>("overview");
@@ -36,9 +36,10 @@ export function OrganizerPage({ userId }: { userId: string }) {
           <RefreshControl refreshing={busy} onRefresh={refresh} seconds={refreshSeconds} onSeconds={setRefreshSeconds} updatedAt={updatedAt} />
         </div>
       </header>
-      <Tabs label="Organizer sections" active={tab} onChange={setTab} tabs={[{ key: "overview", label: "Overview" }, { key: "users", label: "Accounts" }, { key: "activity", label: "Activity" }]} />
+      <Tabs label="Organizer sections" active={tab} onChange={setTab} tabs={[{ key: "overview", label: "Overview" }, { key: "users", label: "Accounts" }, { key: "notices", label: "Send a notice" }, { key: "activity", label: "Activity" }]} />
       {tab === "overview" && <TabPanel id="overview"><HealthCard /><OverviewTab {...shared} /></TabPanel>}
-      {tab === "users" && <TabPanel id="users"><NoticeForm /><UsersTab {...shared} userId={userId} /></TabPanel>}
+      {tab === "users" && <TabPanel id="users"><UsersTab {...shared} userId={userId} /></TabPanel>}
+      {tab === "notices" && <TabPanel id="notices"><NoticeForm /></TabPanel>}
       {tab === "activity" && <TabPanel id="activity"><ActivityTab {...shared} /></TabPanel>}
     </section>
   );
@@ -112,7 +113,7 @@ function NoticeForm() {
   }
   return (
     <form className="callout notice-form" onSubmit={send}>
-      <div><h2>Send a notice to everyone</h2><p className="muted">Shows up under Notifications in each attendee&rsquo;s account menu, with a count on their initial until they read it.</p></div>
+      <div><h2>Send a notice to everyone</h2><p className="muted">Goes to every active account and shows up under Notifications in their account menu, with a count on their initial until they read it. Keep the title short; the message can carry the details.</p></div>
       <label>Title<input value={title} onChange={event => setTitle(event.target.value)} maxLength={120} required placeholder="Bus leaves at 7:45 tomorrow" /></label>
       <label>Message (optional)<textarea value={body} onChange={event => setBody(event.target.value)} rows={3} maxLength={2000} placeholder="Meet in the hotel lobby. Bring your badge." /></label>
       <div className="button-row"><button className="btn primary" disabled={busy || !title.trim()}>{busy ? "Sending..." : "Send notice"}</button></div>

@@ -1,5 +1,6 @@
 import { after } from "next/server";
 import { runHealthCheck } from "@/lib/health";
+import { ensureWelcomed } from "@/lib/welcome";
 import { getUser } from "@/lib/auth";
 import { withAudit } from "@/lib/audit";
 import { decryptRow, decryptText } from "@/lib/crypto";
@@ -26,6 +27,8 @@ export const GET = withAudit("bootstrap", async (_request, ctx) => {
   if (!user) return emptyBootstrap();
   // The organizer's visits double as health checks (throttled inside runHealthCheck); they run after the response.
   if (user.owner) after(() => runHealthCheck("owner").catch(() => {}));
+  // Accounts from before the welcome tour existed get it once, on their next load.
+  await ensureWelcomed(user.id, false).catch(() => {});
   const sql = getSql();
   const [settings, items, photos, itinerary, tripInfo, tripDocuments, notifications] = await Promise.all([
     sql`SELECT user_id, profile_name, trip_name, home_address, home_place_id, training_location, training_place_id, theme, planning_mode, planning_answers, chime_muted, updated_at FROM settings WHERE user_id = ${user.id}`,
