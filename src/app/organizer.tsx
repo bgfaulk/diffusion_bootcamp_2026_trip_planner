@@ -427,15 +427,15 @@ function UsersTab({ userId, ...shared }: Shared & { userId: string }) {
                   <td className="num">{account.sessions}</td>
                   <td>
                     {self || account.owner ? <span className="muted">{self ? "This is you" : "Organizer"}</span> : (
-                      <div className="row-actions">
-                        <button type="button" className="link-button" disabled={busy === account.id} onClick={() => resetLink(account, true)}>Email reset link</button>
-                        <button type="button" className="link-button" disabled={busy === account.id} onClick={() => resetLink(account)}>Copy reset link</button>
-                        <button type="button" className="link-button" disabled={busy === account.id || !account.sessions} onClick={() => setPending({ account, action: "revoke" })}>Sign out everywhere</button>
-                        {account.suspendedAt
-                          ? <button type="button" className="link-button" disabled={busy === account.id} onClick={() => act(account, "unsuspend")}>Reinstate</button>
-                          : <button type="button" className="link-button" disabled={busy === account.id} onClick={() => setPending({ account, action: "suspend" })}>Suspend</button>}
-                        <button type="button" className="link-button danger" disabled={busy === account.id} onClick={() => { setConfirmText(""); setPending({ account, action: "delete" }); }}>Delete</button>
-                      </div>
+                      <RowMenu label={`Actions for ${account.email}`} busy={busy === account.id} items={[
+                        { label: "Email reset link", onSelect: () => resetLink(account, true) },
+                        { label: "Copy reset link", onSelect: () => resetLink(account) },
+                        { label: "Sign out everywhere", disabled: !account.sessions, onSelect: () => setPending({ account, action: "revoke" }) },
+                        account.suspendedAt
+                          ? { label: "Reinstate", onSelect: () => act(account, "unsuspend") }
+                          : { label: "Suspend", onSelect: () => setPending({ account, action: "suspend" }) },
+                        { label: "Delete", danger: true, onSelect: () => { setConfirmText(""); setPending({ account, action: "delete" }); } }
+                      ]} />
                     )}
                   </td>
                 </tr>
@@ -550,6 +550,58 @@ export function fmtBytes(bytes: number) {
   let value = bytes / 1024, index = 0;
   while (value >= 1024 && index < units.length - 1) { value /= 1024; index++; }
   return `${value < 10 ? value.toFixed(1) : Math.round(value)} ${units[index]}`;
+}
+
+type RowMenuItem = { label: string; onSelect: () => void | Promise<void>; danger?: boolean; disabled?: boolean };
+
+// One "Actions" button per table row. The list is fixed-positioned from the button's rectangle because the
+// table sits in a horizontal scroll container, which would clip an absolutely positioned menu.
+function RowMenu({ label, items, busy }: { label: string; items: RowMenuItem[]; busy: boolean }) {
+  const [open, setOpen] = useState(false);
+  const [place, setPlace] = useState<{ top: number; right: number; up: boolean }>({ top: 0, right: 0, up: false });
+  const ref = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  function toggle() {
+    if (!open && buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      const up = window.innerHeight - rect.bottom < 280;
+      setPlace({ top: up ? window.innerHeight - rect.top + 6 : rect.bottom + 6, right: window.innerWidth - rect.right, up });
+    }
+    setOpen(value => !value);
+  }
+  useEffect(() => {
+    if (!open) return;
+    const close = (event: Event) => {
+      if (event instanceof KeyboardEvent) { if (event.key === "Escape") setOpen(false); return; }
+      if (event.type === "mousedown" && ref.current?.contains(event.target as Node)) return;
+      setOpen(false);
+    };
+    document.addEventListener("mousedown", close);
+    document.addEventListener("keydown", close);
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    return () => {
+      document.removeEventListener("mousedown", close);
+      document.removeEventListener("keydown", close);
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
+    };
+  }, [open]);
+  return (
+    <div className="row-menu" ref={ref}>
+      <button ref={buttonRef} type="button" className="btn row-menu-button" aria-haspopup="menu" aria-expanded={open} aria-label={label} disabled={busy} onClick={toggle}>
+        Actions
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 7.5l5 5 5-5" /></svg>
+      </button>
+      {open && (
+        <div className="action-menu-list row-menu-list" role="menu" style={place.up ? { top: "auto", bottom: place.top, right: place.right } : { top: place.top, right: place.right }}>
+          {items.map(item => (
+            <button type="button" role="menuitem" key={item.label} className={item.danger ? "danger" : ""} disabled={item.disabled} onClick={() => { setOpen(false); item.onSelect(); }}>{item.label}</button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function fmtWhen(iso: string, seconds = false) {
