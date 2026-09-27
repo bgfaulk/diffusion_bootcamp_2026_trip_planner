@@ -59,7 +59,7 @@ export function UserGuide({ readAt = null, onRead }: { readAt?: string | null; o
       <h3>Trip Information</h3>
       <ul>
         <li>Your bookings, grouped as Flights, Hotel, Rental Car, Training, Insurance, and Other, each with dates, times, confirmation details, and notes.</li>
-        <li>Adding one from a tab keeps that type. Provider suggests common airlines, hotel chains, and rental companies but takes any name; the start and end fields are date and time pickers; phone numbers are tidied as you type.</li>
+        <li>Adding one from a tab keeps that type. Provider suggests common airlines, hotel chains, and rental companies but takes any name; the start and end fields are date and time pickers; phone numbers are tidied as you type. Flights take From and To airport codes, which give the Overview its route and miles.</li>
         <li>&ldquo;+ PDF&rdquo; stores insurance or protection documents so they are on hand during the trip.</li>
         <li>Bookings and PDFs can be deleted from their cards. Deleting asks you to confirm first.</li>
         <li><strong>Add to calendar.</strong> The menu at the top downloads a calendar file (.ics) with the whole trip: an all-day block for your dates, every booking with a readable start, and the training days with the daily agenda. Each booking card has its own &ldquo;Add to calendar&rdquo; button, and the Training tab can add just the training days. Open the file and Apple Calendar, Google Calendar, or Outlook adds the events. If you set a calendar guest in Settings, every event invites them too.</li>

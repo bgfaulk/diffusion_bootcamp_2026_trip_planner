@@ -65,6 +65,7 @@ export function bookingEvent(booking: TimedBooking): CalendarEvent | null {
   const label = categoryLabels[booking.category];
   const lines = [
     booking.provider && booking.provider !== booking.title ? booking.provider : "",
+    booking.from_airport || booking.to_airport ? `Route: ${[booking.from_airport, booking.to_airport].filter(Boolean).join(" → ")}` : "",
     booking.confirmation_number ? `Confirmation: ${booking.confirmation_number}` : "",
     booking.phone ? `Phone: ${booking.phone}` : "",
     booking.start_at || booking.end_at ? `As entered: ${[booking.start_at, booking.end_at].filter(Boolean).join(" to ")}` : "",

@@ -69,7 +69,7 @@ export const GET = withTraffic("bootstrap", async (_request, ctx) => {
       imageUrl: `/api/photos/${photo.id}`
     }])),
     itinerary: itinerary[0] ? decryptRow(itinerary[0], ["instructions", "response", "saved_plan"]) : null,
-    tripInfo: tripInfo.map((item: any) => decryptRow(item, ["title", "provider", "confirmation_number", "start_at", "end_at", "address", "phone", "notes"])),
+    tripInfo: tripInfo.map((item: any) => decryptRow(item, ["title", "provider", "confirmation_number", "start_at", "end_at", "address", "phone", "notes", "from_airport", "to_airport"])),
     notifications: notifications.map((row: any) => decryptRow(row, ["title", "body", "data"])),
     tripDocuments: tripDocuments.map((document: any) => ({
       ...decryptRow(document, ["label", "file_name"]),
