@@ -2,9 +2,13 @@ import { requireUser } from "@/lib/auth";
 import { errorResponse, fail } from "@/lib/validation";
 
 // Proxies weatherapi.com so the key stays on the server. Responses are cached per location for 30 minutes
-// to stay well inside the plan's request quota; the client refreshes on the same cadence.
+// to stay well inside the plan's request quota; the client refreshes on the same cadence. The query is
+// free text (a rounded lat,lng or a place name), so the cache is capped to keep a long-lived instance honest.
 const cache = new Map<string, { at: number; data: unknown }>();
 const TTL = 30 * 60 * 1000;
+const MAX_ENTRIES = 500;
+// The free tier returns three forecast days; asking for more only makes the response bigger.
+const DAYS = 3;
 
 function secure(url: string) { return url.startsWith("//") ? `https:${url}` : url; }
 
@@ -16,7 +20,7 @@ export async function GET(request: Request) {
     const q = (new URL(request.url).searchParams.get("q") || "San Francisco, CA").trim().slice(0, 120);
     const hit = cache.get(q);
     if (hit && Date.now() - hit.at < TTL) return Response.json(hit.data);
-    const upstream = await fetch(`https://api.weatherapi.com/v1/forecast.json?key=${encodeURIComponent(key)}&q=${encodeURIComponent(q)}&days=7&aqi=no&alerts=no`, { cache: "no-store" });
+    const upstream = await fetch(`https://api.weatherapi.com/v1/forecast.json?key=${encodeURIComponent(key)}&q=${encodeURIComponent(q)}&days=${DAYS}&aqi=no&alerts=no`, { cache: "no-store" });
     if (!upstream.ok) fail("Weather is unavailable right now", 502);
     const raw = await upstream.json();
     const data = {
@@ -37,6 +41,10 @@ export async function GET(request: Request) {
         rain: Number(day.day?.daily_chance_of_rain ?? 0)
       }))
     };
+    if (cache.size >= MAX_ENTRIES) {
+      for (const [key, entry] of cache) if (Date.now() - entry.at >= TTL) cache.delete(key);
+      if (cache.size >= MAX_ENTRIES) cache.delete(cache.keys().next().value as string);
+    }
     cache.set(q, { at: Date.now(), data });
     return Response.json(data);
   } catch (error) {
