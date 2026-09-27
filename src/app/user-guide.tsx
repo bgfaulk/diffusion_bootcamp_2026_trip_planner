@@ -2,7 +2,7 @@
 // in, what each page and control is for, and what changed recently. Keep it current when features change.
 
 export const APP_URL = "https://diffusion-bootcamp-2026-trip-planne.vercel.app";
-export const GUIDE_UPDATED = "September 26, 2026";
+export const GUIDE_UPDATED = "September 27, 2026";
 
 export function UserGuide() {
   return (
@@ -64,15 +64,17 @@ export function UserGuide() {
       </ul>
       <h3>Organizer</h3>
       <p>
-        Only the trip organizer sees this page. It lists attendee accounts, sends password reset links, can suspend or remove an account,
-        sends a notice to everyone from its own tab, and shows request performance, stored data size, and an activity log. The log keeps what people did for a year; routine page loads are kept for a week only, and polling such as weather is not logged unless it fails. The organizer is also
+        Only the trip organizer sees this page. Its Accounts tab lists every attendee, and each row&rsquo;s Actions menu can email or copy a
+        password reset link, sign the person out everywhere, suspend or reinstate them, or remove the account. Other tabs send a notice
+        to everyone and show request performance, stored data size, and an activity log. The log keeps what people did for a year; routine page loads are kept for a week only, and polling such as weather is not logged unless it fails. The organizer is also
         notified when someone new joins and when the app crosses a health threshold: slow responses, server errors, or a database
         that is large or growing quickly. Opening one of those notifications shows the numbers behind it and what to do.
       </p>
 
       <h2>Around the app</h2>
       <ul>
-        <li><strong>Weather.</strong> The sidebar shows the forecast for where you are, or for the training location until you share your location.</li>
+        <li><strong>Finding pages.</strong> The sidebar groups the pages by when they matter: Get ready, Travel days, and On the trip, with Overview above them. Tap a group&rsquo;s heading to fold it away; a folded heading shows how many items are still open inside. The arrow at the top shrinks the sidebar to icons.</li>
+        <li><strong>Weather.</strong> Below the pages, the sidebar shows the forecast for where you are, or for the training location until you share your location.</li>
         <li><strong>Account menu.</strong> Your initial, at the bottom left on a computer or the top right on a phone. It holds Settings, Notifications, Theme, ABC WhatsApp, Report Bug, and Sign out.</li>
         <li><strong>Notifications.</strong> Notices from the trip organizer land here, and a count on your initial shows how many are unread. Mark them all as read, delete one at a time, or clear them all.</li>
         <li><strong>Themes.</strong> &ldquo;Theme&rdquo; in the account menu opens a picker for Light, Dark, or Digital Nirvana. Digital Nirvana adds a &ldquo;Grid effects&rdquo; switch for the animated backdrop.</li>
@@ -88,6 +90,9 @@ export function UserGuide() {
       <h2>What&rsquo;s new</h2>
       <p className="muted">Updated {GUIDE_UPDATED}.</p>
       <ul>
+        <li>The sidebar groups pages into Get ready, Travel days, and On the trip. Each group folds away, and the forecast sits under its own divider.</li>
+        <li>Address fields say so when suggestions are unavailable, and the booking form&rsquo;s Address field offers suggestions too.</li>
+        <li>For the organizer: each account on the Accounts tab has a single Actions menu, and the Activity tab separates what people did from routine page loads.</li>
         <li>Notifications: the organizer can send a notice to everyone, and unread ones show as a count on your initial. Open one to see its details.</li>
         <li>For the organizer: a notification when a new attendee joins, and health alerts for slow responses, server errors, and database size or growth, with a daily automatic check and a &ldquo;Check now&rdquo; button on the Organizer page.</li>
         <li>Report Bug in the account menu emails the organizer with your note.</li>
