@@ -365,13 +365,27 @@ a { color:var(--accent-dark); font-weight:800; }
   .abc-letters.flash { transform:none; }
 }
 
+/* Phones: the sidebar becomes a slim top bar (brand + avatar) and the primary nav a bottom rail that scrolls
+   sideways, so the page content starts at the top of the screen instead of under a stack of buttons. */
 @media (max-width: 900px) {
   .app-shell { grid-template-columns:1fr; }
-  .sidebar { position:static; height:auto; grid-template-rows:auto auto auto auto; }
   .app-shell:has(.sidebar.collapsed) { grid-template-columns:1fr; }
+  /* backdrop-filter would make the sidebar the containing block for the fixed rail below, so the bar goes opaque here. */
+  .sidebar, .sidebar.collapsed { position:sticky; top:0; z-index:15; height:auto; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 14px; border-right:0; border-bottom:1px solid var(--line); background:var(--panel); backdrop-filter:none; }
+  .sidebar .brand, .sidebar.collapsed .brand { flex:1; min-width:0; flex-direction:row; gap:12px; padding:0; }
   .sidebar-toggle { display:none; }
   .weather { display:none; }
-  .content { padding:14px; }
+  .sidebar > .profile { flex:none; }
+  .profile-button { grid-template-columns:38px; gap:0; min-height:0; padding:2px; border:0; background:transparent; }
+  .profile-button > span:not(.avatar) { display:none; }
+  .profile-popover { left:auto; right:0; bottom:auto; top:calc(100% + 8px); width:min(280px, calc(100vw - 28px)); }
+  .sidebar > .primary-nav { position:fixed; left:0; right:0; bottom:0; z-index:20; display:flex; gap:6px; padding:8px 10px calc(8px + env(safe-area-inset-bottom)); overflow-x:auto; overscroll-behavior-x:contain; scroll-snap-type:x proximity; -webkit-overflow-scrolling:touch; scrollbar-width:none; background:color-mix(in srgb, var(--panel) 94%, transparent); backdrop-filter:blur(14px); border-top:1px solid var(--line); box-shadow:0 -10px 30px rgba(29,37,40,.08); }
+  .primary-nav::-webkit-scrollbar { display:none; }
+  .primary-nav button, .sidebar.collapsed .primary-nav button { flex:0 0 auto; position:relative; width:auto; min-width:76px; min-height:58px; flex-direction:column; justify-content:center; gap:4px; padding:6px 10px; border-radius:10px; scroll-snap-align:center; font-size:11px; }
+  .primary-nav button .page-icon { width:22px; height:22px; }
+  .nav-label { flex:none; text-align:center; white-space:nowrap; overflow-wrap:normal; }
+  .nav-count, .sidebar.collapsed .nav-count { position:absolute; top:4px; right:6px; min-width:18px; padding:0 5px; font-size:10px; line-height:16px; }
+  .content { padding:14px 14px calc(88px + env(safe-area-inset-bottom)); }
   .settings-grid, .trip-form, .document-form, .choice-grid, .wizard-grid { grid-template-columns:1fr; }
   .choice-card, .wizard-card { padding:20px; }
   .wizard-page { padding:16px; }
@@ -703,11 +717,13 @@ a { color:var(--accent-dark); font-weight:800; }
   .checklist-hero { grid-template-columns:1fr; gap:18px; padding:20px; }
   .trip-form.in-modal { grid-template-columns:1fr; }
   .progress-block { padding-left:0; border-left:0; padding-top:16px; border-top:1px solid var(--line); }
-  .fact-table thead { display:none; }
-  .fact-table tr { display:grid; padding:8px 0; border-bottom:1px solid var(--line); }
-  .fact-table tr:last-child { border-bottom:0; }
-  .fact-table td { display:block; padding:1px 0; border:0; white-space:normal; }
-  .fact-table td:empty { display:none; }
+  .fact-table:not(.data-table) thead { display:none; }
+  .fact-table:not(.data-table) tr { display:grid; padding:8px 0; border-bottom:1px solid var(--line); }
+  .fact-table:not(.data-table) tr:last-child { border-bottom:0; }
+  .fact-table:not(.data-table) td { display:block; padding:1px 0; border:0; white-space:normal; }
+  .fact-table:not(.data-table) td:empty { display:none; }
+  .organizer .page-header-row { flex-direction:column; align-items:stretch; }
+  .pill-row { justify-content:flex-start; }
   .trip-bar-summary { flex-direction:column; align-items:stretch; gap:8px; }
   .trip-bar-stats { flex-wrap:wrap; overflow:visible; }
   .trip-stat { padding:4px 12px; }
@@ -845,3 +861,7 @@ a { color:var(--accent-dark); font-weight:800; }
 .sort-th button.on, .sort-th button:hover { color:var(--ink); }
 .sort-th button.on span { opacity:1; color:var(--accent-dark); }
 .sort-th.num button { justify-content:flex-end; }
+@media (max-width: 900px) {
+  .stat-grid { grid-template-columns:repeat(2, minmax(0, 1fr)); }
+  .stat-tile strong { font-size:22px; }
+}
