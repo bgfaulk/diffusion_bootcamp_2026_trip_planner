@@ -37,10 +37,10 @@ export const PATCH = withAudit("items.toggle", async (request, ctx) => {
     const checked = Boolean(body.checked);
     ctx.target = id; ctx.detail = checked ? "checked" : "unchecked";
     const sql = getSql();
-    const rows = await sql`SELECT page FROM list_items WHERE id = ${id} AND user_id = ${user.id}`;
+    // Only the flag changes. Position stays put, so an item unchecked later returns to the spot it held in the list;
+    // the bootstrap query orders by checked first and position second, which is what groups done items at the bottom.
+    const rows = await sql`UPDATE list_items SET checked = ${checked}, updated_at = now() WHERE id = ${id} AND user_id = ${user.id} RETURNING id`;
     if (!rows.length) fail("Item not found", 404);
-    const next = await sql`SELECT COALESCE(MAX(position), 0)::int + 1 AS next FROM list_items WHERE user_id = ${user.id} AND page = ${rows[0].page}`;
-    await sql`UPDATE list_items SET checked = ${checked}, position = ${Number(next[0].next)}, updated_at = now() WHERE id = ${id} AND user_id = ${user.id}`;
     return Response.json({ ok: true });
   } catch (error) {
     return errorResponse(error, "Could not update item");

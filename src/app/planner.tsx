@@ -826,8 +826,9 @@ function ChecklistItem({ item, onItems }: { item: Item; onItems: ItemsPatch }) {
   const { refreshStars } = useStars();
   async function toggle() {
     const checked = !item.checked;
-    // Flip it right away and move it to the end of its new group, which is where the server puts it too.
-    onItems(items => [...items.filter(other => other.id !== item.id), { ...item, checked }]);
+    // Flip it in place. The list groups open and done items itself, and each group keeps position order, so an
+    // unchecked item lands back where it used to be (the server leaves position alone as well).
+    onItems(items => items.map(other => (other.id === item.id ? { ...other, checked } : other)));
     try {
       await api("/api/items", { method: "PATCH", body: JSON.stringify({ id: item.id, checked }) });
       notify.success(checked ? "Checked off" : "Unchecked");
