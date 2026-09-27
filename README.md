@@ -31,7 +31,8 @@ trip data, or group links. Runtime data belongs in Neon and Vercel environment v
 - On the trip: Explore San Francisco (itinerary and places), Trip Information (bookings and PDFs, with
   "Add to calendar" .ics downloads for the whole trip, one booking, or the training days; a calendar guest
   from Settings is invited on every event), and
-  Photo Route (one photo per stop, shrunk before upload).
+  Photo Route (one photo per stop, shrunk before upload; every stop starts with a stock photo from
+  `public/stock`, credited in `public/stock/CREDITS.md`, until the attendee adds their own or deletes it).
 - Settings: profile, trip details, account deletion, and the in-app User Guide.
 - Organizer (owner only): see below.
 
@@ -88,6 +89,9 @@ Neon Postgres, created lazily by `ensureSchema()` in `src/lib/db.ts`. Text field
 encrypted at rest with AES-256-GCM keyed from `SESSION_SECRET`. Tables: `users`, `sessions`, `settings`,
 `list_items`, `itinerary`, `trip_info`, `trip_documents`, `photos`, `notifications`, `audit_log`,
 `health_snapshots`, `health_alert_state`, `weather_cache`, `star_awards`, `reports`.
+
+`settings.hidden_stock_spots` is a JSON list of photo-route stops whose stock photo the person deleted; the
+`photos` table holds only their own uploads.
 
 `list_items.source` records where an item came from (`starter`, `import`, `custom`, or `extra` for
 hand-added items after a person's fifth ever). Items from before the column existed count as `starter`.

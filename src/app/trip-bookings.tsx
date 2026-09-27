@@ -44,7 +44,7 @@ export function formatPhone(raw: string) {
   if (country && digits.startsWith("1")) digits = digits.slice(1);
   if (digits.length > 10) return text;
   const prefix = country ? "+1 " : "";
-  if (!digits.length) return country ? "+1 " : "";
+  if (!digits.length) return text.startsWith("+") ? text.replace(/[^+\d]/g, "") : ""; // "+" or "+1" while typing or deleting
   if (digits.length < 4) return `${prefix}(${digits}`;
   if (digits.length < 7) return `${prefix}(${digits.slice(0, 3)}) ${digits.slice(3)}`;
   return `${prefix}(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;

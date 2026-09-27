@@ -121,6 +121,9 @@ export function parseItinerary(text: string | null | undefined, startKey: number
   return plan;
 }
 
+/** Longest saved plan the itinerary API accepts (it slices longer text, so the client checks first). */
+export const MAX_ITINERARY_CHARS = 12000;
+
 /** The inverse of parseItinerary: the same "Day N - ..." headers and "- time | place | why | address" bullets, so a stop
  *  edited in the app round-trips through the parser. Intro lines and practical notes come back as plain lines and bullets. */
 export function serializeItinerary(plan: ParsedPlan): string {

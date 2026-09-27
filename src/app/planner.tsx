@@ -24,7 +24,7 @@ import { photoSpots, stockPhotos } from "@/lib/photo-spots";
 import { bookingEvent, buildIcs, downloadIcs, slug, trainingEvents, tripWindowEvent, type CalendarEvent } from "@/lib/calendar";
 import { formatBytes, MAX_PHOTO_EDGE, preparePhoto, type PreparedPhoto } from "@/lib/image";
 import { applyFx, applyTheme, storedFx, storedTheme, THEMES, themeLabels, type Theme } from "@/lib/theme";
-import { buildTripModel, countdown, dayKey, daysBetween, fmtDay, fmtMinutes, fmtShort, keyToDate, parseItinerary, parseWhen, serializeItinerary, timeMinutes, withStop, type DayEvent, type ParsedPlan, type Stop, type TimedBooking, type TripModel } from "@/lib/trip-time";
+import { buildTripModel, countdown, dayKey, daysBetween, fmtDay, fmtMinutes, fmtShort, keyToDate, MAX_ITINERARY_CHARS, parseItinerary, parseWhen, serializeItinerary, timeMinutes, withStop, type DayEvent, type ParsedPlan, type Stop, type TimedBooking, type TripModel } from "@/lib/trip-time";
 
 type Item = { id: string; page: string; title: string; checked: boolean; position: number; source?: string };
 type TripInfo = {
@@ -865,6 +865,7 @@ function ExplorePage({ items, itinerary, startDate, openModal, reload, onItems }
   const [confirmClear, setConfirmClear] = useState(false);
   // Which stop the editor is open on: a day and a stop index, or a day alone to add a stop to it.
   const [editing, setEditing] = useState<{ day: number; stop: number | null } | null>(null);
+  useEscape(confirmClear, () => setConfirmClear(false));
   const saved = itinerary?.saved_plan || "";
   const start = parseWhen(startDate);
   const plan = useMemo(() => parseItinerary(saved, start ? dayKey(start) : null), [saved, start?.y, start?.m, start?.d]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -876,7 +877,10 @@ function ExplorePage({ items, itinerary, startDate, openModal, reload, onItems }
   }
   // Edits rewrite the saved plan text in the same format ChatGPT's answer was saved in, so the parser reads it back.
   async function savePlan(next: ParsedPlan, done: string) {
-    await api("/api/itinerary", { method: "POST", body: JSON.stringify({ instructions: itinerary?.instructions || "", response: itinerary?.response || "", savedPlan: serializeItinerary(next) }) });
+    const text = serializeItinerary(next);
+    // The API slices longer plans rather than rejecting them, which would drop the last stops without a word.
+    if (text.length > MAX_ITINERARY_CHARS) throw new Error("This itinerary is as long as it can be. Shorten a note or remove a stop before adding more.");
+    await api("/api/itinerary", { method: "POST", body: JSON.stringify({ instructions: itinerary?.instructions || "", response: itinerary?.response || "", savedPlan: text }) });
     setEditing(null);
     notify.success(done);
     await reload();
@@ -990,6 +994,7 @@ function StopModal({ plan, day, stop, onClose, onSave, onDelete }: { plan: Parse
   const [error, setError] = useState("");
   const dayLabel = (entry: ParsedPlan["days"][number]) => entry.key ? `Day ${entry.index} · ${fmtDay(entry.key)}` : entry.label;
   const badTime = time.trim() !== "" && timeMinutes(time) === null;
+  useEscape(!busy, onClose);
   const mapsHref = address.trim() ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address.trim())}` : "";
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -1281,6 +1286,16 @@ function TrainingSchedule({ record, onCalendar }: { record?: TripInfo; onCalenda
   );
 }
 
+// Escape runs `close` while `active`; the dialogs below share it so every modal closes the same way.
+function useEscape(active: boolean, close: () => void) {
+  useEffect(() => {
+    if (!active) return;
+    function onKey(event: KeyboardEvent) { if (event.key === "Escape") close(); }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [active, close]);
+}
+
 // Shared shell for the "+ Something" add dialogs: backdrop click or Escape closes it.
 function FormModal({ title, eyebrow, onClose, children }: { title: string; eyebrow?: string; onClose: () => void; children: React.ReactNode }) {
   useEffect(() => {
@@ -1426,6 +1441,8 @@ function PhotoViewer({ spot, photos, stockHidden, onClose, onDeleted }: { spot: 
   const [confirming, setConfirming] = useState(false);
   const [confirmStock, setConfirmStock] = useState(false);
   const [busy, setBusy] = useState(false);
+  // Escape backs out one layer at a time: the confirm first, then the viewer.
+  useEscape(!busy, () => { if (confirmStock) setConfirmStock(false); else if (confirming) setConfirming(false); else onClose(); });
   // Deleting a stock photo is remembered on the account, so the stop stays empty until the person adds their own.
   async function removeStock() {
     setBusy(true);
