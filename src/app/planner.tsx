@@ -2,7 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/lib/client";
-import { buildWizardPrompt, extractJson, parseAnswers, trainingAgenda, type WizardAnswers } from "@/lib/plan";
+import { buildWizardPrompt, extractJson, parseAnswers, planTextFromJson, trainingAddress, trainingAgenda, trainingDetail, type WizardAnswers } from "@/lib/plan";
 import { AbcLoader, AbcMark, ActionMenu, DestinationField, InterestFields, LoginScreen, PlanningChoice, SetupWizard, TravelerFields, TripDateFields } from "./onboarding";
 import { primeChime, setChimeEnabled } from "@/lib/chime";
 import { PlaceInput } from "./place-input";
@@ -1121,13 +1121,14 @@ function StopModal({ plan, day, stop, onClose, onSave, onDelete }: { plan: Parse
 
 function ItineraryModal({ items, itinerary, answers, tripInfo, hasTripData, onClose, reload }: { items: Item[]; itinerary: AppState["itinerary"]; answers: WizardAnswers; tripInfo: TripInfo[]; hasTripData: boolean; onClose: () => void; reload: () => Promise<void> }) {
   const existing = Boolean(itinerary?.saved_plan);
-  const [instructions, setInstructions] = useState(itinerary?.instructions || "");
+  // The wizard leaves a marker in the instructions column; it isn't something the person wrote.
+  const [instructions, setInstructions] = useState(itinerary?.instructions === "Built by the ChatGPT setup wizard" ? "" : itinerary?.instructions || "");
   const [response, setResponse] = useState(itinerary?.response || "");
   const [file, setFile] = useState("");
   const [ack, setAck] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const prompt = useMemo(() => buildChatGptPrompt(instructions, items), [instructions, items]);
+  const prompt = useMemo(() => buildChatGptPrompt(instructions, items, answers, tripInfo), [instructions, items, answers, tripInfo]);
   const filePrompt = useMemo(() => buildWizardPrompt(answers), [answers]);
 
   async function persistText(nextInstructions = instructions, nextResponse = response) {
@@ -1137,10 +1138,13 @@ function ItineraryModal({ items, itinerary, answers, tripInfo, hasTripData, onCl
     if (!response.trim()) return setError("Paste ChatGPT's itinerary first.");
     setError(""); setBusy(true);
     try {
-      // ChatGPT's text, with any stops that only restate a booking left out: the bookings place those moments themselves.
-      const trip = buildTripModel({ startDate: answers.startDate, endDate: answers.endDate, bookings: tripInfo, itinerary: response, now: new Date() });
+      // ChatGPT sometimes answers with JSON (or the person pastes a trip-plan.json); its itinerary is read the same way.
+      const text = planTextFromJson(response) ?? response;
+      if (!parseItinerary(text, null).days.length) throw new Error("That doesn't look like a day-by-day plan. Ask ChatGPT for the 'Day 1 - ...' format from the prompt and paste the whole answer.");
+      // Stops that only restate a booking are left out: the bookings place those moments themselves.
+      const trip = buildTripModel({ startDate: answers.startDate, endDate: answers.endDate, bookings: tripInfo, itinerary: text, now: new Date() });
       const stripped = stripBookingStops(trip.plan, trip.bookings, trip.trainingKeys);
-      await api("/api/itinerary", { method: "POST", body: JSON.stringify({ instructions, response, savedPlan: stripped.removed ? serializeItinerary(stripped.plan) : response, cleaned: true }) });
+      await api("/api/itinerary", { method: "POST", body: JSON.stringify({ instructions, response, savedPlan: stripped.removed ? serializeItinerary(stripped.plan) : text, cleaned: true }) });
       if (stripped.removed) notify.success(`${stripped.removed} ${stripped.removed === 1 ? "line" : "lines"} that repeated a booking left out; those times come from Trip Information`);
       await reload();
       onClose();
@@ -1160,17 +1164,18 @@ function ItineraryModal({ items, itinerary, answers, tripInfo, hasTripData, onCl
 
   return (
     <FormModal eyebrow="Explore San Francisco" title={existing ? "Plan again with ChatGPT" : "Plan with ChatGPT"} onClose={onClose}>
-      {existing && <p className="warn-banner"><strong>You already have an itinerary.</strong> Saving a pasted plan replaces it. Importing a trip-plan.json replaces your bookings, checklists, and itinerary with the file&apos;s contents.</p>}
+      {existing && <p className="warn-banner"><strong>You already have an itinerary.</strong> Saving a pasted plan replaces it. Importing a trip-plan.json replaces your bookings and itinerary with the file&apos;s contents; checklist items are merged and keep their ticks.</p>}
       <label>Instructions<textarea value={instructions} onChange={event => setInstructions(event.target.value)} onBlur={() => persistText()} placeholder="We want walkable dinners, views, and one relaxed daytime idea..." /></label>
       <div className="button-row">
         <button className="btn" type="button" onClick={() => setInstructions(items.map(item => item.title).join("\n"))}>Use my places to visit</button>
         <button className="btn primary" type="button" onClick={() => window.open(`https://chatgpt.com/?q=${encodeURIComponent(prompt)}`, "_blank")}>Open ChatGPT with prompt</button>
       </div>
-      <label>Paste ChatGPT&apos;s itinerary<textarea value={response} onChange={event => setResponse(event.target.value)} onBlur={() => persistText()} placeholder="Paste the finished itinerary here after ChatGPT plans it." /></label>
+      <p className="muted">ChatGPT answers this prompt as text, day by day, built around your dates and bookings. Copy the whole answer and paste it below (JSON works too).</p>
+      <label>Paste ChatGPT&apos;s answer<textarea value={response} onChange={event => setResponse(event.target.value)} onBlur={() => persistText()} placeholder="Day 1 - Mon, Oct 12&#10;- 6:30 PM | North Beach dinner | Walkable from the hotel | Columbus Ave & Green St" /></label>
       <div className="button-row"><button className="btn primary" type="button" disabled={busy} onClick={saveText}>{busy ? "Saving..." : existing ? "Replace itinerary" : "Save itinerary"}</button></div>
       <details className="plan-file">
         <summary>Have a full trip-plan.json from ChatGPT instead?</summary>
-        <p className="muted">Use the setup prompt to get the whole trip back as a file, then drop it here. This rebuilds bookings, checklists, and the itinerary from the file.</p>
+        <p className="muted">Use the setup prompt to get the whole trip back as a file, then drop it here. This rebuilds bookings and the itinerary from the file; checklist items are merged so what you have ticked stays ticked.</p>
         <div className="button-row"><button className="btn" type="button" onClick={() => window.open(`https://chatgpt.com/?q=${encodeURIComponent(filePrompt)}`, "_blank")}>Open ChatGPT with the trip file prompt</button></div>
         <JsonFileInput value={file} onChange={setFile} placeholder='{ "tripName": "...", "records": [ ... ] }' />
         {hasTripData && <label className="ack"><input type="checkbox" checked={ack} onChange={event => setAck(event.target.checked)} />I understand this replaces my current trip data</label>}
@@ -1181,24 +1186,40 @@ function ItineraryModal({ items, itinerary, answers, tripInfo, hasTripData, onCl
   );
 }
 
-function buildChatGptPrompt(instructions: string, items: Item[]) {
-  return `Build a concise, practical San Francisco itinerary for a training trip web app.
+// The Explore page's re-plan prompt: the trip's dates and bookings as context (so ChatGPT plans around them without
+// listing them), the person's places and wishes, and the exact day-by-day text the parser reads back.
+function buildChatGptPrompt(instructions: string, items: Item[], answers: WizardAnswers, tripInfo: TripInfo[]) {
+  const when = (value?: string) => value?.trim() || "";
+  const bookings = tripInfo.map(b => `- ${b.category}: ${b.title}${b.provider ? ` (${b.provider})` : ""}${when(b.start_at) ? ` · ${when(b.start_at)}` : ""}${when(b.end_at) ? ` to ${when(b.end_at)}` : ""}${b.address ? ` · ${b.address}` : ""}`);
+  const dates = answers.startDate || answers.endDate ? `Trip dates: ${answers.startDate || "?"} to ${answers.endDate || "?"} (YYYY-MM-DD).` : "Trip dates: not set yet; take them from the bookings below.";
+  return `Plan a day-by-day San Francisco itinerary for my Diffusion Bootcamp training trip. Answer in plain text in exactly the format at the end; I'll paste it into a web app that reads it line by line.
 
-User instructions:
-${instructions || "(No custom instructions yet.)"}
+${dates}
+Training: ${trainingAddress} (${trainingDetail}); the bootcamp runs from ${trainingAgenda.slots[0].title.toLowerCase()} at 8 AM through 5 PM on training days, and evenings are free.
+${[answers.homeCity && `Home city: ${answers.homeCity}.`, answers.interests?.length && `Interests: ${answers.interests.join(", ")}.`, answers.budget && `Budget: ${answers.budget}.`].filter(Boolean).join("\n")}
 
-Existing saved Explore San Francisco ideas:
-${items.map(item => `- ${item.title}`).join("\n")}
+My bookings (plan around these; do NOT list them as itinerary items, the app places flights, hotel check-in and check-out, rental pickup and return, and the bootcamp itself on the right days by itself):
+${bookings.length ? bookings.join("\n") : "- none entered yet"}
 
-Return the response in this format:
-Title:
-Overview:
-Plan:
-- Time or sequence | Place | Why it fits | Address/search phrase
+Places I want to visit (use as starting ideas, drop any that don't fit):
+${items.length ? items.map(item => `- ${item.title}`).join("\n") : "- no list yet; pick well-known highlights"}
+
+${instructions.trim() ? `My wishes:\n${instructions.trim()}\n` : ""}
+Rules: cover every day from the day I arrive to the day I leave, keep training days to the evening, allow realistic travel time (Redwood City to the city is 45 to 75 minutes), and give each stop a clock time.
+
+Format (keep these exact line shapes, no extra headings or markdown):
+Title: <a short title>
+Overview: <one or two sentences>
+
+Day 1 - <Weekday, Mon D>
+- <time> | <place> | <why it fits> | <address or search phrase>
+- <time> | <place> | <why it fits> | <address or search phrase>
+
+Day 2 - <Weekday, Mon D>
+- ...
+
 Practical notes:
-- Parking, layers, timing, reservations, and transit notes
-
-Keep it mobile-readable, specific, and ready to save into the app.`;
+- <parking, layers, timing, reservations, transit>`;
 }
 
 function TripInfoPage({ tripInfo, tripDocuments, reload, answers, settings, email }: { tripInfo: TripInfo[]; tripDocuments: TripDocument[]; reload: () => Promise<void>; answers: WizardAnswers; settings: Settings; email: string }) {

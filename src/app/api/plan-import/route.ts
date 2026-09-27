@@ -1,6 +1,6 @@
 import { requireUser } from "@/lib/auth";
 import { withAudit } from "@/lib/audit";
-import { encryptText } from "@/lib/crypto";
+import { decryptText, encryptText } from "@/lib/crypto";
 import { getSql } from "@/lib/db";
 import { extractJson, normalizePlan } from "@/lib/plan";
 import { dayKey, parseItinerary, parseWhen, serializeItinerary, stripBookingStops, timeBookings, trainingDays, type Booking } from "@/lib/trip-time";
@@ -24,12 +24,28 @@ export const POST = withAudit("plan.import", async (request, ctx) => {
       if (plan.trainingLocation) queries.push(sql`UPDATE settings SET training_location = ${encryptText(plan.trainingLocation)}, training_place_id = '', updated_at = now() WHERE user_id = ${user.id}`);
     }
 
+    // Checklists merge rather than reset: an item already on the page keeps its tick (matched by title, ignoring
+    // case and spacing) and takes the file's ordering; new titles are added; imported or starter items the file
+    // no longer lists are removed; items the person added by hand always stay. Star awards are keyed once per
+    // page, so a re-import can't earn a list's stars twice.
+    const norm = (title: string) => title.toLowerCase().replace(/\s+/g, " ").trim();
     for (const [page, titles] of Object.entries(plan.lists)) {
       if (!titles.length) continue;
-      queries.push(sql`DELETE FROM list_items WHERE user_id = ${user.id} AND page = ${page}`);
+      const existing = (await sql`SELECT id, title, source FROM list_items WHERE user_id = ${user.id} AND page = ${page}`)
+        .map(row => ({ id: String(row.id), key: norm(decryptText(row.title)), source: String(row.source || "starter") }));
+      const matched = new Set<string>();
       titles.forEach((title, index) => {
-        queries.push(sql`INSERT INTO list_items (user_id, page, title, position, source) VALUES (${user.id}, ${page}, ${encryptText(title)}, ${index + 1}, 'import')`);
+        const match = existing.find(row => row.key === norm(title) && !matched.has(row.id));
+        if (match) {
+          matched.add(match.id);
+          queries.push(sql`UPDATE list_items SET position = ${index + 1}, updated_at = now() WHERE id = ${match.id} AND user_id = ${user.id}`);
+        } else {
+          queries.push(sql`INSERT INTO list_items (user_id, page, title, position, source) VALUES (${user.id}, ${page}, ${encryptText(title)}, ${index + 1}, 'import')`);
+        }
       });
+      for (const row of existing) {
+        if (!matched.has(row.id) && (row.source === "import" || row.source === "starter")) queries.push(sql`DELETE FROM list_items WHERE id = ${row.id} AND user_id = ${user.id}`);
+      }
     }
 
     if (plan.records.length) {
