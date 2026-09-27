@@ -10,8 +10,7 @@ function emptyBootstrap() {
     photos: {},
     itinerary: null,
     tripInfo: [],
-    tripDocuments: [],
-    tripImport: null
+    tripDocuments: []
   });
 }
 
@@ -21,7 +20,7 @@ export async function GET() {
   const user = await getUser();
   if (!user) return emptyBootstrap();
   const sql = getSql();
-  const [settings, items, photos, itinerary, tripInfo, tripDocuments, tripImport] = await Promise.all([
+  const [settings, items, photos, itinerary, tripInfo, tripDocuments] = await Promise.all([
     sql`SELECT user_id, profile_name, trip_name, home_address, home_place_id, training_location, training_place_id, theme, planning_mode, planning_answers, updated_at FROM settings WHERE user_id = ${user.id}`,
     sql`SELECT * FROM list_items WHERE user_id = ${user.id} ORDER BY checked ASC, position ASC, created_at ASC`,
     sql`
@@ -33,8 +32,7 @@ export async function GET() {
     `,
     sql`SELECT instructions, response, saved_plan FROM itinerary WHERE user_id = ${user.id}`,
     sql`SELECT * FROM trip_info WHERE user_id = ${user.id} ORDER BY created_at DESC`,
-    sql`SELECT id, label, file_name, content_type, created_at FROM trip_documents WHERE user_id = ${user.id} ORDER BY created_at DESC`,
-    sql`SELECT instructions, response FROM trip_import WHERE user_id = ${user.id}`
+    sql`SELECT id, label, file_name, content_type, created_at FROM trip_documents WHERE user_id = ${user.id} ORDER BY created_at DESC`
   ]);
   return Response.json({
     user,
@@ -51,7 +49,6 @@ export async function GET() {
       ...decryptRow(document, ["label", "file_name"]),
       viewUrl: `/api/trip-documents/${document.id}`,
       downloadUrl: `/api/trip-documents/${document.id}?download=1`
-    })),
-    tripImport: tripImport[0] ? decryptRow(tripImport[0], ["instructions", "response"]) : null
+    }))
   });
 }

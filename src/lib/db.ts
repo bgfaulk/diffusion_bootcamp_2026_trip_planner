@@ -135,14 +135,8 @@ export async function ensureSchema() {
         created_at TIMESTAMPTZ NOT NULL DEFAULT now()
       )
     `,
-    sql`
-      CREATE TABLE IF NOT EXISTS trip_import (
-        user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-        instructions TEXT,
-        response TEXT,
-        updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-      )
-    `
+    // The bookings-only ChatGPT import is gone; its table only ever held draft prompt text.
+    sql`DROP TABLE IF EXISTS trip_import`
   ]);
   schemaReady = true;
 }

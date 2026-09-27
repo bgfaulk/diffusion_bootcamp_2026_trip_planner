@@ -57,7 +57,6 @@ type AppState = {
   itinerary: null | { instructions?: string; response?: string; saved_plan?: string };
   tripInfo: TripInfo[];
   tripDocuments: TripDocument[];
-  tripImport: null | { instructions?: string; response?: string };
 };
 
 const emptyAppState: AppState = {
@@ -67,8 +66,7 @@ const emptyAppState: AppState = {
   photos: {},
   itinerary: null,
   tripInfo: [],
-  tripDocuments: [],
-  tripImport: null
+  tripDocuments: []
 };
 
 // Per-device hint that a session exists, so the loader can start before bootstrap answers.
@@ -357,7 +355,7 @@ export default function Home() {
         {page === "overview" && <Overview tripName={tripName} settings={data.settings} answers={answers} itinerary={data.itinerary} tripInfo={data.tripInfo} goTo={setPage} />}
         {listPages.includes(page) && <ListPage pageKey={page} items={data.items} onItems={patchItems} />}
         {page === "explore" && <ExplorePage items={data.items.filter(item => item.page === "explore")} itinerary={data.itinerary} startDate={answers.startDate} openModal={() => setItineraryOpen(true)} reload={load} onItems={patchItems} />}
-        {page === "tripInfo" && <TripInfoPage tripInfo={data.tripInfo} tripDocuments={data.tripDocuments} tripImport={data.tripImport} reload={load} />}
+        {page === "tripInfo" && <TripInfoPage tripInfo={data.tripInfo} tripDocuments={data.tripDocuments} reload={load} />}
         {page === "gallery" && <Gallery photos={data.photos} openViewer={setViewer} reload={load} />}
         {page === "settings" && <SettingsPage settings={data.settings} owner={Boolean(data.user.owner)} saveSettings={saveSettings} reload={load} />}
       </main>
@@ -377,8 +375,7 @@ function normalizeAppState(next: Partial<AppState>): AppState {
     photos: next.photos && typeof next.photos === "object" ? next.photos : {},
     itinerary: next.itinerary || null,
     tripInfo: Array.isArray(next.tripInfo) ? next.tripInfo : [],
-    tripDocuments: Array.isArray(next.tripDocuments) ? next.tripDocuments : [],
-    tripImport: next.tripImport || null
+    tripDocuments: Array.isArray(next.tripDocuments) ? next.tripDocuments : []
   };
 }
 
@@ -801,8 +798,7 @@ Practical notes:
 Keep it mobile-readable, specific, and ready to save into the app.`;
 }
 
-function TripInfoPage({ tripInfo, tripDocuments, tripImport, reload }: { tripInfo: TripInfo[]; tripDocuments: TripDocument[]; tripImport: AppState["tripImport"]; reload: () => Promise<void> }) {
-  const [importOpen, setImportOpen] = useState(false);
+function TripInfoPage({ tripInfo, tripDocuments, reload }: { tripInfo: TripInfo[]; tripDocuments: TripDocument[]; reload: () => Promise<void> }) {
   const [adding, setAdding] = useState<string | null>(null);
   const [pdfOpen, setPdfOpen] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<null | { kind: "booking" | "document"; id: string; label: string }>(null);
@@ -836,7 +832,6 @@ function TripInfoPage({ tripInfo, tripDocuments, tripImport, reload }: { tripInf
       <div className="callout">
         <h2>Keep booking details in your own account</h2>
         <p>Add flights, hotels, rental cars, training addresses, insurance policy notes, and other reservations here. Nothing personal needs to live in the shared repo.</p>
-        <div className="button-row"><button className="btn primary" onClick={() => setImportOpen(true)}>Import with ChatGPT</button></div>
       </div>
 
       <Tabs label="Trip information sections" active={tab} onChange={setTab} tabs={[
@@ -886,7 +881,6 @@ function TripInfoPage({ tripInfo, tripDocuments, tripImport, reload }: { tripInf
         </TabPanel>
       )}
 
-      {importOpen && <TripImportModal tripImport={tripImport} onClose={() => setImportOpen(false)} reload={reload} />}
       {pendingDelete && (
         <div className="modal-backdrop" onClick={() => setPendingDelete(null)}>
           <section className="modal confirm-modal" role="dialog" aria-modal="true" onClick={event => event.stopPropagation()}>
@@ -954,96 +948,6 @@ function FormModal({ title, eyebrow, onClose, children }: { title: string; eyebr
       </section>
     </div>
   );
-}
-
-function TripImportModal({ tripImport, onClose, reload }: { tripImport: AppState["tripImport"]; onClose: () => void; reload: () => Promise<void> }) {
-  const [instructions, setInstructions] = useState(tripImport?.instructions || defaultTripImportInstructions());
-  const [response, setResponse] = useState(tripImport?.response || "");
-  const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
-  const prompt = useMemo(() => buildTripImportPrompt(instructions), [instructions]);
-
-  async function persist(nextInstructions = instructions, nextResponse = response) {
-    await api("/api/trip-import", { method: "POST", body: JSON.stringify({ instructions: nextInstructions, response: nextResponse }) }).catch(() => {});
-  }
-
-  async function saveRecords() {
-    const records = parseTripRecords(response);
-    if (!records.length) return setError("Paste the JSON records from ChatGPT before saving");
-    setError(""); setBusy(true);
-    try {
-      await persist();
-      for (const record of records) {
-        await api("/api/trip-info", { method: "POST", body: JSON.stringify(record) });
-      }
-      await reload();
-      onClose();
-    } catch (err) { setError(err instanceof Error ? err.message : "Could not save those bookings"); } finally { setBusy(false); }
-  }
-
-  return (
-    <FormModal eyebrow="Trip Information" title="Import Trip Information" onClose={onClose}>
-      <p className="muted">Ask ChatGPT to review the travel emails you provide or connect there. It gives you a trip-bookings.json file to upload here. Imported bookings are added to what you already have.</p>
-      <label>Instructions<textarea value={instructions} onChange={event => setInstructions(event.target.value)} onBlur={() => persist()} /></label>
-      <div className="button-row"><button className="btn" type="button" onClick={() => setInstructions(defaultTripImportInstructions())}>Use suggested instructions</button><button className="btn primary" type="button" onClick={() => window.open(`https://chatgpt.com/?q=${encodeURIComponent(prompt)}`, "_blank")}>Open ChatGPT with prompt</button></div>
-      <JsonFileInput value={response} onChange={value => { setResponse(value); persist(instructions, value); }} fileHint="trip-bookings.json" placeholder='{"records":[{"category":"flight","title":"Outbound flight","provider":"Airline","confirmationNumber":"ABC123"}]}' />
-      {error && <p className="error">{error}</p>}
-      <div className="button-row"><button className="btn" type="button" onClick={onClose}>Cancel</button><button className="btn primary" type="button" disabled={busy} onClick={saveRecords}>{busy ? "Saving..." : "Save imported details"}</button></div>
-    </FormModal>
-  );
-}
-
-function defaultTripImportInstructions() {
-  return "Find flight, hotel, rental car, training, insurance, and other reservation details. Include confirmation numbers, dates/times, addresses, phone numbers, and practical warnings like pickup times that do not match flight arrival times.";
-}
-
-function buildTripImportPrompt(instructions: string) {
-  return `Review my travel details and give me a downloadable file named trip-bookings.json that I can import into my trip planner.
-
-Instructions:
-${instructions}
-
-Use this exact schema:
-{
-  "records": [
-    {
-      "category": "flight | hotel | rental | training | insurance | other",
-      "title": "Short label",
-      "provider": "Company name",
-      "confirmationNumber": "Confirmation, reservation, policy, or record locator",
-      "startAt": "Date/time text",
-      "endAt": "Date/time text",
-      "address": "Address or location text",
-      "phone": "Phone number",
-      "notes": "Important instructions or warnings"
-    }
-  ]
-}
-
-The file must contain valid JSON only, with no markdown fences. If a field is unknown, use an empty string.
-Don't paste the JSON into the chat. Just give me the download link. If you can't create files, reply with only the JSON instead.`;
-}
-
-function parseTripRecords(response: string) {
-  try {
-    const parsed = extractJson(response);
-    const source = Array.isArray(parsed) ? parsed : parsed.records;
-    if (!Array.isArray(source)) return [];
-    const valid = new Set(["flight", "hotel", "rental", "training", "insurance", "other"]);
-    return source.map((item: any) => ({
-      category: valid.has(String(item.category)) ? String(item.category) : "other",
-      title: String(item.title || "").slice(0, 120),
-      provider: String(item.provider || "").slice(0, 120),
-      confirmationNumber: String(item.confirmationNumber || item.confirmation_number || "").slice(0, 120),
-      startAt: String(item.startAt || item.start_at || "").slice(0, 120),
-      endAt: String(item.endAt || item.end_at || "").slice(0, 120),
-      address: String(item.address || "").slice(0, 260),
-      phone: String(item.phone || "").slice(0, 80),
-      notes: String(item.notes || "").slice(0, 1200)
-    })).filter((item: any) => item.title);
-  } catch {
-    return [];
-  }
 }
 
 function Gallery({ photos, openViewer, reload }: { photos: AppState["photos"]; openViewer: (spot: string) => void; reload: () => Promise<void> }) {
