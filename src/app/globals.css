@@ -324,13 +324,14 @@ a { color:var(--accent-dark); font-weight:800; }
 .login-card h1 { font-size:clamp(26px, 3.6vw, 36px); line-height:1.12; }
 .login-brand { margin-top:4px; padding-top:14px; border-top:1px solid var(--line); text-align:center; }
 .login-brand .eyebrow { margin:0; }
-.abc-logo { display:grid; justify-items:center; gap:10px; padding:6px 0 2px; }
+/* One content-sized column, centred, so the word under the letters can stretch to exactly their width. */
+.abc-logo { display:grid; grid-template-columns:max-content; justify-content:center; justify-items:center; gap:10px; padding:6px 0 2px; }
 .abc-logo .abc-letters { gap:clamp(10px, 3vw, 24px); }
 .abc-logo .abc-letter { font-size:clamp(52px, 10vw, 84px); color:color-mix(in srgb, var(--ink) 9%, transparent); }
 .abc-logo .abc-letters.flash .abc-letter { color:var(--glow); text-shadow:0 0 22px var(--glow), 0 0 60px var(--glow); }
 .abc-logo .abc-feathers { gap:8px; }
 .abc-logo .abc-feathers i { width:clamp(18px, 4vw, 30px); height:6px; background:color-mix(in srgb, var(--ink) 9%, transparent); }
-.abc-logo .abc-word { font-size:clamp(12px, 2.4vw, 17px); letter-spacing:.3em; text-indent:.3em; color:color-mix(in srgb, var(--ink) 12%, transparent); }
+.abc-logo .abc-word { justify-self:stretch; justify-content:space-between; font-size:clamp(11px, 2.2vw, 15px); letter-spacing:0; text-indent:0; color:color-mix(in srgb, var(--ink) 12%, transparent); }
 .abc-logo .abc-letters.flash + .abc-word span { color:var(--f); text-shadow:0 0 14px var(--f), 0 0 40px var(--f); }
 .honeypot { position:absolute; left:-10000px; width:1px; height:1px; overflow:hidden; }
 .visually-hidden { position:absolute; width:1px; height:1px; margin:-1px; padding:0; border:0; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
@@ -853,7 +854,7 @@ a { color:var(--accent-dark); font-weight:800; }
 :root[data-theme="nirvana"] .abc-caption { font-family:var(--mono); font-weight:400; letter-spacing:.08em; }
 :root[data-theme="nirvana"] .abc-feathers i { border-radius:0; height:6px; }
 :root[data-theme="nirvana"] .abc-word { font-family:var(--display); font-weight:700; letter-spacing:.4em; text-indent:.4em; }
-:root[data-theme="nirvana"] .abc-logo .abc-word { letter-spacing:.3em; text-indent:.3em; }
+:root[data-theme="nirvana"] .abc-logo .abc-word { letter-spacing:0; text-indent:0; }
 :root[data-theme="nirvana"] .abc-logo.small .abc-word { font-size:7px; letter-spacing:0; text-indent:0; }
 :root[data-theme="nirvana"] .abc-sound { border-radius:0; border-color:var(--cyan-line); color:var(--cyan-dim); background:rgba(0,229,255,.05); font-family:var(--display); font-size:.66rem; letter-spacing:.16em; text-transform:uppercase; clip-path:var(--cut-xs); }
 :root[data-theme="nirvana"] .abc-sound.attention { border-color:var(--orange); color:var(--orange); }
