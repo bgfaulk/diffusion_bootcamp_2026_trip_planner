@@ -37,6 +37,7 @@ export function friendlyWhen(value: string) {
 // Tidies a US phone number as it is typed: "(555) 123-4567", or "+1 (555) 123-4567" when it starts with a country code.
 // Other international numbers (+44 ...) and anything longer than ten digits, like extensions, are left as typed.
 export function formatPhone(raw: string) {
+  if (/[a-z]/i.test(raw)) return raw; // "x12", "ext. 4" or a note: leave it exactly as typed
   const text = raw.replace(/[^\d+\s().-]/g, "").trimStart();
   if (text.startsWith("+") && !text.startsWith("+1")) return text;
   let digits = text.replace(/\D/g, "");
