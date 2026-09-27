@@ -30,12 +30,15 @@ export function hasDatabaseUrl() {
   );
 }
 
+// Neon's HTTP driver opens a fresh connection per statement, so a session-level advisory lock taken in
+// one statement is gone before the next one runs. A single transaction fixes both problems at once: the
+// transaction-scoped lock really serializes concurrent cold starts, and 14 round trips become one.
 export async function ensureSchema() {
   if (schemaReady) return;
   const sql = getSql();
-  await sql`SELECT pg_advisory_lock(2026092601)`;
-  try {
-    await sql`
+  await sql.transaction([
+    sql`SELECT pg_advisory_xact_lock(2026092601)`,
+    sql`
       CREATE TABLE IF NOT EXISTS users (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         email TEXT UNIQUE NOT NULL,
@@ -44,16 +47,16 @@ export async function ensureSchema() {
         created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
       )
-    `;
-    await sql`
+    `,
+    sql`
       CREATE TABLE IF NOT EXISTS sessions (
         token_hash TEXT PRIMARY KEY,
         user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         expires_at TIMESTAMPTZ NOT NULL,
         created_at TIMESTAMPTZ NOT NULL DEFAULT now()
       )
-    `;
-    await sql`
+    `,
+    sql`
       CREATE TABLE IF NOT EXISTS settings (
         user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
         profile_name TEXT,
@@ -69,10 +72,10 @@ export async function ensureSchema() {
         theme TEXT NOT NULL DEFAULT 'light',
         updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
       )
-    `;
-    await sql`ALTER TABLE settings ADD COLUMN IF NOT EXISTS planning_mode TEXT`;
-    await sql`ALTER TABLE settings ADD COLUMN IF NOT EXISTS planning_answers TEXT`;
-    await sql`
+    `,
+    sql`ALTER TABLE settings ADD COLUMN IF NOT EXISTS planning_mode TEXT`,
+    sql`ALTER TABLE settings ADD COLUMN IF NOT EXISTS planning_answers TEXT`,
+    sql`
       CREATE TABLE IF NOT EXISTS list_items (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -83,8 +86,8 @@ export async function ensureSchema() {
         created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
       )
-    `;
-    await sql`
+    `,
+    sql`
       CREATE TABLE IF NOT EXISTS photos (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -94,8 +97,8 @@ export async function ensureSchema() {
         image_base64 TEXT NOT NULL,
         created_at TIMESTAMPTZ NOT NULL DEFAULT now()
       )
-    `;
-    await sql`
+    `,
+    sql`
       CREATE TABLE IF NOT EXISTS itinerary (
         user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
         instructions TEXT,
@@ -103,8 +106,8 @@ export async function ensureSchema() {
         saved_plan TEXT,
         updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
       )
-    `;
-    await sql`
+    `,
+    sql`
       CREATE TABLE IF NOT EXISTS trip_info (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -120,8 +123,8 @@ export async function ensureSchema() {
         created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
       )
-    `;
-    await sql`
+    `,
+    sql`
       CREATE TABLE IF NOT EXISTS trip_documents (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -131,19 +134,17 @@ export async function ensureSchema() {
         file_base64 TEXT NOT NULL,
         created_at TIMESTAMPTZ NOT NULL DEFAULT now()
       )
-    `;
-    await sql`
+    `,
+    sql`
       CREATE TABLE IF NOT EXISTS trip_import (
         user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
         instructions TEXT,
         response TEXT,
         updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
       )
-    `;
-    schemaReady = true;
-  } finally {
-    await sql`SELECT pg_advisory_unlock(2026092601)`;
-  }
+    `
+  ]);
+  schemaReady = true;
 }
 
 export async function seedStarterItems(userId: string) {
