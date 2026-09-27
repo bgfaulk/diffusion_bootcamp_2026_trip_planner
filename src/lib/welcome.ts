@@ -27,8 +27,8 @@ export async function ensureWelcomed(userId: string, fresh: boolean) {
   if (!rows.length || rows[0].welcomed_at) return false;
   const title = fresh ? "Welcome to the trip planner" : "A quick tour of the trip planner";
   const body = fresh
-    ? "Here is everything worth setting up to get the most out of the planner. Each item has a button that takes you right to it."
-    : "The planner has grown since you signed up: notifications, a User Guide, the ABC WhatsApp group, Report Bug, and more. Here is everything worth a look, each with a button that takes you right to it.";
+    ? "Start with Finish setup so the Overview and checklists know your trip. Then read the User Guide under Settings > User Guide for what each page does, and join the ABC WhatsApp group from your account menu (tap your initial). The full list is below, and each item has a button that takes you right to it."
+    : "Here is what the planner has picked up since you signed up, and where to find each piece. A User Guide under Settings > User Guide explains every page. Your account menu (tap your initial) now has Notifications like this one, Theme, the ABC WhatsApp group link with a QR code, and Report Bug, which emails the organizer. Every page has its own web address, and every save confirms it worked. The full checklist is below, and each item has a button that takes you right to it.";
   await sql`
     INSERT INTO notifications (user_id, kind, title, body, data)
     VALUES (${userId}, ${"welcome"}, ${encryptText(title)}, ${encryptText(body)}, ${encryptText(JSON.stringify({ steps: welcomeSteps() }))})
