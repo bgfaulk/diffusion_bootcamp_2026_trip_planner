@@ -486,6 +486,32 @@ export default function Home() {
     );
   }
 
+  // On phones the rail is rendered as a sibling of the top bar, not inside it: iOS Safari re-positions a fixed element
+  // that lives inside a sticky ancestor on every scroll frame, which showed as the rail blinking while scrolling.
+  const pageNav = (
+    <nav className="primary-nav" aria-label="Pages">
+      {navButton("overview")}
+      {navGroups.map(group => {
+        // Phones show the flat rail and the icon-only sidebar can't label a fold, so both always show every page.
+        const open = mobile || compact || !closedGroups.has(group.key);
+        const left = group.pages.reduce((sum, key) => sum + (remaining[key] || 0), 0);
+        return (
+          <div key={group.key} className="nav-group">
+            {!mobile && (compact
+              ? <span className="nav-group-rule" aria-hidden="true" />
+              : <button type="button" className="nav-group-head" aria-expanded={open} onClick={() => setGroupClosed(group.key, open)}>
+                  <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 7.5l5 5 5-5" /></svg>
+                  <span className="nav-label">{group.label}</span>
+                  {!open && left > 0 && <span className="nav-count" aria-label={`${left} left`}>{left}</span>}
+                </button>)}
+            {open && group.pages.map(navButton)}
+          </div>
+        );
+      })}
+      {data.user.owner && (compact ? <span className="nav-group-rule" aria-hidden="true" /> : null)}
+      {data.user.owner && navButton("organizer")}
+    </nav>
+  );
   return (
     <StarsProvider value={{ stars: data.stars, leaderboard: data.leaderboard, burst, refreshStars }}>{backdrop(true)}{idleModal}<div className="app-shell">
       <aside className={compact ? "sidebar collapsed" : "sidebar"}>
@@ -497,28 +523,7 @@ export default function Home() {
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d={compact ? "M9 6l6 6-6 6" : "M15 6l-6 6 6 6"} /></svg>
           </button>
         </div>
-        <nav className="primary-nav" aria-label="Pages">
-          {navButton("overview")}
-          {navGroups.map(group => {
-            // Phones show the flat rail and the icon-only sidebar can't label a fold, so both always show every page.
-            const open = mobile || compact || !closedGroups.has(group.key);
-            const left = group.pages.reduce((sum, key) => sum + (remaining[key] || 0), 0);
-            return (
-              <div key={group.key} className="nav-group">
-                {!mobile && (compact
-                  ? <span className="nav-group-rule" aria-hidden="true" />
-                  : <button type="button" className="nav-group-head" aria-expanded={open} onClick={() => setGroupClosed(group.key, open)}>
-                      <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 7.5l5 5 5-5" /></svg>
-                      <span className="nav-label">{group.label}</span>
-                      {!open && left > 0 && <span className="nav-count" aria-label={`${left} left`}>{left}</span>}
-                    </button>)}
-                {open && group.pages.map(navButton)}
-              </div>
-            );
-          })}
-          {data.user.owner && (compact ? <span className="nav-group-rule" aria-hidden="true" /> : null)}
-          {data.user.owner && navButton("organizer")}
-        </nav>
+        {!mobile && pageNav}
         <WeatherPanel weather={weather} collapsed={compact} />
         <div className="profile" ref={profileRef}>
           <button className="profile-button" onClick={() => setProfileOpen(open => !open)} title={compact ? (displayName || data.user.email) : undefined} aria-label="Account menu">
@@ -537,6 +542,7 @@ export default function Home() {
           )}
         </div>
       </aside>
+      {mobile && pageNav}
 
       <main className="content">
         {!answers.completed && !hideBanner && (

@@ -551,7 +551,7 @@ a { color:var(--accent-dark); font-weight:800; }
      shell's min-height:100vh is shared between two auto rows, so a short page grows the top bar. */
   .app-shell { grid-template-columns:1fr; grid-template-rows:auto minmax(0, 1fr); align-content:start; }
   .app-shell:has(.sidebar.collapsed) { grid-template-columns:1fr; }
-  /* backdrop-filter would make the sidebar the containing block for the fixed rail below, so the bar goes opaque here.
+  /* The top bar goes opaque here: a blurred sticky bar is re-rasterized on every scroll frame on iOS Safari.
      (Digital Nirvana's more specific sidebar rule re-adds a blur; its phone override sits next to that rule.) */
   .sidebar, .sidebar.collapsed { position:sticky; top:0; z-index:15; height:auto; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 14px; border-right:0; border-bottom:1px solid var(--line); background:var(--panel); backdrop-filter:none; }
   .sidebar .brand, .sidebar.collapsed .brand { flex:1; min-width:0; flex-direction:row; gap:12px; padding:0; }
@@ -561,10 +561,11 @@ a { color:var(--accent-dark); font-weight:800; }
   .profile-button { grid-template-columns:38px; gap:0; min-height:0; padding:2px; border:0; background:transparent; }
   .profile-button > span:not(.avatar) { display:none; }
   .profile-popover { left:auto; right:0; bottom:auto; top:calc(100% + 8px); width:min(280px, calc(100vw - 28px)); }
-  /* The rail is opaque and promoted to its own compositor layer (translateZ). It lives inside the sticky top bar, and on
-     iOS Safari a fixed, blurred, scrollable element inside a sticky ancestor is re-rasterized as the page scrolls, which
-     showed as the rail blinking out for a frame. No backdrop-filter and no legacy -webkit-overflow-scrolling here. */
-  .sidebar > .primary-nav { position:fixed; left:0; right:0; bottom:0; z-index:20; display:flex; gap:6px; padding:8px 10px calc(8px + env(safe-area-inset-bottom)); overflow-x:auto; overscroll-behavior-x:contain; scroll-snap-type:x proximity; scrollbar-width:none; background:var(--panel); border-top:1px solid var(--line); box-shadow:0 -10px 30px rgba(29,37,40,.08); transform:translateZ(0); }
+  /* The rail is a direct child of .app-shell on phones (planner.tsx renders it outside the top bar), so it is fixed to the
+     viewport with no sticky, transformed, or filtered ancestor. iOS Safari re-positions a fixed element inside a sticky
+     ancestor on every scroll frame, which showed as the rail blinking while scrolling. It stays opaque with no
+     backdrop-filter and no legacy -webkit-overflow-scrolling, which each add a re-rasterization of their own. */
+  .primary-nav { position:fixed; left:0; right:0; bottom:0; z-index:20; display:flex; gap:6px; padding:8px 10px calc(8px + env(safe-area-inset-bottom)); overflow-x:auto; overscroll-behavior-x:contain; scroll-snap-type:x proximity; scrollbar-width:none; background:var(--panel); border-top:1px solid var(--line); box-shadow:0 -10px 30px rgba(29,37,40,.08); transform:translateZ(0); }
   .primary-nav::-webkit-scrollbar { display:none; }
   /* The rail is one flat row: group wrappers dissolve and headings are not rendered on phones. */
   .nav-group { display:contents; }
@@ -771,7 +772,7 @@ a { color:var(--accent-dark); font-weight:800; }
   /* Phones: no blur (it would trap the fixed bottom rail inside the top bar) and the side border becomes a bottom one. */
   :root[data-theme="nirvana"] .sidebar { background:rgba(2,6,12,.96); border-right:0; border-bottom-color:var(--cyan-line); backdrop-filter:none; }
   /* The bottom rail is fully opaque here too; Nirvana's --panel is translucent and the rail must not blend while scrolling. */
-  :root[data-theme="nirvana"] .sidebar > .primary-nav { background:rgb(2,6,12); }
+  :root[data-theme="nirvana"] .primary-nav { background:rgb(2,6,12); }
 }
 :root[data-theme="nirvana"] .brand-divider { background:var(--cyan-line); }
 :root[data-theme="nirvana"] .brand strong { display:block; font-family:var(--display); font-size:.74rem; letter-spacing:.12em; text-transform:uppercase; }
