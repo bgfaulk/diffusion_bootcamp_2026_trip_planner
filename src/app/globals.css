@@ -950,11 +950,21 @@ a { color:var(--accent-dark); font-weight:800; }
   .tabs { flex-wrap:nowrap; overflow-x:auto; scroll-snap-type:x proximity; scrollbar-width:none; -webkit-overflow-scrolling:touch; }
   .tabs::-webkit-scrollbar { display:none; }
   .tabs button { scroll-snap-align:start; }
-  .trip-bar-summary { flex-direction:column; align-items:stretch; gap:8px; }
-  .trip-bar-stats { flex-wrap:wrap; overflow:visible; }
-  .trip-stat { padding:4px 12px; }
+  /* The stats become a two-column grid of equal cells with hairlines between them, so every row lines up
+     whatever the cell count. The divider before the star cells is an <i>, so nth-of-type counts only cells. */
+  .trip-bar-summary { flex-direction:column; align-items:stretch; gap:10px; padding:4px 16px 10px; }
+  .trip-bar-stats { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); overflow:visible; }
+  .trip-stat, .trip-stat:first-child { padding:10px 12px; border-left:0; border-top:1px solid var(--line); }
+  .trip-stat:nth-of-type(-n+2) { border-top:0; }
+  .trip-stat:nth-of-type(odd) { padding-left:0; }
+  .trip-stat:nth-of-type(even) { border-left:1px solid var(--line); }
+  .trip-stat .eyebrow { white-space:normal; }
+  .trip-stat strong { white-space:normal; overflow-wrap:anywhere; }
   .trip-stat-divider { display:none; }
   .trip-stat.rank { min-width:0; }
+  .trip-bar-toggle { align-self:center; }
+  :root[data-theme="nirvana"] .trip-bar-stats .trip-stat { padding:10px 12px; border-top-color:var(--cyan-line); }
+  :root[data-theme="nirvana"] .trip-bar-stats .trip-stat:nth-of-type(odd) { padding-left:0; }
 }
 
 :root[data-theme="nirvana"] :is(.hero-card, .trip-bar, .day-list li) { position:relative; background:var(--panel); border:1px solid var(--cyan-line); box-shadow:inset 0 0 18px rgba(0,229,255,.06); backdrop-filter:blur(6px); }
