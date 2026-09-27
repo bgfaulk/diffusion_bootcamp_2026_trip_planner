@@ -178,6 +178,25 @@ h2 { font-size: 24px; }
 .progress-block > span { color:var(--muted); font-size:13px; font-weight:800; text-transform:uppercase; letter-spacing:.06em; }
 .progress-bar { height:10px; overflow:hidden; border:1px solid var(--line); border-radius:999px; background:var(--soft); }
 .progress-bar i { display:block; height:100%; border-radius:999px; background:linear-gradient(90deg, var(--accent), var(--accent-dark)); transition:width .35s ease; }
+/* Stars: a marker rides the bar (the bar clips overflow, so the marker sits on a wrapper), and a line under
+   the status says how many stars are waiting or earned. */
+.progress-track { position:relative; padding:7px 0; }
+.progress-star { position:absolute; top:50%; left:0; width:24px; height:24px; transform:translate(-50%,-50%); transition:left .35s ease; pointer-events:none; }
+.progress-star .star-glyph { display:block; width:100%; height:100%; fill:var(--panel); stroke:color-mix(in srgb, var(--accent) 55%, var(--line)); stroke-width:1.6; stroke-linejoin:round; filter:drop-shadow(0 1px 2px rgba(0,0,0,.18)); }
+.progress-star.pending .star-glyph { fill:var(--accent); stroke:var(--accent-dark); }
+.progress-star.unlocked .star-glyph { fill:#f2b21b; stroke:#b7801a; }
+.progress-star.burst { animation:star-pop .9s ease; }
+@keyframes star-pop { 0% { transform:translate(-50%,-50%) scale(1); } 45% { transform:translate(-50%,-50%) scale(1.7) rotate(18deg); } 100% { transform:translate(-50%,-50%) scale(1); } }
+.progress-stars { font-style:normal; font-size:13px; font-weight:750; color:var(--accent-dark); }
+.progress-stars.earned { color:#b7801a; }
+.progress-block.inline { padding:14px 18px; border:1px solid var(--line); border-left:1px solid var(--line); border-radius:var(--radius); background:var(--panel); box-shadow:var(--shadow); }
+.progress-block.inline strong { font-size:26px; }
+.extra-note { margin:8px 0 0; font-size:13px; }
+.guide .guide-read { margin-top:14px; padding-top:16px; border-top:1px solid var(--line); }
+.guide .guide-read.done .check-title { color:var(--accent-dark); }
+.guide .guide-read input:disabled ~ .check-title { cursor:default; }
+.stars-explainer { display:grid; gap:10px; }
+.notice-note { margin:0; padding:10px 12px; border-radius:8px; background:var(--soft); color:var(--muted); font-size:14px; }
 .check-groups { display:grid; gap:18px; }
 .check-list { display:grid; gap:8px; margin:0; padding:0; list-style:none; }
 .check-card { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:10px; align-items:center; padding:6px 8px 6px 16px; background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow); transition:border-color .15s ease, background .2s ease; }
@@ -487,6 +506,7 @@ a { color:var(--accent-dark); font-weight:800; }
 .abc-sound.attention { border-color:#fcb711; color:#fcb711; animation:abcPulse 1.6s ease-in-out infinite; }
 @keyframes abcPulse { 0%, 100% { box-shadow:0 0 0 0 rgba(252,183,17,.45); } 50% { box-shadow:0 0 0 8px rgba(252,183,17,0); } }
 @media (prefers-reduced-motion: reduce) {
+  .progress-star, .trip-stat.stars strong, .trip-stat.rank .rank-row { animation:none; transition:none; }
   .abc-sound.attention { animation:none; }
   .abc-letters, .abc-letter, .abc-feathers i { transition:none; }
   .abc-letters.flash { transform:none; }
@@ -672,6 +692,14 @@ a { color:var(--accent-dark); font-weight:800; }
 :root[data-theme="nirvana"] .progress-block strong small, :root[data-theme="nirvana"] .progress-block > span, :root[data-theme="nirvana"] .check-section-head h2 { font-family:var(--mono); font-weight:400; letter-spacing:.14em; text-transform:uppercase; color:var(--cyan-dim); font-size:.74rem; }
 :root[data-theme="nirvana"] .progress-bar { border-radius:0; border:0; background:rgba(0,229,255,.1); }
 :root[data-theme="nirvana"] .progress-bar i { border-radius:0; background:var(--cyan); box-shadow:0 0 12px var(--cyan); }
+:root[data-theme="nirvana"] .progress-star .star-glyph { fill:transparent; stroke:var(--cyan-dim); filter:none; }
+:root[data-theme="nirvana"] .progress-star.pending .star-glyph { fill:var(--cyan); stroke:var(--cyan); filter:drop-shadow(0 0 6px var(--cyan)); }
+:root[data-theme="nirvana"] .progress-star.unlocked .star-glyph { fill:var(--orange); stroke:var(--orange); filter:drop-shadow(0 0 8px var(--orange)); }
+:root[data-theme="nirvana"] .progress-stars { font-family:var(--mono); font-weight:400; font-size:.74rem; letter-spacing:.1em; text-transform:uppercase; color:var(--cyan); }
+:root[data-theme="nirvana"] .progress-stars.earned { color:var(--orange); }
+:root[data-theme="nirvana"] .progress-block.inline { background:var(--panel); border:1px solid var(--cyan-line); box-shadow:inset 0 0 18px rgba(0,229,255,.06); clip-path:var(--cut-xs); }
+:root[data-theme="nirvana"] .guide .guide-read { border-top-color:var(--cyan-line); }
+:root[data-theme="nirvana"] .notice-note { background:rgba(0,229,255,.06); box-shadow:inset 0 0 0 1px var(--cyan-line); border-radius:0; }
 :root[data-theme="nirvana"] .check-box { width:20px; height:20px; border:1px solid rgba(0,229,255,.5); border-radius:0; background:transparent; }
 :root[data-theme="nirvana"] .check-toggle input:checked + .check-box { background:var(--cyan); border-color:var(--cyan); box-shadow:0 0 10px var(--cyan); }
 :root[data-theme="nirvana"] .check-box svg { stroke:var(--void); }
@@ -824,6 +852,17 @@ a { color:var(--accent-dark); font-weight:800; }
 .trip-stat:first-child { border-left:0; padding-left:0; }
 .trip-stat .eyebrow { margin:0; font-size:10.5px; letter-spacing:.06em; white-space:nowrap; }
 .trip-stat strong { font-size:17px; line-height:1.15; white-space:nowrap; }
+/* Stars cells: a heavier divider sets them off from the trip facts, and the Rank cell swaps rows every few seconds. */
+.trip-stat-divider { flex:none; align-self:stretch; width:2px; margin:0 8px 0 12px; border-radius:2px; background:color-mix(in srgb, var(--accent) 45%, transparent); }
+.trip-stat.stars strong { display:inline-flex; align-items:center; gap:5px; color:var(--accent-dark); }
+.trip-stat.stars .star-glyph { width:17px; height:17px; fill:#f2b21b; stroke:#b7801a; stroke-width:1.4; stroke-linejoin:round; }
+.trip-stat.stars.burst strong { animation:star-pop-inline .9s ease; }
+@keyframes star-pop-inline { 0% { transform:scale(1); } 45% { transform:scale(1.35); } 100% { transform:scale(1); } }
+.trip-stat.rank { min-width:15ch; }
+.trip-stat.rank .rank-row { display:block; animation:rank-swap .4s ease; }
+.trip-stat.rank .rank-row.me { color:var(--accent-dark); }
+.trip-stat.rank .rank-row.muted { font-weight:700; }
+@keyframes rank-swap { from { opacity:0; transform:translateY(5px); } to { opacity:1; transform:none; } }
 .trip-bar-toggle { display:grid; place-items:center; flex:none; width:34px; height:34px; border-radius:50%; color:var(--accent-dark); background:color-mix(in srgb, var(--accent) 12%, transparent); }
 .trip-bar-toggle svg { width:18px; height:18px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; transition:transform .15s ease; }
 .trip-bar.open .trip-bar-toggle svg { transform:rotate(180deg); }
@@ -902,6 +941,8 @@ a { color:var(--accent-dark); font-weight:800; }
   .trip-bar-summary { flex-direction:column; align-items:stretch; gap:8px; }
   .trip-bar-stats { flex-wrap:wrap; overflow:visible; }
   .trip-stat { padding:4px 12px; }
+  .trip-stat-divider { display:none; }
+  .trip-stat.rank { min-width:0; }
 }
 
 :root[data-theme="nirvana"] :is(.hero-card, .trip-bar, .day-list li) { position:relative; background:var(--panel); border:1px solid var(--cyan-line); box-shadow:inset 0 0 18px rgba(0,229,255,.06); backdrop-filter:blur(6px); }
@@ -919,6 +960,10 @@ a { color:var(--accent-dark); font-weight:800; }
 :root[data-theme="nirvana"] .trip-stat .eyebrow { font-size:.6rem; letter-spacing:.12em; }
 :root[data-theme="nirvana"] .trip-stat strong { font-family:var(--display); font-weight:700; font-size:.9rem; letter-spacing:.03em; text-shadow:0 0 12px rgba(0,229,255,.55); }
 :root[data-theme="nirvana"] .trip-bar-toggle { border-radius:0; color:var(--cyan); background:rgba(0,229,255,.08); box-shadow:inset 0 0 0 1px var(--cyan-line); }
+:root[data-theme="nirvana"] .trip-stat-divider { background:var(--cyan); box-shadow:0 0 8px var(--cyan); border-radius:0; }
+:root[data-theme="nirvana"] .trip-stat.stars strong { color:var(--orange); text-shadow:0 0 12px rgba(255,122,26,.55); }
+:root[data-theme="nirvana"] .trip-stat.stars .star-glyph { fill:var(--orange); stroke:var(--orange); filter:drop-shadow(0 0 6px var(--orange)); }
+:root[data-theme="nirvana"] .trip-stat.rank .rank-row.me { color:var(--orange); text-shadow:0 0 12px rgba(255,122,26,.55); }
 :root[data-theme="nirvana"] .trip-bar-details { border-top-color:var(--cyan-line); }
 
 :root[data-theme="nirvana"] .fact-table th { color:var(--cyan-dim); font-weight:400; font-size:.66rem; letter-spacing:.16em; border-bottom-color:var(--cyan-line); }
@@ -994,6 +1039,11 @@ a { color:var(--accent-dark); font-weight:800; }
 .status-pill { display:inline-block; padding:3px 9px; border-radius:999px; font-size:12px; font-weight:800; white-space:nowrap; }
 .status-pill.ok { background:color-mix(in srgb, var(--accent) 14%, transparent); color:var(--accent-dark); }
 .status-pill.bad { background:color-mix(in srgb, var(--danger) 14%, transparent); color:var(--danger); }
+.status-pill.warn { background:color-mix(in srgb, var(--bridge) 16%, transparent); color:var(--bridge); }
+.status-pill.muted { background:var(--soft); color:var(--muted); }
+.data-table td.report-message { max-width:420px; white-space:pre-wrap; overflow-wrap:anywhere; }
+.data-table td.report-message .link-button { display:block; margin-top:4px; }
+.filter-row > p { margin:0; flex:1 1 100%; font-size:13px; }
 .accounts tr.suspended td { opacity:.75; }
 .row-actions { display:flex; flex-wrap:wrap; gap:4px 12px; }
 .row-actions .link-button { padding:0; font-size:13px; }

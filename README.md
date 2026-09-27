@@ -42,7 +42,14 @@ trip data, or group links. Runtime data belongs in Neon and Vercel environment v
 - Notifications with an unread count on the avatar: a welcome tour for new accounts, notices from the
   organizer, and health alerts for the organizer.
 - Account menu: Settings, Notifications, Theme (Light, Dark, Digital Nirvana), ABC WhatsApp (group link and
-  QR code), Report Bug (emails the organizer), Sign out.
+  QR code), Report Bug (stored for the organizer and emailed), Sign out.
+- Stars: points for using the planner, computed on the server from what each person has done and kept as a
+  ledger that is never revoked (`src/lib/stars-rules.ts` holds the numbers). Checklist items are 1 star each
+  (up to 10 per list, at least 3 items, unlocked when the whole list is checked); the first five hand-added
+  items count and checking all five is a 5-star bonus; profile 5, trip dates plus a booking 10, the User
+  Guide checkbox 15; a fixed bug or accepted feedback 5 each, up to five times. The Overview strip shows the
+  balance, the percent of what that person can earn, and a Rank cell that cycles through everyone with
+  stars. The organizer is not ranked. The first award sends an in-app explainer notice; prizes are TBD.
 - The loading screen plays an A-B-C chime, mutable in Settings.
 - Every save, add, or delete shows a toast with the result.
 - Phones get a top bar and a bottom page rail instead of the sidebar.
@@ -50,9 +57,11 @@ trip data, or group links. Runtime data belongs in Neon and Vercel environment v
 **Organizer page** (`OWNER_EMAIL` account only)
 - Overview: requests, errors, latency (p95), database size and growth per table, and application health
   with a "Check now" button, over a selectable time window with optional auto-refresh.
-- Accounts: every registered account with status, last sign-in, last seen, stored data, and session
-  count, plus an Actions menu per row (email or copy a reset link, sign out everywhere, suspend or
+- Accounts: every registered account with status, last sign-in, last seen, stored data, session count,
+  and stars, plus an Actions menu per row (email or copy a reset link, sign out everywhere, suspend or
   reinstate, delete).
+- Reports: every bug report and piece of feedback with its status. Marking a bug Fixed or feedback
+  Accepted awards the reporter 5 stars (capped at five of each per person); Close awards nothing.
 - Send a notice: one notification to every active account.
 - Activity: the audit log (who, IP, route, status, timing, error text), filterable and sortable.
 
@@ -65,7 +74,7 @@ senders, and none of them loop or retry:
 | --- | --- | --- |
 | Forgot password | the attendee | 3 per email and 10 per IP every 15 minutes |
 | Organizer emails a reset link | the attendee | manual only |
-| Report Bug / feedback | the organizer | 10 per account and 20 per IP per hour |
+| Report Bug / feedback (also stored in `reports`) | the organizer | 10 per account and 20 per IP per hour |
 | Health alert | the organizer | each alert kind at most once per 24 hours |
 
 Health checks run from the daily Vercel cron (`vercel.json`, 14:00 UTC), when the organizer opens the app
@@ -78,7 +87,10 @@ notifications are in-app only and never send email.
 Neon Postgres, created lazily by `ensureSchema()` in `src/lib/db.ts`. Text fields, photos, and PDFs are
 encrypted at rest with AES-256-GCM keyed from `SESSION_SECRET`. Tables: `users`, `sessions`, `settings`,
 `list_items`, `itinerary`, `trip_info`, `trip_documents`, `photos`, `notifications`, `audit_log`,
-`health_snapshots`, `health_alert_state`, `weather_cache`.
+`health_snapshots`, `health_alert_state`, `weather_cache`, `star_awards`, `reports`.
+
+`list_items.source` records where an item came from (`starter`, `import`, `custom`, or `extra` for
+hand-added items after a person's fifth ever). Items from before the column existed count as `starter`.
 
 Retention: activity audit rows a year, traffic rows a week, health snapshots 90 days, weather cache a day.
 Photos are limited to 1.5 MB after shrinking and PDFs to 10 MB.

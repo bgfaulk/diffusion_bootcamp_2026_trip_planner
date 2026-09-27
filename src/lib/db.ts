@@ -118,6 +118,43 @@ export async function ensureSchema() {
         updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
       )
     `,
+    // Stars (see src/lib/stars.ts). `source` says where a checklist item came from: 'starter' (seeded),
+    // 'import' (ChatGPT plan), 'custom' (one of the person's first five hand-added items, ever) or 'extra'
+    // (hand-added after that, worth no stars). Rows from before the column existed count as starter.
+    sql`ALTER TABLE list_items ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'starter'`,
+    sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS guide_read_at TIMESTAMPTZ`,
+    sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS stars_welcomed_at TIMESTAMPTZ`,
+    sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS custom_items_created INTEGER NOT NULL DEFAULT 0`,
+    // One row per star award; keys are unique per person so nothing can be earned twice. Labels are plain
+    // text with no personal data ("Packing list complete").
+    sql`
+      CREATE TABLE IF NOT EXISTS star_awards (
+        id BIGSERIAL PRIMARY KEY,
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        key TEXT NOT NULL,
+        stars INTEGER NOT NULL,
+        label TEXT NOT NULL,
+        awarded_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        UNIQUE (user_id, key)
+      )
+    `,
+    // Bug reports and feedback from the account menu. The organizer sets the status on the Reports tab;
+    // 'fixed' bugs and 'accepted' feedback award stars to the reporter.
+    sql`
+      CREATE TABLE IF NOT EXISTS reports (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        kind TEXT NOT NULL,
+        message TEXT NOT NULL,
+        page TEXT,
+        user_agent TEXT,
+        status TEXT NOT NULL DEFAULT 'open',
+        mail TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        resolved_at TIMESTAMPTZ
+      )
+    `,
+    sql`CREATE INDEX IF NOT EXISTS reports_status_idx ON reports (status, created_at DESC)`,
     sql`
       CREATE TABLE IF NOT EXISTS photos (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -235,7 +272,7 @@ export async function seedStarterItems(userId: string) {
   };
   for (const [page, titles] of Object.entries(starter) as [PageKey, string[]][]) {
     for (const [index, title] of titles.entries()) {
-      await sql`INSERT INTO list_items (user_id, page, title, position) VALUES (${userId}, ${page}, ${encryptText(title)}, ${index + 1})`;
+      await sql`INSERT INTO list_items (user_id, page, title, position, source) VALUES (${userId}, ${page}, ${encryptText(title)}, ${index + 1}, 'starter')`;
     }
   }
 }

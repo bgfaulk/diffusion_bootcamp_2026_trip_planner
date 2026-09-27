@@ -20,7 +20,7 @@ export function windowFromParams(url: URL) {
   return { minutes, from, to, bucket: bucketMinutes(minutes) };
 }
 
-const appTables = ["users", "sessions", "settings", "list_items", "photos", "itinerary", "trip_info", "trip_documents", "audit_log", "notifications", "health_snapshots", "weather_cache"];
+const appTables = ["users", "sessions", "settings", "list_items", "photos", "itinerary", "trip_info", "trip_documents", "audit_log", "notifications", "health_snapshots", "weather_cache", "star_awards", "reports"];
 
 // Activity rows live a year (the widest window the picker offers); traffic rows only feed the request and
 // latency charts and go after a week.
@@ -80,6 +80,8 @@ export async function overview(window: ReturnType<typeof windowFromParams>) {
         UNION ALL SELECT 'trip_info', created_at, pg_column_size(x.*) FROM trip_info x
         UNION ALL SELECT 'trip_documents', created_at, pg_column_size(file_base64) + 256 FROM trip_documents
         UNION ALL SELECT 'audit_log', at, pg_column_size(a.*) FROM audit_log a
+        UNION ALL SELECT 'star_awards', awarded_at, pg_column_size(w.*) FROM star_awards w
+        UNION ALL SELECT 'reports', created_at, pg_column_size(r.*) FROM reports r
       ) sized GROUP BY 1, 2 ORDER BY 2
     `
   ]);
@@ -93,6 +95,8 @@ export async function overview(window: ReturnType<typeof windowFromParams>) {
     UNION ALL SELECT 'trip_info', count(*)::int FROM trip_info
     UNION ALL SELECT 'trip_documents', count(*)::int FROM trip_documents
     UNION ALL SELECT 'audit_log', count(*)::int FROM audit_log
+    UNION ALL SELECT 'star_awards', count(*)::int FROM star_awards
+    UNION ALL SELECT 'reports', count(*)::int FROM reports
   `;
   const rowCounts = Object.fromEntries(counts.map((row: any) => [row.name, row.rows]));
 
@@ -136,6 +140,7 @@ export async function listUsers() {
       (SELECT count(*)::int FROM trip_documents WHERE user_id = u.id) AS documents,
       (SELECT coalesce(sum(pg_column_size(file_base64)), 0)::bigint FROM trip_documents WHERE user_id = u.id) AS document_bytes,
       (SELECT count(*)::int FROM sessions WHERE user_id = u.id AND expires_at > now()) AS sessions,
+      (SELECT coalesce(sum(stars), 0)::int FROM star_awards WHERE user_id = u.id) AS stars,
       (SELECT max(at) FROM audit_log WHERE user_id = u.id AND event = 'auth.signin' AND status < 400) AS last_signin,
       (SELECT max(at) FROM audit_log WHERE user_id = u.id) AS last_seen,
       (SELECT ip FROM audit_log WHERE user_id = u.id ORDER BY at DESC LIMIT 1) AS last_ip
@@ -152,6 +157,7 @@ export async function listUsers() {
     items: row.items, bookings: row.bookings, photos: row.photos, documents: row.documents,
     storedBytes: Number(row.photo_bytes) + Number(row.document_bytes),
     sessions: row.sessions,
+    stars: Number(row.stars) || 0,
     lastSignin: row.last_signin, lastSeen: row.last_seen, lastIp: row.last_ip
   }));
 }

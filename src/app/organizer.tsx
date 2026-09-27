@@ -10,7 +10,7 @@ import { RefreshControl, TimeWindowPill } from "./time-window-pill";
 // The Organizer page (OWNER_EMAIL only): how the app is doing, who is registered, and what has been happening.
 // One time window scopes the Overview and Activity tabs; Refresh and auto-refresh reload whichever tab is open.
 
-type OrganizerTab = "overview" | "users" | "notices" | "activity";
+type OrganizerTab = "overview" | "users" | "reports" | "notices" | "activity";
 
 export function OrganizerPage({ userId }: { userId: string }) {
   const [tab, setTab] = useState<OrganizerTab>("overview");
@@ -36,9 +36,10 @@ export function OrganizerPage({ userId }: { userId: string }) {
           <RefreshControl refreshing={busy} onRefresh={refresh} seconds={refreshSeconds} onSeconds={setRefreshSeconds} updatedAt={updatedAt} />
         </div>
       </header>
-      <Tabs label="Organizer sections" active={tab} onChange={setTab} tabs={[{ key: "overview", label: "Overview" }, { key: "users", label: "Accounts" }, { key: "notices", label: "Send a notice" }, { key: "activity", label: "Activity" }]} />
+      <Tabs label="Organizer sections" active={tab} onChange={setTab} tabs={[{ key: "overview", label: "Overview" }, { key: "users", label: "Accounts" }, { key: "reports", label: "Reports" }, { key: "notices", label: "Send a notice" }, { key: "activity", label: "Activity" }]} />
       {tab === "overview" && <TabPanel id="overview"><HealthCard /><OverviewTab {...shared} /></TabPanel>}
       {tab === "users" && <TabPanel id="users"><UsersTab {...shared} userId={userId} /></TabPanel>}
+      {tab === "reports" && <TabPanel id="reports"><ReportsTab {...shared} /></TabPanel>}
       {tab === "notices" && <TabPanel id="notices"><NoticeForm /></TabPanel>}
       {tab === "activity" && <TabPanel id="activity"><ActivityTab {...shared} /></TabPanel>}
     </section>
@@ -370,7 +371,7 @@ function clock(date: Date) { return `${String(date.getHours()).padStart(2, "0")}
 
 /* ---------- Accounts ---------- */
 
-type Account = { id: string; email: string; name: string; owner: boolean; createdAt: string; suspendedAt: string | null; items: number; bookings: number; photos: number; documents: number; storedBytes: number; sessions: number; lastSignin: string | null; lastSeen: string | null; lastIp: string | null };
+type Account = { id: string; email: string; name: string; owner: boolean; createdAt: string; suspendedAt: string | null; items: number; bookings: number; photos: number; documents: number; storedBytes: number; sessions: number; stars: number; lastSignin: string | null; lastSeen: string | null; lastIp: string | null };
 
 function UsersTab({ userId, ...shared }: Shared & { userId: string }) {
   const { data, error, loading, reload } = useAdmin<{ users: Account[] }>("/api/admin/users", shared);
@@ -413,7 +414,7 @@ function UsersTab({ userId, ...shared }: Shared & { userId: string }) {
       )}
       <div className="org-panel table-scroll">
         <table className="fact-table data-table accounts">
-          <thead><tr><Th label="Account" sortKey="email" sort={accounts.sort} onSort={accounts.toggle} /><Th label="Status" sortKey="status" sort={accounts.sort} onSort={accounts.toggle} /><Th label="Last sign-in" sortKey="lastSignin" numeric sort={accounts.sort} onSort={accounts.toggle} /><Th label="Last seen" sortKey="lastSeen" numeric sort={accounts.sort} onSort={accounts.toggle} /><Th label="Data" sortKey="storedBytes" numeric sort={accounts.sort} onSort={accounts.toggle} /><Th label="Sessions" sortKey="sessions" numeric sort={accounts.sort} onSort={accounts.toggle} /><th>Actions</th></tr></thead>
+          <thead><tr><Th label="Account" sortKey="email" sort={accounts.sort} onSort={accounts.toggle} /><Th label="Status" sortKey="status" sort={accounts.sort} onSort={accounts.toggle} /><Th label="Last sign-in" sortKey="lastSignin" numeric sort={accounts.sort} onSort={accounts.toggle} /><Th label="Last seen" sortKey="lastSeen" numeric sort={accounts.sort} onSort={accounts.toggle} /><Th label="Data" sortKey="storedBytes" numeric sort={accounts.sort} onSort={accounts.toggle} /><Th label="Sessions" sortKey="sessions" numeric sort={accounts.sort} onSort={accounts.toggle} /><Th label="Stars" sortKey="stars" numeric sort={accounts.sort} onSort={accounts.toggle} /><th>Actions</th></tr></thead>
           <tbody>
             {accounts.sorted.map(account => {
               const self = account.id === userId;
@@ -425,6 +426,7 @@ function UsersTab({ userId, ...shared }: Shared & { userId: string }) {
                   <td>{account.lastSeen ? <>{fmtWhen(account.lastSeen)}{account.lastIp && <span className="muted">{account.lastIp}</span>}</> : <span className="muted">No activity</span>}</td>
                   <td className="num">{fmtBytes(account.storedBytes)}<span className="muted">{account.bookings} bookings · {account.items} items · {account.photos} photos · {account.documents} PDFs</span></td>
                   <td className="num">{account.sessions}</td>
+                  <td className="num">{account.stars}{account.owner && <span className="muted">not ranked</span>}</td>
                   <td>
                     {self || account.owner ? <span className="muted">{self ? "This is you" : "Organizer"}</span> : (
                       <RowMenu label={`Actions for ${account.email}`} busy={busy === account.id} items={[
@@ -484,6 +486,84 @@ function accountCell(row: Account, key: string): Cell {
     case "createdAt": case "lastSignin": case "lastSeen": return dateCell(row[key]);
     default: return (row as unknown as Record<string, Cell>)[key];
   }
+}
+
+/* ---------- Reports (bugs and feedback) ---------- */
+
+type Report = { id: string; kind: "bug" | "feedback"; message: string; page: string; userAgent: string; status: "open" | "fixed" | "accepted" | "closed"; mail: string; createdAt: string; resolvedAt: string | null; email: string; name: string; organizer: boolean; awarded: number; cap: number };
+
+const statusLabel: Record<Report["status"], string> = { open: "Open", fixed: "Fixed", accepted: "Accepted", closed: "Closed" };
+const noReports: Report[] = [];
+function reportCell(row: Report, key: string): Cell {
+  switch (key) {
+    case "email": return row.name ? `${row.name} ${row.email}` : row.email;
+    case "createdAt": case "resolvedAt": return dateCell(row[key]);
+    default: return (row as unknown as Record<string, Cell>)[key];
+  }
+}
+
+// Every bug report and piece of feedback, with the status the organizer sets. "Fixed" (bugs) and "Accepted"
+// (feedback) award stars to the reporter, capped per person (lib/stars.ts); "Closed" awards nothing.
+function ReportsTab(shared: Shared) {
+  const [filter, setFilter] = useState<"open" | "fixed" | "accepted" | "closed" | "all">("open");
+  const { data, error, loading, reload } = useAdmin<{ reports: Report[] }>(`/api/admin/reports?status=${filter}`, shared);
+  const reports = useSort(data?.reports ?? noReports, { key: "createdAt", dir: -1 }, reportCell);
+  const [busy, setBusy] = useState("");
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  function toggleExpanded(id: string) { setExpanded(current => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next; }); }
+
+  async function act(report: Report, status: Report["status"]) {
+    setBusy(report.id);
+    try {
+      const result = await api("/api/admin/reports", { method: "POST", body: JSON.stringify({ id: report.id, status } ) });
+      const who = report.name || report.email;
+      const verb = statusLabel[status].toLowerCase();
+      notify.success(result.awarded ? `Marked ${verb}. 5 stars to ${who}.` : status === "fixed" || status === "accepted" ? `Marked ${verb}. ${who} already had stars for this or is at the cap.` : `Marked ${verb}.`);
+      await reload();
+    } catch (err) { notify.error(err, "Could not update that report"); } finally { setBusy(""); }
+  }
+
+  const atCap = (report: Report) => report.awarded >= report.cap;
+  return (
+    <div className={loading ? "stack reloading" : "stack"}>
+      <div className="filter-row">
+        <label>Status<select value={filter} onChange={e => setFilter(e.target.value as typeof filter)}><option value="open">Open</option><option value="fixed">Fixed</option><option value="accepted">Accepted</option><option value="closed">Closed</option><option value="all">All</option></select></label>
+        <p className="muted">Fixed bugs and accepted feedback give the reporter 5 stars, up to five of each per person. Closing gives nothing. Stars are never taken back.</p>
+      </div>
+      {error && <p className="error">{error}</p>}
+      {!data ? <p className="muted">Loading...</p> : !data.reports.length ? <p className="check-empty">No {filter === "all" ? "" : `${filter} `}reports.</p> : (
+        <div className="org-panel table-scroll">
+          <table className="fact-table data-table reports">
+            <thead><tr><Th label="When" sortKey="createdAt" numeric sort={reports.sort} onSort={reports.toggle} /><Th label="Reporter" sortKey="email" sort={reports.sort} onSort={reports.toggle} /><Th label="Kind" sortKey="kind" sort={reports.sort} onSort={reports.toggle} /><th>Message</th><Th label="Status" sortKey="status" sort={reports.sort} onSort={reports.toggle} /><th>Actions</th></tr></thead>
+            <tbody>
+              {reports.sorted.map(report => {
+                const long = report.message.length > 240;
+                const open = expanded.has(report.id);
+                return (
+                  <tr key={report.id}>
+                    <td className="when">{fmtWhen(report.createdAt)}{report.page && <span className="muted">{report.page}</span>}</td>
+                    <td><strong>{report.name || report.email}</strong>{report.name && <span className="muted">{report.email}</span>}<span className="muted">{report.organizer ? "organizer" : `${report.awarded} of ${report.cap} ${report.kind} awards used`}</span></td>
+                    <td>{report.kind === "bug" ? "Bug" : "Feedback"}</td>
+                    <td className="detail report-message">{long && !open ? `${report.message.slice(0, 240)}…` : report.message}{long && <button type="button" className="link-button" onClick={() => toggleExpanded(report.id)}>{open ? "Less" : "More"}</button>}{report.mail && !report.mail.startsWith("sent") && report.mail !== "" && <span className="muted">Mail: {report.mail}</span>}</td>
+                    <td><span className={`status-pill ${report.status === "open" ? "warn" : report.status === "closed" ? "muted" : "ok"}`}>{statusLabel[report.status]}{report.resolvedAt && report.status !== "open" ? ` ${fmtWhen(report.resolvedAt)}` : ""}</span></td>
+                    <td>
+                      <RowMenu label={`Actions for this ${report.kind}`} busy={busy === report.id} items={[
+                        report.kind === "bug"
+                          ? { label: atCap(report) ? "Mark fixed (at star cap)" : "Mark fixed (5 stars)", disabled: report.status === "fixed", onSelect: () => act(report, "fixed") }
+                          : { label: atCap(report) ? "Accept (at star cap)" : "Accept (5 stars)", disabled: report.status === "accepted", onSelect: () => act(report, "accepted") },
+                        { label: "Close without stars", disabled: report.status === "closed", onSelect: () => act(report, "closed") },
+                        { label: "Reopen", disabled: report.status === "open", onSelect: () => act(report, "open") }
+                      ]} />
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
 }
 
 /* ---------- Activity ---------- */
