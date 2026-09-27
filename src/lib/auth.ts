@@ -1,8 +1,9 @@
 import { cookies } from "next/headers";
 import crypto from "node:crypto";
 import { promisify } from "node:util";
-import { sessionSecret as secret } from "./crypto";
+import { encryptText, sessionSecret as secret } from "./crypto";
 import { ensureSchema, getSql, seedStarterItems } from "./db";
+import { notifyOwner } from "./health";
 import { isOwner, resetTokenEmail, verifyResetToken } from "./reset";
 import { AppError, asString, validateEmail, validatePassword } from "./validation";
 
@@ -71,6 +72,11 @@ export async function createOrLogin(emailValue: unknown, passwordValue: unknown,
     const inserted = await sql`INSERT INTO users (email, password_hash, password_salt) VALUES (${email}, ${hash}, ${salt}) RETURNING id`;
     userId = String(inserted[0].id);
     await seedStarterItems(userId);
+    await sql`INSERT INTO notifications (user_id, title, body) VALUES (${userId}, ${encryptText("Welcome to the trip planner")}, ${encryptText("Start with Finish setup to add your dates and bookings. The User Guide under Settings explains what each page is for, and Report Bug in this menu reaches the organizer.")})`;
+    if (!isOwner(email)) {
+      const joined = new Date().toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short", timeZone: "America/Los_Angeles" });
+      await notifyOwner("signup", `New attendee: ${email}`, `${email} created an account.`, { rows: [["Email", email], ["Joined", `${joined} Pacific`]], advice: ["The Accounts tab on the Organizer page lists everyone and can send a password reset link if they get stuck."] }).catch(() => {});
+    }
   } else {
     const user = users[0] as { id: string; password_hash: string; password_salt: string; suspended_at: string | null };
     if (user.suspended_at) throw new AppError("This account is suspended. Contact the trip organizer.", 403);

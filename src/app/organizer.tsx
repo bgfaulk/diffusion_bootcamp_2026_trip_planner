@@ -4,6 +4,7 @@ import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "re
 import { api } from "@/lib/client";
 import { DEFAULT_WINDOW_MINUTES } from "@/lib/time-window";
 import { TabPanel, Tabs } from "./tabs";
+import { notify } from "./toast";
 import { RefreshControl, TimeWindowPill } from "./time-window-pill";
 
 // The Organizer page (OWNER_EMAIL only): how the app is doing, who is registered, and what has been happening.
@@ -36,14 +37,88 @@ export function OrganizerPage({ userId }: { userId: string }) {
         </div>
       </header>
       <Tabs label="Organizer sections" active={tab} onChange={setTab} tabs={[{ key: "overview", label: "Overview" }, { key: "users", label: "Accounts" }, { key: "activity", label: "Activity" }]} />
-      {tab === "overview" && <TabPanel id="overview"><OverviewTab {...shared} /></TabPanel>}
-      {tab === "users" && <TabPanel id="users"><UsersTab {...shared} userId={userId} /></TabPanel>}
+      {tab === "overview" && <TabPanel id="overview"><HealthCard /><OverviewTab {...shared} /></TabPanel>}
+      {tab === "users" && <TabPanel id="users"><NoticeForm /><UsersTab {...shared} userId={userId} /></TabPanel>}
       {tab === "activity" && <TabPanel id="activity"><ActivityTab {...shared} /></TabPanel>}
     </section>
   );
 }
 
 type Shared = { minutes: number; tick: number; onLoading: (loading: boolean) => void };
+
+type Snapshot = { checkedAt: string; requests: number; avgMs: number; p95Ms: number; failures: number; dbBytes: number; growthBytes24h: number | null };
+type Thresholds = { windowMinutes: number; minRequests: number; p95Ms: number; avgMs: number; failureRate: number; sizeWarnBytes: number; sizeCriticalBytes: number; growthBytes24h: number; repeatHours: number };
+const mb = (bytes: number) => `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+
+// Latest health snapshot against the alert thresholds, with a button to run a check right now. Alerts that
+// cross a threshold arrive as notifications (and email) for the owner; see lib/health.ts.
+function HealthCard() {
+  const [state, setState] = useState<{ snapshot: Snapshot | null; thresholds: Thresholds } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const load = useCallback(async () => { try { setState(await api("/api/health/check?peek=1")); } catch {} }, []);
+  useEffect(() => { void load(); }, [load]);
+  async function check() {
+    setBusy(true);
+    try {
+      const result = await api("/api/health/check");
+      setState(current => current ? { ...current, snapshot: result.snapshot } : { snapshot: result.snapshot, thresholds: result.thresholds });
+      notify.success(result.fired?.length ? `Check done: ${result.fired.length} alert${result.fired.length === 1 ? "" : "s"} sent to your notifications` : "Check done: everything within thresholds");
+    } catch (err) {
+      notify.error(err, "Health check failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+  const s = state?.snapshot, t = state?.thresholds;
+  const enough = s ? s.requests >= (t?.minRequests ?? 0) : false;
+  const flag = (bad: boolean, na = false) => (na ? "na" : bad ? "bad" : "ok");
+  const rows: [string, string, string][] = s && t ? [
+    ["Slowest 5% (p95)", `${s.p95Ms} ms`, flag(s.p95Ms > t.p95Ms, !enough)],
+    ["Average response", `${s.avgMs} ms`, flag(s.avgMs > t.avgMs, !enough)],
+    ["Server errors", `${s.failures} of ${s.requests}`, flag(s.failures / Math.max(1, s.requests) > t.failureRate, !enough)],
+    ["Database size", mb(s.dbBytes), flag(s.dbBytes > t.sizeWarnBytes)],
+    ["Growth in 24 h", s.growthBytes24h == null ? "No history yet" : mb(s.growthBytes24h), flag((s.growthBytes24h ?? 0) > t.growthBytes24h, s.growthBytes24h == null)]
+  ] : [];
+  return (
+    <section className="callout health-card">
+      <div className="page-header-row"><div><h2>Application health</h2><p className="muted">{s ? `Last check ${new Date(s.checkedAt).toLocaleString()} over the previous ${t?.windowMinutes} minutes.` : "No check has run yet."} Alerts repeat at most once a day and arrive in your notifications and email.</p></div><button type="button" className="btn" disabled={busy} onClick={check}>{busy ? "Checking..." : "Check now"}</button></div>
+      {rows.length > 0 && (
+        <ul className="health-rows">
+          {rows.map(([label, value, status]) => <li key={label} className={status}><span>{label}</span><strong>{value}</strong><em>{status === "ok" ? "OK" : status === "bad" ? "Over threshold" : "Not enough data"}</em></li>)}
+        </ul>
+      )}
+      {t && <p className="muted">Thresholds: p95 over {t.p95Ms} ms, average over {t.avgMs} ms, or more than {Math.round(t.failureRate * 100)}% server errors (each needs {t.minRequests}+ requests in the window); database over {mb(t.sizeWarnBytes)} (critical at {mb(t.sizeCriticalBytes)}); growth over {mb(t.growthBytes24h)} in 24 hours.</p>}
+    </section>
+  );
+}
+
+// Sends one notice to every active account; it appears under Notifications in their account menu.
+function NoticeForm() {
+  const [title, setTitle] = useState("");
+  const [body, setBody] = useState("");
+  const [busy, setBusy] = useState(false);
+  async function send(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setBusy(true);
+    try {
+      const { sent } = await api("/api/admin/notify", { method: "POST", body: JSON.stringify({ title: title.trim(), body: body.trim() }) });
+      notify.success(`Sent to ${sent} ${sent === 1 ? "account" : "accounts"}`);
+      setTitle(""); setBody("");
+    } catch (err) {
+      notify.error(err, "Could not send the notice");
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <form className="callout notice-form" onSubmit={send}>
+      <div><h2>Send a notice to everyone</h2><p className="muted">Shows up under Notifications in each attendee&rsquo;s account menu, with a count on their initial until they read it.</p></div>
+      <label>Title<input value={title} onChange={event => setTitle(event.target.value)} maxLength={120} required placeholder="Bus leaves at 7:45 tomorrow" /></label>
+      <label>Message (optional)<textarea value={body} onChange={event => setBody(event.target.value)} rows={3} maxLength={2000} placeholder="Meet in the hotel lobby. Bring your badge." /></label>
+      <div className="button-row"><button className="btn primary" disabled={busy || !title.trim()}>{busy ? "Sending..." : "Send notice"}</button></div>
+    </form>
+  );
+}
 
 // Fetches `path` whenever the window or the refresh tick changes; keeps the last data on screen while reloading.
 function useAdmin<T>(path: string | null, { tick, onLoading }: Shared) {

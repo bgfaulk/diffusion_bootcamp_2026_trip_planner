@@ -16,6 +16,7 @@ import { useWeather, WeatherPanel } from "./weather";
 import { IdleWarning, useIdleTimeout } from "./idle-timeout";
 import { notify } from "./toast";
 import { UserGuide } from "./user-guide";
+import { WhatsAppModal } from "./whatsapp-modal";
 import { photoSpots } from "@/lib/photo-spots";
 import { formatBytes, MAX_PHOTO_EDGE, preparePhoto, type PreparedPhoto } from "@/lib/image";
 import { applyFx, applyTheme, storedFx, storedTheme, THEMES, themeLabels, type Theme } from "@/lib/theme";
@@ -63,7 +64,12 @@ type AppState = {
   itinerary: null | { instructions?: string; response?: string; saved_plan?: string };
   tripInfo: TripInfo[];
   tripDocuments: TripDocument[];
+  notifications: Notice[];
+  links: { whatsapp: string };
 };
+type Notice = { id: string; kind: string; title: string; body: string | null; data: string | null; read_at: string | null; created_at: string };
+type NoticeData = { rows?: [string, string][]; advice?: string[] };
+function noticeData(notice: Notice): NoticeData | null { try { return notice.data ? JSON.parse(notice.data) : null; } catch { return null; } }
 
 const emptyAppState: AppState = {
   user: null,
@@ -72,7 +78,9 @@ const emptyAppState: AppState = {
   photos: {},
   itinerary: null,
   tripInfo: [],
-  tripDocuments: []
+  tripDocuments: [],
+  notifications: [],
+  links: { whatsapp: "" }
 };
 
 // Per-device hint that a session exists, so the loader can start before bootstrap answers.
@@ -162,6 +170,10 @@ export default function Home() {
   const [choosingPlan, setChoosingPlan] = useState(false);
   const [itineraryOpen, setItineraryOpen] = useState(false);
   const [viewer, setViewer] = useState<null | string>(null);
+  const [themeOpen, setThemeOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [bugOpen, setBugOpen] = useState(false);
+  const [whatsAppOpen, setWhatsAppOpen] = useState(false);
   // Theme mirrors the account setting once loaded; before that (and on the login screen) it is the
   // last theme used on this device. Grid effects are a per-device preference.
   const [theme, setThemeState] = useState<Theme>("light");
@@ -235,6 +247,7 @@ export default function Home() {
   }, []);
 
   const displayName = data.settings?.profile_name?.trim() || "";
+  const unread = data.notifications.filter(notice => !notice.read_at).length;
   const tripName = data.settings?.trip_name || "San Francisco trip planner";
   const initials = (displayName || data.user?.email || "?").charAt(0).toUpperCase();
   // Sidebar counts: what's still left to do on each page.
@@ -400,21 +413,16 @@ export default function Home() {
         <WeatherPanel weather={weather} collapsed={compact} />
         <div className="profile" ref={profileRef}>
           <button className="profile-button" onClick={() => setProfileOpen(open => !open)} title={compact ? (displayName || data.user.email) : undefined} aria-label="Account menu">
-            <span className="avatar">{initials}</span>{!compact && (displayName ? <span><strong>{displayName}</strong><small>{data.user.email}</small></span> : <span className="profile-email"><strong>{data.user.email}</strong></span>)}{!compact && <span>⌄</span>}
+            <span className="avatar">{initials}{unread > 0 && <span className="avatar-badge" aria-label={`${unread} unread notifications`}>{unread > 9 ? "9+" : unread}</span>}</span>{!compact && (displayName ? <span><strong>{displayName}</strong><small>{data.user.email}</small></span> : <span className="profile-email"><strong>{data.user.email}</strong></span>)}{!compact && <span>⌄</span>}
           </button>
           {profileOpen && (
             <div className="profile-popover">
               <button onClick={() => { setPage("settings"); setProfileOpen(false); }}>Settings</button>
               {!answers.completed && <button onClick={resumeSetup}>Finish setup</button>}
-              <div className="theme-picker" role="radiogroup" aria-label="Theme">
-                <span>Theme</span>
-                <div>
-                  {THEMES.map(option => (
-                    <button key={option} type="button" role="radio" aria-checked={theme === option} onClick={() => chooseTheme(option)}>{themeLabels[option]}</button>
-                  ))}
-                </div>
-              </div>
-              {theme === "nirvana" && <button type="button" onClick={toggleFx}>Grid effects: {fx ? "On" : "Off"}</button>}
+              <button onClick={() => { setNotificationsOpen(true); setProfileOpen(false); }}>Notifications{unread > 0 && <span className="menu-count">{unread}</span>}</button>
+              <button onClick={() => { setThemeOpen(true); setProfileOpen(false); }}>Theme<span className="menu-value">{themeLabels[theme]}</span></button>
+              <button onClick={() => { setWhatsAppOpen(true); setProfileOpen(false); }}>ABC WhatsApp</button>
+              <button onClick={() => { setBugOpen(true); setProfileOpen(false); }}>Report Bug</button>
               <button className="sign-out" onClick={signOut}>Sign out</button>
             </div>
           )}
@@ -440,6 +448,10 @@ export default function Home() {
 
       {itineraryOpen && <ItineraryModal items={data.items.filter(item => item.page === "explore")} itinerary={data.itinerary} answers={answers} hasTripData={Boolean(data.itinerary?.saved_plan) || data.tripInfo.length > 0} onClose={() => setItineraryOpen(false)} reload={load} />}
       {viewer && <PhotoViewer spot={viewer} photos={data.photos} onClose={() => setViewer(null)} onDeleted={load} />}
+      {themeOpen && <ThemeModal theme={theme} fx={fx} onTheme={chooseTheme} onFx={toggleFx} onClose={() => setThemeOpen(false)} />}
+      {notificationsOpen && <NotificationsModal items={data.notifications} onChange={list => setData(current => ({ ...current, notifications: list }))} onClose={() => setNotificationsOpen(false)} />}
+      {bugOpen && <ReportBugModal onClose={() => setBugOpen(false)} />}
+      {whatsAppOpen && <WhatsAppModal url={data.links.whatsapp} onClose={() => setWhatsAppOpen(false)} />}
     </div></>
   );
 }
@@ -451,6 +463,8 @@ function normalizeAppState(next: Partial<AppState>): AppState {
     settings: next.settings || null,
     items: Array.isArray(next.items) ? next.items : [],
     photos: next.photos && typeof next.photos === "object" ? next.photos : {},
+    notifications: Array.isArray(next.notifications) ? next.notifications : [],
+    links: { whatsapp: typeof next.links?.whatsapp === "string" ? next.links.whatsapp : "" },
     itinerary: next.itinerary || null,
     tripInfo: Array.isArray(next.tripInfo) ? next.tripInfo : [],
     tripDocuments: Array.isArray(next.tripDocuments) ? next.tripDocuments : []
@@ -1199,6 +1213,134 @@ function PhotoViewer({ spot, photos, onClose, onDeleted }: { spot: string; photo
         {!photo && <p className="muted">No photo here yet. Use “+ Photo” on the route to add one.</p>}
       </section>
     </div>
+  );
+}
+
+const themeBlurbs: Record<Theme, string> = { light: "Bright and simple.", dark: "Easier on the eyes at night.", nirvana: "Neon grid, just for fun." };
+
+function ThemeModal({ theme, fx, onTheme, onFx, onClose }: { theme: Theme; fx: boolean; onTheme: (next: Theme) => void; onFx: () => void; onClose: () => void }) {
+  return (
+    <FormModal eyebrow="Appearance" title="Theme" onClose={onClose}>
+      <div className="theme-picker modal-picker" role="radiogroup" aria-label="Theme">
+        <div>
+          {THEMES.map(option => (
+            <button key={option} type="button" role="radio" aria-checked={theme === option} onClick={() => onTheme(option)}>
+              <strong>{themeLabels[option]}</strong><small>{themeBlurbs[option]}</small>
+            </button>
+          ))}
+        </div>
+      </div>
+      {theme === "nirvana" && (
+        <label className="check-toggle">
+          <input type="checkbox" className="visually-hidden" checked={fx} onChange={onFx} />
+          <span className="check-box" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg></span>
+          <span><span className="check-title">Grid effects</span><br /><span className="muted">The animated grid behind the pages. Turn it off if it distracts you or slows your phone.</span></span>
+        </label>
+      )}
+      <div className="button-row"><button type="button" className="btn primary" onClick={onClose}>Done</button></div>
+    </FormModal>
+  );
+}
+
+function fmtWhen(value: string) {
+  return new Date(value).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+}
+
+function NotificationsModal({ items, onChange, onClose }: { items: Notice[]; onChange: (list: Notice[]) => void; onClose: () => void }) {
+  const [busy, setBusy] = useState("");
+  const [openId, setOpenId] = useState<string | null>(null);
+  const unread = items.filter(notice => !notice.read_at).length;
+  const open = openId ? items.find(notice => notice.id === openId) || null : null;
+  // Opening a notice shows its details and marks it read.
+  function show(notice: Notice) {
+    setOpenId(notice.id);
+    if (!notice.read_at) void run("open", () => api("/api/notifications", { method: "PATCH", body: JSON.stringify({ id: notice.id }) }));
+  }
+  async function run(label: string, request: () => Promise<{ notifications: Notice[] }>, done?: string) {
+    setBusy(label);
+    try {
+      const { notifications } = await request();
+      onChange(notifications);
+      if (done) notify.success(done);
+    } catch (err) {
+      notify.error(err, "Couldn't update notifications");
+    } finally {
+      setBusy("");
+    }
+  }
+  if (open) {
+    const details = noticeData(open);
+    const kindLabel = open.kind === "health" ? "Application health" : open.kind === "signup" ? "New attendee" : "Notice";
+    return (
+      <FormModal eyebrow={kindLabel} title={open.title} onClose={onClose}>
+        <p className="muted">{fmtWhen(open.created_at)}</p>
+        {open.body && <p className="notice-body">{open.body}</p>}
+        {details?.rows?.length ? <dl className="notice-rows">{details.rows.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl> : null}
+        {details?.advice?.length ? <div><h3 className="notice-h3">What to do</h3><ul className="how-to">{details.advice.map(line => <li key={line}>{line}</li>)}</ul></div> : null}
+        <div className="button-row">
+          <button type="button" className="btn" onClick={() => setOpenId(null)}>Back to all</button>
+          <button type="button" className="btn danger" disabled={Boolean(busy)} onClick={() => run(open.id, () => api("/api/notifications", { method: "DELETE", body: JSON.stringify({ id: open.id }) })).then(() => setOpenId(null))}>Delete</button>
+        </div>
+      </FormModal>
+    );
+  }
+  return (
+    <FormModal eyebrow="Account" title="Notifications" onClose={onClose}>
+      <div className="button-row notice-actions">
+        <button type="button" className="btn" disabled={!unread || Boolean(busy)} onClick={() => run("read", () => api("/api/notifications", { method: "PATCH", body: JSON.stringify({ all: true }) }))}>Mark all as read</button>
+        <button type="button" className="btn danger" disabled={!items.length || Boolean(busy)} onClick={() => run("clear", () => api("/api/notifications", { method: "DELETE", body: JSON.stringify({ all: true }) }), "Notifications cleared")}>Delete all</button>
+      </div>
+      {items.length ? (
+        <ul className="notice-list">
+          {items.map(notice => (
+            <li key={notice.id} className={notice.read_at ? "notice" : "notice unread"}>
+              <button type="button" className="notice-open" onClick={() => show(notice)} aria-label={`Open ${notice.title}`}>
+                <strong>{notice.title}</strong>
+                {notice.body && <p>{notice.body}</p>}
+                <time dateTime={notice.created_at}>{fmtWhen(notice.created_at)}{notice.read_at ? "" : " · New"}{notice.kind === "health" ? " · Health" : notice.kind === "signup" ? " · New attendee" : ""}</time>
+              </button>
+              <button type="button" className="check-remove" aria-label={`Delete ${notice.title}`} disabled={Boolean(busy)} onClick={() => run(notice.id, () => api("/api/notifications", { method: "DELETE", body: JSON.stringify({ id: notice.id }) }))}>×</button>
+            </li>
+          ))}
+        </ul>
+      ) : <p className="muted">You&rsquo;re all caught up.</p>}
+    </FormModal>
+  );
+}
+
+function ReportBugModal({ onClose }: { onClose: () => void }) {
+  const [kind, setKind] = useState<"bug" | "feedback">("bug");
+  const [message, setMessage] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  async function send(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (message.trim().length < 5) return setError("Tell us a little more so we can act on it.");
+    setBusy(true); setError("");
+    try {
+      await api("/api/feedback", { method: "POST", body: JSON.stringify({ kind, message: message.trim(), page: location.pathname, userAgent: navigator.userAgent }) });
+      notify.success(kind === "bug" ? "Bug report sent. Thank you!" : "Feedback sent. Thank you!");
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not send that");
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <FormModal eyebrow="Help" title="Report a bug or send feedback" onClose={onClose}>
+      <form className="stack" onSubmit={send}>
+        <div className="option-list two" role="radiogroup" aria-label="What is this about?">
+          {([["bug", "Something's broken", "A page, button, or save that isn't working."], ["feedback", "An idea or feedback", "Something that would make the planner better."]] as const).map(([value, title, detail]) => (
+            <button type="button" key={value} role="radio" aria-checked={kind === value} className={`option ${kind === value ? "selected" : ""}`} onClick={() => setKind(value)}><strong>{title}</strong><span>{detail}</span></button>
+          ))}
+        </div>
+        <label>{kind === "bug" ? "What happened?" : "What's on your mind?"}<textarea value={message} onChange={event => setMessage(event.target.value)} rows={5} maxLength={4000} required placeholder={kind === "bug" ? "What were you doing, what did you expect, and what happened instead?" : "Tell us what you'd like to see."} /></label>
+        <p className="muted">This goes straight to the trip organizer&rsquo;s email, along with your account email and the page you were on.</p>
+        {error && <p className="error">{error}</p>}
+        <div className="button-row"><button className="btn primary" disabled={busy}>{busy ? "Sending..." : "Send"}</button><button type="button" className="btn" onClick={onClose}>Cancel</button></div>
+      </form>
+    </FormModal>
   );
 }
 

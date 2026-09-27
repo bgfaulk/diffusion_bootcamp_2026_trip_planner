@@ -65,13 +65,19 @@ export function UserGuide() {
       <h3>Organizer</h3>
       <p>
         Only the trip organizer sees this page. It lists attendee accounts, sends password reset links, can suspend or remove an account,
-        and shows request performance, stored data size, and an activity log.
+        sends a notice to everyone, and shows request performance, stored data size, and an activity log. The organizer is also
+        notified when someone new joins and when the app crosses a health threshold: slow responses, server errors, or a database
+        that is large or growing quickly. Opening one of those notifications shows the numbers behind it and what to do.
       </p>
 
       <h2>Around the app</h2>
       <ul>
         <li><strong>Weather.</strong> The sidebar shows the forecast for where you are, or for the training location until you share your location.</li>
-        <li><strong>Themes.</strong> Open the account menu (your initial, at the bottom left on a computer or the top right on a phone) to pick Light, Dark, or Digital Nirvana. Digital Nirvana has a &ldquo;Grid effects&rdquo; switch for the animated backdrop.</li>
+        <li><strong>Account menu.</strong> Your initial, at the bottom left on a computer or the top right on a phone. It holds Settings, Notifications, Theme, ABC WhatsApp, Report Bug, and Sign out.</li>
+        <li><strong>Notifications.</strong> Notices from the trip organizer land here, and a count on your initial shows how many are unread. Mark them all as read, delete one at a time, or clear them all.</li>
+        <li><strong>Themes.</strong> &ldquo;Theme&rdquo; in the account menu opens a picker for Light, Dark, or Digital Nirvana. Digital Nirvana adds a &ldquo;Grid effects&rdquo; switch for the animated backdrop.</li>
+        <li><strong>ABC WhatsApp.</strong> The group chat&rsquo;s invite link and a QR code, so you can open the group or add someone standing next to you.</li>
+        <li><strong>Report Bug.</strong> Found something broken, or have an idea? &ldquo;Report Bug&rdquo; in the account menu sends your note straight to the trip organizer&rsquo;s email.</li>
         <li><strong>Loading chime.</strong> The A-B-C letters on the loading screen play three notes. Browsers only allow sound after you have tapped or typed on the page, so a cold start may be silent. Mute it in Settings or with the sound button on the loading screen.</li>
         <li><strong>Save messages.</strong> Every save, add, or delete shows a short message at the bottom of the screen: green when it worked, red with the reason when it did not.</li>
         <li><strong>Web addresses.</strong> Each page has its own address, so you can bookmark one, refresh without losing your place, and use the back button.</li>
@@ -82,6 +88,11 @@ export function UserGuide() {
       <h2>What&rsquo;s new</h2>
       <p className="muted">Updated {GUIDE_UPDATED}.</p>
       <ul>
+        <li>Notifications: the organizer can send a notice to everyone, and unread ones show as a count on your initial. Open one to see its details.</li>
+        <li>For the organizer: a notification when a new attendee joins, and health alerts for slow responses, server errors, and database size or growth, with a daily automatic check and a &ldquo;Check now&rdquo; button on the Organizer page.</li>
+        <li>Report Bug in the account menu emails the organizer with your note.</li>
+        <li>ABC WhatsApp in the account menu shows the group link and a QR code.</li>
+        <li>The theme picker moved into its own window from the account menu.</li>
         <li>Every page has its own web address.</li>
         <li>Every save now confirms it worked or says why it did not.</li>
         <li>Photo Route: photos can be deleted, large photos are shrunk before saving, each stop holds one photo, and the route zig-zags between stops.</li>
