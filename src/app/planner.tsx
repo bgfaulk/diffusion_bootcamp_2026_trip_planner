@@ -18,6 +18,7 @@ import { notify } from "./toast";
 import { UserGuide } from "./user-guide";
 import { WhatsAppModal } from "./whatsapp-modal";
 import { photoSpots } from "@/lib/photo-spots";
+import { bookingEvent, buildIcs, downloadIcs, slug, trainingEvents, tripWindowEvent, type CalendarEvent } from "@/lib/calendar";
 import { formatBytes, MAX_PHOTO_EDGE, preparePhoto, type PreparedPhoto } from "@/lib/image";
 import { applyFx, applyTheme, storedFx, storedTheme, THEMES, themeLabels, type Theme } from "@/lib/theme";
 import { buildTripModel, countdown, dayKey, daysBetween, fmtDay, fmtMinutes, fmtShort, keyToDate, parseItinerary, parseWhen, type DayEvent, type ParsedPlan, type TimedBooking, type TripModel } from "@/lib/trip-time";
@@ -55,6 +56,7 @@ type Settings = {
   planning_mode?: "ai" | "manual" | null;
   planning_answers?: string;
   chime_muted?: boolean;
+  calendar_guest?: string;
 } | null;
 type AppState = {
   user: null | { id: string; email: string; owner?: boolean };
@@ -501,7 +503,7 @@ export default function Home() {
         {page === "overview" && <Overview tripName={tripName} settings={data.settings} answers={answers} itinerary={data.itinerary} tripInfo={data.tripInfo} goTo={setPage} />}
         {listPages.includes(page) && <ListPage pageKey={page} items={data.items} onItems={patchItems} />}
         {page === "explore" && <ExplorePage items={data.items.filter(item => item.page === "explore")} itinerary={data.itinerary} startDate={answers.startDate} openModal={() => setItineraryOpen(true)} reload={load} onItems={patchItems} />}
-        {page === "tripInfo" && <TripInfoPage tripInfo={data.tripInfo} tripDocuments={data.tripDocuments} reload={load} />}
+        {page === "tripInfo" && <TripInfoPage tripInfo={data.tripInfo} tripDocuments={data.tripDocuments} reload={load} answers={answers} settings={data.settings} email={data.user.email} />}
         {page === "gallery" && <Gallery photos={data.photos} openViewer={setViewer} reload={load} />}
         {page === "settings" && <SettingsPage settings={data.settings} saveSettings={saveSettings} reload={load} tab={settingsTab} onTab={setSettingsTab} />}
         {page === "organizer" && data.user.owner && <OrganizerPage userId={data.user.id} />}
@@ -973,8 +975,26 @@ Practical notes:
 Keep it mobile-readable, specific, and ready to save into the app.`;
 }
 
-function TripInfoPage({ tripInfo, tripDocuments, reload }: { tripInfo: TripInfo[]; tripDocuments: TripDocument[]; reload: () => Promise<void> }) {
+function TripInfoPage({ tripInfo, tripDocuments, reload, answers, settings, email }: { tripInfo: TripInfo[]; tripDocuments: TripDocument[]; reload: () => Promise<void>; answers: WizardAnswers; settings: Settings; email: string }) {
   const [adding, setAdding] = useState<string | null>(null);
+  // Calendar export works from the same trip model as the Overview: parsed booking times plus training days.
+  const trip = useMemo(() => buildTripModel({ startDate: answers.startDate, endDate: answers.endDate, bookings: tripInfo, itinerary: null, now: new Date() }), [answers.startDate, answers.endDate, tripInfo]);
+  const guest = settings?.calendar_guest?.trim() || "";
+  const tripName = settings?.trip_name?.trim() || answers.tripName || "San Francisco trip";
+  function exportEvents(events: CalendarEvent[], filename: string, what: string) {
+    if (!events.length) return notify.error(new Error(`Nothing to add yet. ${what}`));
+    downloadIcs(filename, buildIcs(events, { guest, organizer: guest ? email : undefined }));
+    notify.success(`Calendar file ready: ${events.length} event${events.length === 1 ? "" : "s"}. Open it to add ${events.length === 1 ? "it" : "them"} to your calendar.`);
+  }
+  const bookingEvents = () => trip.bookings.filter(b => b.category !== "training" || !trip.trainingKeys.length).map(bookingEvent).filter((e): e is CalendarEvent => Boolean(e));
+  const wholeTrip = () => exportEvents([tripWindowEvent(trip, tripName), ...bookingEvents(), ...trainingEvents(trip, settings?.training_location || "")].filter((e): e is CalendarEvent => Boolean(e)), `${slug(tripName)}.ics`, "Add trip dates in Settings or a booking with a date first.");
+  const trainingOnly = () => exportEvents(trainingEvents(trip, settings?.training_location || ""), "training-days.ics", "Add a Training booking with dates first.");
+  const datesOnly = () => exportEvents([tripWindowEvent(trip, tripName)].filter((e): e is CalendarEvent => Boolean(e)), `${slug(tripName)}-dates.ics`, "Add your trip dates in Settings > Trip details first.");
+  const oneBooking = (item: TripInfo) => {
+    const timed = trip.bookings.find(b => b.id === item.id);
+    const event = timed ? bookingEvent(timed) : null;
+    exportEvents(event ? [event] : [], `${slug(item.title)}.ics`, "Give this booking a start date the planner can read, like \"Oct 12, 7:05 AM\".");
+  };
   const [pdfOpen, setPdfOpen] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<null | { kind: "booking" | "document"; id: string; label: string }>(null);
   const [tab, setTab] = useState<string>("flight");
@@ -1013,10 +1033,18 @@ function TripInfoPage({ tripInfo, tripDocuments, reload }: { tripInfo: TripInfo[
 
   return (
     <section className="page active">
-      <header className="page-header"><p className="eyebrow">Travel details</p><h1>Trip Information</h1></header>
+      <header className="page-header page-header-row">
+        <div><p className="eyebrow">Travel details</p><h1>Trip Information</h1></div>
+        <ActionMenu label="Add to calendar" items={[
+          { label: "Whole trip: dates, bookings, training days", onSelect: wholeTrip },
+          { label: "Training days only", onSelect: trainingOnly },
+          { label: "Trip dates only", onSelect: datesOnly }
+        ]} />
+      </header>
       <div className="callout">
         <h2>Keep booking details in your own account</h2>
         <p>Add flights, hotels, rental cars, training addresses, insurance policy notes, and other reservations here. Nothing personal needs to live in the shared repo.</p>
+        <p className="muted">&ldquo;Add to calendar&rdquo; downloads a calendar file (.ics) that Apple Calendar, Google Calendar, or Outlook can open. {guest ? <>Every event invites <strong>{guest}</strong>; change that in Settings.</> : <>To invite someone else on every event, add a calendar guest in Settings.</>}</p>
       </div>
 
       <Tabs label="Trip information sections" active={tab} onChange={setTab} tabs={[
@@ -1036,11 +1064,14 @@ function TripInfoPage({ tripInfo, tripDocuments, reload }: { tripInfo: TripInfo[
                 {item.address && <p><b>Address:</b> <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.address)}`} target="_blank" rel="noreferrer">{item.address}</a></p>}
                 {item.phone && <p><b>Phone:</b> <a href={`tel:${item.phone}`}>{item.phone}</a></p>}
                 {item.notes && <p>{item.notes}</p>}
-                <div className="card-actions"><button type="button" className="btn danger" onClick={() => setPendingDelete({ kind: "booking", id: item.id, label: item.title })}>Delete booking</button></div>
+                <div className="card-actions">
+                  <button type="button" className="btn" onClick={() => oneBooking(item)}>Add to calendar</button>
+                  <button type="button" className="btn danger" onClick={() => setPendingDelete({ kind: "booking", id: item.id, label: item.title })}>Delete booking</button>
+                </div>
               </article>
             )) : <p className="muted">No {categoryTitle(tab).toLowerCase()} details yet.</p>}
           </section>
-          {tab === "training" && <TrainingSchedule record={grouped.training?.[0]} />}
+          {tab === "training" && <TrainingSchedule record={grouped.training?.[0]} onCalendar={trip.trainingKeys.length ? trainingOnly : undefined} />}
         </TabPanel>
       )}
 
@@ -1096,13 +1127,13 @@ function TripInfoPage({ tripInfo, tripDocuments, reload }: { tripInfo: TripInfo[
 }
 
 // The bootcamp's daily agenda, shown under the Training booking. The same schedule feeds the Overview's day view.
-function TrainingSchedule({ record }: { record?: TripInfo }) {
+function TrainingSchedule({ record, onCalendar }: { record?: TripInfo; onCalendar?: () => void }) {
   const start = parseWhen(record?.start_at);
   const end = parseWhen(record?.end_at) || start;
   const range = start ? (end && dayKey(end) !== dayKey(start) ? `${fmtDay(dayKey(start))} to ${fmtDay(dayKey(end))}` : fmtDay(dayKey(start))) : "";
   return (
     <section className="schedule">
-      <div className="panel-head"><div><h2>Daily schedule</h2><p className="muted">{range ? `Every training day, ${range}. These show up on the Overview each morning.` : "Add a training booking with dates and this schedule lands on your Overview for each training day."}</p></div></div>
+      <div className="panel-head"><div><h2>Daily schedule</h2><p className="muted">{range ? `Every training day, ${range}. These show up on the Overview each morning.` : "Add a training booking with dates and this schedule lands on your Overview for each training day."}</p></div>{onCalendar && <button type="button" className="btn" onClick={onCalendar}>Add training days to calendar</button>}</div>
       <ol className="day-list">
         {trainingAgenda.slots.map(slot => (
           <li key={slot.minutes} className="training">
@@ -1465,6 +1496,7 @@ function SettingsForm({ settings, onSubmit }: { settings: Settings; onSubmit: (f
       <label>Trip name<input name="tripName" defaultValue={settings?.trip_name || ""} maxLength={120} /></label>
       <AddressField label={<span>Home address <span className="help" title="Optional. It helps personalize the route map and itinerary context.">?</span></span>} name="home" defaultAddress={settings?.home_address || ""} defaultPlaceId={settings?.home_place_id || ""} />
       <AddressField label="Training location" name="training" defaultAddress={settings?.training_location || ""} defaultPlaceId={settings?.training_place_id || ""} />
+      <label className="wide"><span>Calendar invite guest <span className="help" title="Optional. Every calendar event you download from Trip Information invites this address, so a partner or assistant gets the same events.">?</span></span><input name="calendarGuest" type="email" placeholder="Someone to invite on every calendar event" defaultValue={settings?.calendar_guest || ""} maxLength={254} /></label>
       <input type="hidden" name="theme" value={settings?.theme || "light"} />
       <label className="check-toggle wide">
         <input type="checkbox" className="visually-hidden" checked={chimeMuted} onChange={event => setChimeMuted(event.target.checked)} />

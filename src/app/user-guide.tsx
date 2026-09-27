@@ -48,6 +48,7 @@ export function UserGuide() {
         <li>Your bookings, grouped as Flights, Hotel, Rental Car, Training, Insurance, and Other, each with dates, times, confirmation details, and notes.</li>
         <li>&ldquo;+ PDF&rdquo; stores insurance or protection documents so they are on hand during the trip.</li>
         <li>Bookings and PDFs can be deleted from their cards. Deleting asks you to confirm first.</li>
+        <li><strong>Add to calendar.</strong> The menu at the top downloads a calendar file (.ics) with the whole trip: an all-day block for your dates, every booking with a readable start, and the training days with the daily agenda. Each booking card has its own &ldquo;Add to calendar&rdquo; button, and the Training tab can add just the training days. Open the file and Apple Calendar, Google Calendar, or Outlook adds the events. If you set a calendar guest in Settings, every event invites them too.</li>
       </ul>
       <h3>Photo Route</h3>
       <ul>
@@ -57,7 +58,7 @@ export function UserGuide() {
       </ul>
       <h3>Settings</h3>
       <ul>
-        <li><strong>Profile:</strong> your display name, the trip name, your home address, your training location, and the switch that mutes the loading-screen chime.</li>
+        <li><strong>Profile:</strong> your display name, the trip name, your home address, your training location, an optional calendar invite guest (someone to invite on every calendar event you download), and the switch that mutes the loading-screen chime.</li>
         <li><strong>Trip details:</strong> destination, dates, travelers, and interests. These are the same answers the setup wizard collects.</li>
         <li><strong>Account:</strong> delete your account and everything stored with it. This cannot be undone.</li>
         <li><strong>User Guide:</strong> this page.</li>
@@ -90,6 +91,7 @@ export function UserGuide() {
       <h2>What&rsquo;s new</h2>
       <p className="muted">Updated {GUIDE_UPDATED}.</p>
       <ul>
+        <li>Add to calendar is back: Trip Information downloads calendar files for the whole trip, one booking, or the training days, and Settings has a calendar guest who gets invited on every event.</li>
         <li>The sidebar groups pages into Get ready, Travel days, and On the trip. Each group folds away, and the forecast sits under its own divider.</li>
         <li>Address fields say so when suggestions are unavailable, and the booking form&rsquo;s Address field offers suggestions too.</li>
         <li>For the organizer: each account on the Accounts tab has a single Actions menu, and the Activity tab separates what people did from routine page loads.</li>
