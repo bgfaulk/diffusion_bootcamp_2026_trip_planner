@@ -72,6 +72,10 @@ const emptyAppState: AppState = {
 };
 
 // Per-device hint that a session exists, so the loader can start before bootstrap answers.
+// The "finish setup" banner can be hidden per device; the profile menu still offers "Finish setup".
+const bannerKey = "trip-setup-banner";
+function bannerHidden() { try { return localStorage.getItem(bannerKey) === "hidden"; } catch { return false; } }
+
 function sessionHint() { try { return localStorage.getItem("trip-session") === "1"; } catch { return false; } }
 function rememberSession(on: boolean) { try { if (on) localStorage.setItem("trip-session", "1"); else localStorage.removeItem("trip-session"); } catch {} }
 
@@ -96,8 +100,26 @@ export default function Home() {
   const [page, setPage] = useState("overview");
   const [profileOpen, setProfileOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
-  // Sidebar collapse is a per-device preference.
+  // Sidebar collapse is a per-device preference. On phones the sidebar is a top bar plus a bottom rail,
+  // where a collapsed state makes no sense, so `compact` is what the layout actually renders.
   const [collapsed, setCollapsed] = useState(false);
+  const [mobile, setMobile] = useState(false);
+  const [hideBanner, setHideBanner] = useState(false);
+  useEffect(() => { setHideBanner(bannerHidden()); }, []);
+  function dismissBanner() { setHideBanner(true); try { localStorage.setItem(bannerKey, "hidden"); } catch {} }
+  const compact = collapsed && !mobile;
+  useEffect(() => {
+    const query = matchMedia("(max-width: 900px)");
+    const sync = () => setMobile(query.matches);
+    sync();
+    query.addEventListener("change", sync);
+    return () => query.removeEventListener("change", sync);
+  }, []);
+  // Keep the active page's button in view on the bottom rail.
+  useEffect(() => {
+    if (!mobile) return;
+    document.querySelector<HTMLElement>(".primary-nav button.active")?.scrollIntoView({ inline: "center", block: "nearest", behavior: "smooth" });
+  }, [mobile, page]);
   const [loaded, setLoaded] = useState(false);
   // The ABC bumper plays on every sign-in (and on load with a saved session); it holds until data is ready.
   const [entering, setEntering] = useState(false);
@@ -309,28 +331,28 @@ export default function Home() {
 
   return (
     <>{backdrop(true)}<div className="app-shell">
-      <aside className={collapsed ? "sidebar collapsed" : "sidebar"}>
+      <aside className={compact ? "sidebar collapsed" : "sidebar"}>
         <div className="brand">
           <AbcMark small />
-          {!collapsed && <span className="brand-divider" aria-hidden="true" />}
-          {!collapsed && <div><strong>Trip Planner</strong><span>{tripName}</span></div>}
-          <button type="button" className="sidebar-toggle" onClick={toggleSidebar} aria-expanded={!collapsed} aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"} title={collapsed ? "Expand sidebar" : "Collapse sidebar"}>
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d={collapsed ? "M9 6l6 6-6 6" : "M15 6l-6 6 6 6"} /></svg>
+          {!compact && <span className="brand-divider" aria-hidden="true" />}
+          {!compact && <div><strong>Trip Planner</strong><span>{tripName}</span></div>}
+          <button type="button" className="sidebar-toggle" onClick={toggleSidebar} aria-expanded={!compact} aria-label={compact ? "Expand sidebar" : "Collapse sidebar"} title={compact ? "Expand sidebar" : "Collapse sidebar"}>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d={compact ? "M9 6l6 6-6 6" : "M15 6l-6 6 6 6"} /></svg>
           </button>
         </div>
         <nav className="primary-nav" aria-label="Pages">
           {["overview", "prechecks", "packing", "departure", "explore", "tripInfo", "gallery", "return", ...(data.user.owner ? ["organizer"] : [])].map(key => (
-            <button key={key} className={page === key ? "active" : ""} onClick={() => setPage(key)} title={collapsed ? pageLabels[key] : undefined} aria-label={collapsed ? pageLabels[key] : undefined} aria-current={page === key ? "page" : undefined}>
+            <button key={key} className={page === key ? "active" : ""} onClick={() => setPage(key)} title={compact ? pageLabels[key] : undefined} aria-label={compact ? pageLabels[key] : undefined} aria-current={page === key ? "page" : undefined}>
               <PageIcon page={key} />
-              {!collapsed && <span className="nav-label">{pageLabels[key]}</span>}
+              {!compact && <span className="nav-label">{pageLabels[key]}</span>}
               {remaining[key] > 0 && <span className="nav-count" aria-label={`${remaining[key]} left`}>{remaining[key]}</span>}
             </button>
           ))}
         </nav>
-        <WeatherPanel weather={weather} collapsed={collapsed} />
+        <WeatherPanel weather={weather} collapsed={compact} />
         <div className="profile" ref={profileRef}>
-          <button className="profile-button" onClick={() => setProfileOpen(open => !open)} title={collapsed ? (displayName || data.user.email) : undefined}>
-            <span className="avatar">{initials}</span>{!collapsed && (displayName ? <span><strong>{displayName}</strong><small>{data.user.email}</small></span> : <span className="profile-email"><strong>{data.user.email}</strong></span>)}{!collapsed && <span>⌄</span>}
+          <button className="profile-button" onClick={() => setProfileOpen(open => !open)} title={compact ? (displayName || data.user.email) : undefined} aria-label="Account menu">
+            <span className="avatar">{initials}</span>{!compact && (displayName ? <span><strong>{displayName}</strong><small>{data.user.email}</small></span> : <span className="profile-email"><strong>{data.user.email}</strong></span>)}{!compact && <span>⌄</span>}
           </button>
           {profileOpen && (
             <div className="profile-popover">
@@ -352,10 +374,11 @@ export default function Home() {
       </aside>
 
       <main className="content">
-        {!answers.completed && (
+        {!answers.completed && !hideBanner && (
           <div className="setup-banner" role="status">
             <div><strong>Finish setting up your trip</strong><span>{mode === "ai" ? "ChatGPT hasn't built your itinerary, checklists, or bookings yet." : "Add your dates, bookings, travelers, and interests to get the most out of the planner."}</span></div>
             <button className="btn primary" onClick={resumeSetup}>Finish setup</button>
+            <button type="button" className="banner-x" onClick={dismissBanner} aria-label="Hide this reminder" title="Hide this reminder. Finish setup stays in your account menu.">×</button>
           </div>
         )}
         {page === "overview" && <Overview tripName={tripName} settings={data.settings} answers={answers} itinerary={data.itinerary} tripInfo={data.tripInfo} goTo={setPage} />}
