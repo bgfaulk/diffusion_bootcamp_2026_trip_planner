@@ -274,7 +274,7 @@ export function bookingEvents(bookings: TimedBooking[], key: number, trainingKey
 const bookingWords: Record<Booking["category"], RegExp> = {
   flight: /\b(flight|depart|departure|departs|arriv(e|es|al|ing)|land(s|ing|ed)?|board(s|ing)?|airport|take ?off|fly|flying)\b/i,
   hotel: /\b(check[- ]?in|check[- ]?out|hotel|lodging)\b/i,
-  rental: /\b(rental|rent(al)? car|pick ?up|return|drop ?off|car return)\b/i,
+  rental: /\b(rental|rent(al)? car|hire car|(pick ?up|return|drop ?off) (the |your |a )?(rental|car|vehicle)|car (return|pick ?up|drop ?off))\b/i,
   training: /\b(bootcamp|boot camp|training|workshop|class|session|diffusion)\b/i,
   insurance: /\binsurance\b/i,
   other: /(?!)/

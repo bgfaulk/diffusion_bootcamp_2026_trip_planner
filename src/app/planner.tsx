@@ -212,11 +212,12 @@ export default function Home() {
 
   // One pass over a plan saved before bookings were placed on the itinerary live: stops that only restate a booking
   // are dropped, with Undo, and the plan is stamped so this never runs on it again (later stops are the person's own).
-  const tidied = useRef(false);
+  const tidied = useRef("");
   useEffect(() => {
     const plan = data.itinerary;
-    if (!data.user || !plan?.saved_plan || plan.cleaned_at || tidied.current) return;
-    tidied.current = true;
+    // Nothing to match against until bookings exist: leave the stamp off so the pass runs once they do.
+    if (!data.user || !plan?.saved_plan || plan.cleaned_at || !data.tripInfo.length || tidied.current === data.user.id) return;
+    tidied.current = data.user.id;
     const original = plan.saved_plan;
     const answers = parseAnswers(data.settings?.planning_answers);
     const trip = buildTripModel({ startDate: answers.startDate, endDate: answers.endDate, bookings: data.tripInfo, itinerary: original, now: new Date() });
@@ -722,7 +723,6 @@ function TodayPanel({ trip, now, goTo }: { trip: TripModel; now: Date; goTo: (pa
   const past = live ? trip.events.filter(event => event.minutes !== null && event.minutes < nowMinutes) : [];
   const upcoming = live ? trip.events.filter(event => !past.includes(event)) : trip.events;
   const nextIndex = live ? upcoming.findIndex(event => event.minutes !== null) : -1;
-  const tag = (kind: DayEvent["kind"]) => kind === "booking" ? "Booking" : kind === "training" ? "Training" : "Itinerary";
   return (
     <section className="day-panel">
       <div className="panel-head"><div><h2>{heading}</h2><p className="muted">{sub}</p></div>{trip.phase !== "after" && <button className="link-button" onClick={() => goTo("explore")}>Edit itinerary</button>}</div>
@@ -732,7 +732,7 @@ function TodayPanel({ trip, now, goTo }: { trip: TripModel; now: Date; goTo: (pa
             <li key={index} className={`${event.kind}${index === nextIndex ? " next" : ""}`}>
               <span className="day-time">{event.time || "Any time"}</span>
               <div><strong>{event.title}</strong>{event.detail && <span>{event.detail}</span>}</div>
-              <em>{index === nextIndex ? "Up next" : tag(event.kind)}</em>
+              <em>{index === nextIndex ? "Up next" : eventTag(event.kind)}</em>
             </li>
           ))}
         </ol>
@@ -988,6 +988,9 @@ function ExplorePage({ items, itinerary, tripInfo, answers, openModal, reload, o
   );
 }
 
+// The label on a day-list row, by where the row came from.
+const eventTag = (kind: DayEvent["kind"]) => kind === "booking" ? "Booking" : kind === "training" ? "Training" : "Itinerary";
+
 // The plan laid out as day cards instead of raw text, with each day's booking moments slotted in by time. Booking
 // rows open Trip Information, since that is where they are edited. Plans that don't parse into days fall back to prose.
 type DayRow = { minutes: number | null } & ({ kind: "stop"; index: number; stop: Stop } | { kind: "event"; event: DayEvent });
@@ -1000,8 +1003,8 @@ function ItineraryView({ plan, raw, trip, onEdit, onBooking }: { plan: ParsedPla
     if (day.key !== null) for (const event of bookingEvents(trip.bookings, day.key, trip.trainingKeys, trip.training)) rows.push({ kind: "event", event, minutes: event.minutes });
     return rows.sort((a, b) => (a.minutes ?? 1e9) - (b.minutes ?? 1e9));
   };
-  const bookingRows = plan.days.reduce((sum, day) => sum + rowsFor(day).filter(row => row.kind === "event").length, 0);
-  const tag = (kind: DayEvent["kind"]) => kind === "training" ? "Training" : "Booking";
+  const dayRows = plan.days.map(rowsFor);
+  const bookingRows = dayRows.reduce((sum, rows) => sum + rows.filter(row => row.kind === "event").length, 0);
   return (
     <div className="plan-view">
       <section className="plan-summary">
@@ -1010,7 +1013,7 @@ function ItineraryView({ plan, raw, trip, onEdit, onBooking }: { plan: ParsedPla
       </section>
       <div className="plan-days">
         {plan.days.map((day, dayIndex) => {
-          const rows = rowsFor(day);
+          const rows = dayRows[dayIndex];
           return (
           <section className="plan-day" key={`${day.index}-${day.label}`}>
             <header>
@@ -1034,7 +1037,7 @@ function ItineraryView({ plan, raw, trip, onEdit, onBooking }: { plan: ParsedPla
                     <button type="button" className="stop-open" onClick={onBooking} aria-label={`${row.event.title}, open Trip Information`}>
                       <span className="day-time">{row.event.time || "Any time"}</span>
                       <div><strong>{row.event.title}</strong>{row.event.detail && <span>{row.event.detail}</span>}</div>
-                      <em>{tag(row.event.kind)}</em>
+                      <em>{eventTag(row.event.kind)}</em>
                     </button>
                   </li>
                 ))}
