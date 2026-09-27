@@ -1,11 +1,13 @@
 "use client";
 
-import { KeyboardEvent } from "react";
+import { KeyboardEvent, useEffect } from "react";
 
 export type Tab<K extends string> = { key: K; label: string; count?: number };
 
 // Segmented switcher for pages that hold several panels; only the active panel renders.
 export function Tabs<K extends string>({ tabs, active, onChange, label }: { tabs: Tab<K>[]; active: K; onChange: (key: K) => void; label: string }) {
+  // On phones the strip scrolls sideways; keep the active tab in view.
+  useEffect(() => { document.getElementById(`tab-${active}`)?.scrollIntoView({ block: "nearest", inline: "nearest" }); }, [active]);
   function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
     event.preventDefault();

@@ -29,8 +29,8 @@ export function OrganizerPage({ userId }: { userId: string }) {
   const shared = { minutes, tick, onLoading: onLoaded };
   return (
     <section className="page active organizer">
-      <header className="page-header page-header-row">
-        <div><p className="eyebrow">Organizer</p><h1>How the trip planner is doing</h1></div>
+      <header className="page-header page-header-row organizer-head">
+        <p className="eyebrow">Organizer</p>
         <div className="pill-row">
           <TimeWindowPill minutes={minutes} onChange={setMinutes} disabled={busy} />
           <RefreshControl refreshing={busy} onRefresh={refresh} seconds={refreshSeconds} onSeconds={setRefreshSeconds} updatedAt={updatedAt} />

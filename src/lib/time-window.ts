@@ -9,7 +9,7 @@ const MINUTES_PER: Record<WindowUnit, number> = { minutes: 1, hours: 60, days: 1
 
 /** ~12 months (366 days). */
 export const MAX_WINDOW_MINUTES = 527040;
-export const DEFAULT_WINDOW_MINUTES = 1440;
+export const DEFAULT_WINDOW_MINUTES = 60;
 
 export const QUICK_RANGES: readonly { minutes: number; label: string }[] = [
   { minutes: 5, label: "Last 5 minutes" },
