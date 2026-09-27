@@ -1,22 +1,24 @@
 import { requireUser } from "@/lib/auth";
+import { encryptText } from "@/lib/crypto";
 import { getSql } from "@/lib/db";
-import { asString, jsonError, parseNumber } from "@/lib/validation";
+import { isTheme } from "@/lib/theme";
+import { asString, jsonError } from "@/lib/validation";
 
 export async function POST(request: Request) {
   try {
     const user = await requireUser();
     const body = await request.json();
-    const theme = body.theme === "dark" ? "dark" : "light";
-    const profileName = asString(body.profileName, 80);
-    const tripName = asString(body.tripName, 120);
-    const homeAddress = asString(body.homeAddress, 240);
-    const homePlaceId = asString(body.homePlaceId, 160);
-    const trainingLocation = asString(body.trainingLocation, 240);
-    const trainingPlaceId = asString(body.trainingPlaceId, 160);
-    const homeLat = parseNumber(body.homeLat);
-    const homeLng = parseNumber(body.homeLng);
-    const trainingLat = parseNumber(body.trainingLat);
-    const trainingLng = parseNumber(body.trainingLng);
+    const theme = isTheme(body.theme) ? body.theme : "light";
+    const profileName = encryptText(asString(body.profileName, 80));
+    const tripName = encryptText(asString(body.tripName, 120));
+    const homeAddress = encryptText(asString(body.homeAddress, 240));
+    const homePlaceId = encryptText(asString(body.homePlaceId, 160));
+    const trainingLocation = encryptText(asString(body.trainingLocation, 240));
+    const trainingPlaceId = encryptText(asString(body.trainingPlaceId, 160));
+    const homeLat = null;
+    const homeLng = null;
+    const trainingLat = null;
+    const trainingLng = null;
     await getSql()`
       INSERT INTO settings (
         user_id, profile_name, trip_name, home_address, home_place_id, home_lat, home_lng,

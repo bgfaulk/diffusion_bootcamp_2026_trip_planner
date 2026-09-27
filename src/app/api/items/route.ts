@@ -1,4 +1,5 @@
 import { requireUser } from "@/lib/auth";
+import { decryptText, encryptText } from "@/lib/crypto";
 import { getSql, pageKeys } from "@/lib/db";
 import { asString, jsonError, requireString } from "@/lib/validation";
 
@@ -8,7 +9,7 @@ export async function POST(request: Request) {
     const body = await request.json();
     const page = asString(body.page, 40);
     if (!pageKeys.has(page as any)) throw new Error("Invalid page");
-    const title = requireString(body.title, "Item", 180);
+    const title = encryptText(requireString(body.title, "Item", 180));
     const sql = getSql();
     const positionRows = await sql`SELECT COALESCE(MAX(position), 0)::int + 1 AS next FROM list_items WHERE user_id = ${user.id} AND page = ${page}`;
     const item = await sql`
@@ -16,7 +17,7 @@ export async function POST(request: Request) {
       VALUES (${user.id}, ${page}, ${title}, ${Number(positionRows[0].next)})
       RETURNING *
     `;
-    return Response.json({ item: item[0] });
+    return Response.json({ item: { ...item[0], title: decryptText(item[0].title) } });
   } catch (error) {
     return jsonError(error instanceof Error ? error.message : "Could not add item", 400);
   }

@@ -1,22 +1,25 @@
 import { requireUser } from "@/lib/auth";
+import { decryptRow, encryptText } from "@/lib/crypto";
 import { getSql } from "@/lib/db";
 import { asString, jsonError, requireString } from "@/lib/validation";
 
 const categories = new Set(["flight", "hotel", "rental", "training", "insurance", "other"]);
+
+const encryptedFields = ["title", "provider", "confirmation_number", "start_at", "end_at", "address", "phone", "notes"];
 
 function readTripInfo(body: any) {
   const category = asString(body.category, 40);
   if (!categories.has(category)) throw new Error("Choose a valid booking type");
   return {
     category,
-    title: requireString(body.title, "Title", 120),
-    provider: asString(body.provider, 120),
-    confirmationNumber: asString(body.confirmationNumber, 120),
-    startAt: asString(body.startAt, 120),
-    endAt: asString(body.endAt, 120),
-    address: asString(body.address, 260),
-    phone: asString(body.phone, 80),
-    notes: asString(body.notes, 1200)
+    title: encryptText(requireString(body.title, "Title", 120)),
+    provider: encryptText(asString(body.provider, 120)),
+    confirmationNumber: encryptText(asString(body.confirmationNumber, 120)),
+    startAt: encryptText(asString(body.startAt, 120)),
+    endAt: encryptText(asString(body.endAt, 120)),
+    address: encryptText(asString(body.address, 260)),
+    phone: encryptText(asString(body.phone, 80)),
+    notes: encryptText(asString(body.notes, 1200))
   };
 }
 
@@ -30,7 +33,7 @@ export async function POST(request: Request) {
       VALUES (${user.id}, ${item.category}, ${item.title}, ${item.provider}, ${item.confirmationNumber}, ${item.startAt}, ${item.endAt}, ${item.address}, ${item.phone}, ${item.notes})
       RETURNING *
     `;
-    return Response.json({ item: rows[0] });
+    return Response.json({ item: decryptRow(rows[0], encryptedFields) });
   } catch (error) {
     return jsonError(error instanceof Error ? error.message : "Could not add trip information", 400);
   }
@@ -58,7 +61,7 @@ export async function PATCH(request: Request) {
       RETURNING *
     `;
     if (!rows.length) throw new Error("Trip information not found");
-    return Response.json({ item: rows[0] });
+    return Response.json({ item: decryptRow(rows[0], encryptedFields) });
   } catch (error) {
     return jsonError(error instanceof Error ? error.message : "Could not update trip information", 400);
   }
