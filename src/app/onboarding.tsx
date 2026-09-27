@@ -116,6 +116,7 @@ export function LoginScreen({ onSignedIn, notice = "" }: { onSignedIn: () => Pro
   return (
     <main className="login-page">
       <section className="login-card">
+        <AbcMark />
         <h1>{heading}</h1>
         {notice && <p className="notice" role="status">{notice}</p>}
         {/* Honeypot: hidden from people and screen readers, so only bots fill it in. */}
@@ -182,7 +183,7 @@ export function LoginScreen({ onSignedIn, notice = "" }: { onSignedIn: () => Pro
         )}
         {step === "forgot" && <button type="button" className="link-button" onClick={() => goTo("signin")}>Back to sign in</button>}
         {step === "reset" && <button className="link-button" onClick={() => { setResetToken(""); history.replaceState(null, "", location.pathname); goTo("signin"); }}>Back to sign in</button>}
-        <footer className="login-brand"><AbcMark /><p className="eyebrow">ABC Fitness Diffusion Bootcamp Trip Planner</p></footer>
+        <footer className="login-brand"><p className="eyebrow">ABC Fitness Diffusion Bootcamp Trip Planner</p></footer>
       </section>
     </main>
   );
