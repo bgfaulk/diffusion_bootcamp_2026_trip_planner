@@ -10,7 +10,7 @@ export async function POST(request: Request) {
     // Per address and per account, so one attacker can't hammer a single email from many places or many emails from one.
     enforceLimit(`auth:ip:${clientIp(request)}`, 30, 15 * 60 * 1000);
     enforceLimit(`auth:email:${asString(body.email, 254).toLowerCase()}`, 10, 15 * 60 * 1000);
-    const user = await createOrLogin(body.email, body.password, intent);
+    const user = await createOrLogin(body.email, body.password, intent, body.token);
     return Response.json({ user });
   } catch (error) {
     return errorResponse(error, "Could not sign in");

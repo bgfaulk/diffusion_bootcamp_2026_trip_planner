@@ -19,6 +19,19 @@ function rememberedEmail() {
   return match ? decodeURIComponent(match[1]) : "";
 }
 
+// A reset link is /?reset=<token>; the token's first part is base64url JSON with the email in it. The server
+// verifies the signature; the browser only reads the email to prefill the form.
+function resetLinkFromUrl(): { token: string; email: string } | null {
+  try {
+    const token = new URLSearchParams(location.search).get("reset");
+    if (!token) return null;
+    const payload = JSON.parse(atob(token.split(".")[0].replace(/-/g, "+").replace(/_/g, "/")));
+    return typeof payload?.email === "string" ? { token, email: payload.email } : null;
+  } catch {
+    return null;
+  }
+}
+
 function rememberEmail(email: string) {
   const secure = location.protocol === "https:" ? "; Secure" : "";
   document.cookie = `${emailCookie}=${encodeURIComponent(email)}; Max-Age=${60 * 60 * 24 * rememberDays}; Path=/; SameSite=Lax${secure}`;
@@ -32,8 +45,13 @@ export function LoginScreen({ onSignedIn }: { onSignedIn: () => Promise<void> })
   const [website, setWebsite] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [resetToken, setResetToken] = useState("");
 
-  useEffect(() => { setEmail(current => current || rememberedEmail()); }, []);
+  useEffect(() => {
+    const link = resetLinkFromUrl();
+    if (link) { setEmail(link.email); setResetToken(link.token); setStep("reset"); return; }
+    setEmail(current => current || rememberedEmail());
+  }, []);
 
   const newPassword = step === "create" || step === "reset";
   const checks = passwordChecks(password);
@@ -69,8 +87,9 @@ export function LoginScreen({ onSignedIn }: { onSignedIn: () => Promise<void> })
     setBusy(true);
     primeChime(); // inside the submit gesture, so the loader's chime is allowed to play
     try {
-      await api("/api/auth", { method: "POST", body: JSON.stringify({ email, password, intent: step, website }) });
+      await api("/api/auth", { method: "POST", body: JSON.stringify({ email, password, intent: step, website, token: resetToken }) });
       rememberEmail(email);
+      if (step === "reset") history.replaceState(null, "", location.pathname);
       await onSignedIn();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not sign in");
@@ -78,7 +97,7 @@ export function LoginScreen({ onSignedIn }: { onSignedIn: () => Promise<void> })
     }
   }
 
-  const heading = { email: "", signin: "Welcome back", create: "Create your password", reset: "Reset password" }[step];
+  const heading = { email: "", signin: "Welcome back", create: "Create your password", reset: "Set a new password" }[step];
 
   return (
     <main className="login-page">
@@ -99,7 +118,7 @@ export function LoginScreen({ onSignedIn }: { onSignedIn: () => Promise<void> })
             {/* Two-step login: repeat the email as the username so password managers can pair the
                 saved password with it. Kept in the layout (not display:none) because some managers skip hidden fields. */}
             <input className="visually-hidden" id="username" name="username" type="email" autoComplete="username" value={email} readOnly tabIndex={-1} aria-hidden="true" />
-            <div className="email-chip"><span>{email}</span><button type="button" className="link-button" onClick={() => goTo("email")}>Change</button></div>
+            <div className="email-chip"><span>{email}</span>{step !== "reset" && <button type="button" className="link-button" onClick={() => goTo("email")}>Change</button>}</div>
             {step === "create" && <p className="muted">No account uses this email yet. Choose a password to create one.</p>}
             <PasswordField id={step === "signin" ? "current-password" : "new-password"} label={step === "reset" ? "New password" : "Password"} value={password} onChange={setPassword} autoFocus autoComplete={step === "signin" ? "current-password" : "new-password"} />
             {newPassword && (
@@ -118,8 +137,8 @@ export function LoginScreen({ onSignedIn }: { onSignedIn: () => Promise<void> })
             <button className="btn primary" disabled={!canSubmit}>{busy ? "One moment..." : { signin: "Sign in", create: "Create account", reset: "Update password" }[step]}</button>
           </form>
         )}
-        {step === "signin" && <button className="link-button" onClick={() => goTo("reset")}>Forgot password? Reset it</button>}
-        {step === "reset" && <button className="link-button" onClick={() => goTo("signin")}>Back to sign in</button>}
+        {step === "signin" && <p className="muted login-help">Forgot your password? Ask the trip organizer for a reset link.</p>}
+        {step === "reset" && <button className="link-button" onClick={() => { setResetToken(""); history.replaceState(null, "", location.pathname); goTo("signin"); }}>Back to sign in</button>}
       </section>
     </main>
   );

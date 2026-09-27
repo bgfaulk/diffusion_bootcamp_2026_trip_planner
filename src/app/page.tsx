@@ -50,7 +50,7 @@ type Settings = {
   planning_answers?: string;
 } | null;
 type AppState = {
-  user: null | { id: string; email: string };
+  user: null | { id: string; email: string; owner?: boolean };
   settings: Settings;
   items: Item[];
   photos: Record<string, { id: string; caption: string; imageUrl: string }>;
@@ -359,7 +359,7 @@ export default function Home() {
         {page === "explore" && <ExplorePage items={data.items.filter(item => item.page === "explore")} itinerary={data.itinerary} startDate={answers.startDate} openModal={() => setItineraryOpen(true)} reload={load} onItems={patchItems} />}
         {page === "tripInfo" && <TripInfoPage tripInfo={data.tripInfo} tripDocuments={data.tripDocuments} tripImport={data.tripImport} reload={load} />}
         {page === "gallery" && <Gallery photos={data.photos} openViewer={setViewer} reload={load} />}
-        {page === "settings" && <SettingsPage settings={data.settings} saveSettings={saveSettings} reload={load} />}
+        {page === "settings" && <SettingsPage settings={data.settings} owner={Boolean(data.user.owner)} saveSettings={saveSettings} reload={load} />}
       </main>
 
       {itineraryOpen && <ItineraryModal items={data.items.filter(item => item.page === "explore")} itinerary={data.itinerary} answers={answers} hasTripData={Boolean(data.itinerary?.saved_plan) || data.tripInfo.length > 0} onClose={() => setItineraryOpen(false)} reload={load} />}
@@ -1082,8 +1082,8 @@ function PhotoViewer({ spot, photos, onClose }: { spot: string; photos: AppState
   return <div className="modal-backdrop" onClick={onClose}><section className="viewer" onClick={event => event.stopPropagation()}><button className="modal-x" onClick={onClose}>×</button><h2>{meta?.[1] || "Photo"}</h2><p className="muted">{photo?.caption || meta?.[2]}</p><div className="viewer-media">{photo ? <img src={photo.imageUrl} alt={meta?.[1]} /> : meta?.[1]}</div></section></div>;
 }
 
-function SettingsPage({ settings, saveSettings, reload }: { settings: Settings; saveSettings: (form: HTMLFormElement) => Promise<void>; reload: () => Promise<void> }) {
-  const [tab, setTab] = useState<"profile" | "details" | "account">("profile");
+function SettingsPage({ settings, owner, saveSettings, reload }: { settings: Settings; owner: boolean; saveSettings: (form: HTMLFormElement) => Promise<void>; reload: () => Promise<void> }) {
+  const [tab, setTab] = useState<"profile" | "details" | "account" | "organizer">("profile");
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteText, setDeleteText] = useState("");
   async function deleteAccount() {
@@ -1092,7 +1092,44 @@ function SettingsPage({ settings, saveSettings, reload }: { settings: Settings; 
     await api("/api/account", { method: "DELETE" });
     window.location.reload();
   }
-  return <section className="page active"><header className="page-header"><p className="eyebrow">Profile</p><h1>Settings</h1></header><Tabs label="Settings sections" active={tab} onChange={setTab} tabs={[{ key: "profile", label: "Profile" }, { key: "details", label: "Trip details" }, { key: "account", label: "Account" }]} />{tab === "profile" && <TabPanel id="profile"><SettingsForm settings={settings} onSubmit={saveSettings} /></TabPanel>}{tab === "details" && <TabPanel id="details"><TripDetailsPanel settings={settings} reload={reload} /></TabPanel>}{tab === "account" && <TabPanel id="account"><div className="danger-panel"><h2>Delete account data</h2><p className="muted">Remove this account and all saved trip planner data from the database.</p><button className="btn danger" onClick={() => setDeleteOpen(true)}>Delete my account data</button></div></TabPanel>}{deleteOpen && <div className="modal-backdrop"><section className="modal confirm-modal"><button className="modal-x" onClick={() => setDeleteOpen(false)}>×</button><p className="eyebrow">Danger zone</p><h2>Delete account data?</h2><p>This removes the account, checklists, trip information, PDFs, photos, and itinerary from the database. Type DELETE to confirm.</p><label>Confirmation<input value={deleteText} onChange={event => setDeleteText(event.target.value)} placeholder="DELETE" /></label><div className="button-row"><button className="btn" onClick={() => setDeleteOpen(false)}>Cancel</button><button className="btn danger" disabled={deleteText !== "DELETE"} onClick={deleteAccount}>Delete permanently</button></div></section></div>}</section>;
+  return <section className="page active"><header className="page-header"><p className="eyebrow">Profile</p><h1>Settings</h1></header><Tabs label="Settings sections" active={tab} onChange={setTab} tabs={[{ key: "profile", label: "Profile" }, { key: "details", label: "Trip details" }, { key: "account", label: "Account" }, ...(owner ? [{ key: "organizer" as const, label: "Organizer" }] : [])]} />{tab === "profile" && <TabPanel id="profile"><SettingsForm settings={settings} onSubmit={saveSettings} /></TabPanel>}{tab === "details" && <TabPanel id="details"><TripDetailsPanel settings={settings} reload={reload} /></TabPanel>}{tab === "organizer" && owner && <TabPanel id="organizer"><ResetLinkPanel /></TabPanel>}{tab === "account" && <TabPanel id="account"><div className="danger-panel"><h2>Delete account data</h2><p className="muted">Remove this account and all saved trip planner data from the database.</p><button className="btn danger" onClick={() => setDeleteOpen(true)}>Delete my account data</button></div></TabPanel>}{deleteOpen && <div className="modal-backdrop"><section className="modal confirm-modal"><button className="modal-x" onClick={() => setDeleteOpen(false)}>×</button><p className="eyebrow">Danger zone</p><h2>Delete account data?</h2><p>This removes the account, checklists, trip information, PDFs, photos, and itinerary from the database. Type DELETE to confirm.</p><label>Confirmation<input value={deleteText} onChange={event => setDeleteText(event.target.value)} placeholder="DELETE" /></label><div className="button-row"><button className="btn" onClick={() => setDeleteOpen(false)}>Cancel</button><button className="btn danger" disabled={deleteText !== "DELETE"} onClick={deleteAccount}>Delete permanently</button></div></section></div>}</section>;
+}
+
+// Organizer only (OWNER_EMAIL): mint a password reset link for an attendee and send it to them by hand.
+function ResetLinkPanel() {
+  const [email, setEmail] = useState("");
+  const [link, setLink] = useState<null | { url: string; email: string; expiresAt: string }>(null);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [copied, setCopied] = useState(false);
+  async function create(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError(""); setBusy(true); setCopied(false);
+    try {
+      const result = await api("/api/reset-link", { method: "POST", body: JSON.stringify({ email }) });
+      setLink({ url: `${location.origin}/?reset=${result.token}`, email: email.trim().toLowerCase(), expiresAt: result.expiresAt });
+    } catch (err) { setError(err instanceof Error ? err.message : "Could not create a reset link"); } finally { setBusy(false); }
+  }
+  async function copy() {
+    if (!link) return;
+    try { await navigator.clipboard.writeText(link.url); setCopied(true); } catch { setError("Couldn't copy automatically. Select the link and copy it."); }
+  }
+  return (
+    <div className="settings-grid organizer-panel">
+      <div className="wide"><h2>Password reset links</h2><p className="muted">There is no email sending. Create a link for the attendee who is locked out and send it to them yourself (text, chat, or email). Each link lasts 24 hours and works once.</p></div>
+      <form className="item-form wide" onSubmit={create}>
+        <input type="email" value={email} onChange={event => setEmail(event.target.value)} placeholder="attendee@example.com" required maxLength={254} aria-label="Attendee email" />
+        <button className="btn primary" disabled={busy}>{busy ? "Creating..." : "Create reset link"}</button>
+      </form>
+      {error && <p className="error wide">{error}</p>}
+      {link && (
+        <div className="wide stack">
+          <label>Reset link for {link.email}<input value={link.url} readOnly onFocus={event => event.target.select()} /></label>
+          <div className="button-row"><button type="button" className="btn" onClick={copy}>{copied ? "Copied" : "Copy link"}</button><span className="muted">Expires {new Date(link.expiresAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}.</span></div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function SettingsForm({ settings, onSubmit }: { settings: Settings; onSubmit: (form: HTMLFormElement) => Promise<void> }) {

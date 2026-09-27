@@ -32,6 +32,9 @@ Set:
 - `GOOGLE_MAPS_API_KEY` from Google Cloud
 - `SESSION_SECRET` to a long random string (required in production; it also derives the encryption key, so never rotate it without re-encrypting)
 - `WEATHER_API_KEY` from weatherapi.com (optional; the weather panel hides without it)
+- `OWNER_EMAIL` to the organizer's sign-in email. That account gets an Organizer tab in Settings for creating
+  password reset links; there is no email sending, so the organizer sends the link to the attendee by hand.
+  Links last 24 hours and work once.
 
 Run:
 

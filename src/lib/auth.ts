@@ -3,6 +3,7 @@ import crypto from "node:crypto";
 import { promisify } from "node:util";
 import { sessionSecret as secret } from "./crypto";
 import { ensureSchema, getSql, seedStarterItems } from "./db";
+import { isOwner, resetTokenEmail, verifyResetToken } from "./reset";
 import { AppError, validateEmail, validatePassword } from "./validation";
 
 const cookieName = "trip_session";
@@ -34,14 +35,20 @@ export async function emailExists(emailValue: unknown) {
 
 export type AuthIntent = "signin" | "create" | "reset";
 
-export async function createOrLogin(emailValue: unknown, passwordValue: unknown, intent: AuthIntent) {
+const badLink = "This reset link is invalid or has expired. Ask the trip organizer for a new one.";
+
+// A reset never trusts the email in the request body: the account comes from the signed link, and the
+// link only verifies against the account's current password hash, so it works exactly once.
+export async function createOrLogin(emailValue: unknown, passwordValue: unknown, intent: AuthIntent, resetToken?: unknown) {
   await ensureSchema();
   const sql = getSql();
-  const email = validateEmail(emailValue);
+  const email = intent === "reset" ? resetTokenEmail(resetToken) ?? "" : validateEmail(emailValue);
+  if (intent === "reset" && !email) throw new AppError(badLink, 401);
   const password = validatePassword(passwordValue, intent !== "signin");
   const users = await sql`SELECT * FROM users WHERE email = ${email}`;
   let userId: string;
   if (intent === "create" && users.length) throw new AppError("An account already exists for this email. Sign in instead.");
+  if (intent === "reset" && !users.length) throw new AppError(badLink, 401);
   if (intent !== "create" && !users.length) throw new AppError("No account found for this email", 401);
   if (!users.length) {
     const { salt, hash } = await hashPassword(password);
@@ -51,8 +58,11 @@ export async function createOrLogin(emailValue: unknown, passwordValue: unknown,
   } else {
     const user = users[0] as { id: string; password_hash: string; password_salt: string };
     if (intent === "reset") {
+      if (!verifyResetToken(String(resetToken), email, user.password_hash)) throw new AppError(badLink, 401);
       const { salt, hash } = await hashPassword(password);
       await sql`UPDATE users SET password_hash = ${hash}, password_salt = ${salt}, updated_at = now() WHERE id = ${user.id}`;
+      // Whoever held the old password loses every session they had.
+      await sql`DELETE FROM sessions WHERE user_id = ${user.id}`;
     } else if (!(await verifyPassword(password, user.password_salt, user.password_hash))) {
       throw new AppError("Email or password did not match", 401);
     }
@@ -71,7 +81,7 @@ export async function createOrLogin(emailValue: unknown, passwordValue: unknown,
     path: "/",
     maxAge: 60 * 60 * 24 * 7
   });
-  return { userId, email };
+  return { userId, email, owner: isOwner(email) };
 }
 
 export async function getUser() {
@@ -87,7 +97,7 @@ export async function getUser() {
     JOIN users ON users.id = sessions.user_id
     WHERE sessions.token_hash = ${tokenHash} AND sessions.expires_at > now()
   `;
-  return rows[0] ? { id: String(rows[0].id), email: String(rows[0].email) } : null;
+  return rows[0] ? { id: String(rows[0].id), email: String(rows[0].email), owner: isOwner(String(rows[0].email)) } : null;
 }
 
 export async function requireUser() {
