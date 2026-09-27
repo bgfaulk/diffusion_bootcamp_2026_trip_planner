@@ -98,6 +98,11 @@ export async function createOrLogin(emailValue: unknown, passwordValue: unknown,
     path: "/",
     maxAge: 60 * 60 * 24 * 7
   });
+  // The login page reads these to skip the first-visit Welcome step and prefill the email. They are set here,
+  // not only in the browser, because Safari caps JavaScript-set cookies at 7 days; server-set ones keep the year.
+  const remembered = { httpOnly: false, sameSite: "lax" as const, secure: process.env.NODE_ENV === "production", path: "/", maxAge: 60 * 60 * 24 * 365 };
+  jar.set("trip_known", "1", remembered);
+  jar.set("trip_email", email, remembered);
   return { userId, email, owner: isOwner(email) };
 }
 
