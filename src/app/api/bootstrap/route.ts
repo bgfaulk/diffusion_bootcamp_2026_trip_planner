@@ -22,7 +22,7 @@ export async function GET() {
   if (!user) return emptyBootstrap();
   const sql = getSql();
   const [settings, items, photos, itinerary, tripInfo, tripDocuments, tripImport] = await Promise.all([
-    sql`SELECT * FROM settings WHERE user_id = ${user.id}`,
+    sql`SELECT user_id, profile_name, trip_name, home_address, home_place_id, training_location, training_place_id, theme, planning_mode, planning_answers, updated_at FROM settings WHERE user_id = ${user.id}`,
     sql`SELECT * FROM list_items WHERE user_id = ${user.id} ORDER BY checked ASC, position ASC, created_at ASC`,
     sql`
       SELECT p.id, p.spot, p.caption
@@ -38,7 +38,7 @@ export async function GET() {
   ]);
   return Response.json({
     user,
-    settings: settings[0] ? { ...decryptRow(settings[0], ["profile_name", "trip_name", "home_address", "home_place_id", "training_location", "training_place_id", "planning_answers"]), home_lat: null, home_lng: null, training_lat: null, training_lng: null } : null,
+    settings: settings[0] ? decryptRow(settings[0], ["profile_name", "trip_name", "home_address", "home_place_id", "training_location", "training_place_id", "planning_answers"]) : null,
     items: items.map((item: any) => ({ ...item, title: decryptText(item.title) })),
     photos: Object.fromEntries(photos.map((photo: any) => [photo.spot, {
       id: photo.id,

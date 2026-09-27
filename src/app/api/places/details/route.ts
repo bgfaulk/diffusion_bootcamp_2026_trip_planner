@@ -23,7 +23,7 @@ export async function POST(request: Request) {
     const response = await fetch(`https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}`, {
       headers: {
         "X-Goog-Api-Key": key,
-        "X-Goog-FieldMask": "id,formattedAddress,location,displayName",
+        "X-Goog-FieldMask": "id,formattedAddress,displayName",
         "Referer": googleReferer(request)
       }
     });
@@ -34,9 +34,7 @@ export async function POST(request: Request) {
     const data = await response.json();
     return Response.json({
       placeId: data.id,
-      address: data.formattedAddress || data.displayName?.text || "",
-      lat: data.location?.latitude ?? null,
-      lng: data.location?.longitude ?? null
+      address: data.formattedAddress || data.displayName?.text || ""
     });
   } catch (error) {
     return errorResponse(error, "Could not load address");

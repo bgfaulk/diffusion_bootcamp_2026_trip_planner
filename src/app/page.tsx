@@ -12,6 +12,7 @@ import { BookingForm, bookingCategories, categoryTitle } from "./trip-bookings";
 import { NirvanaBackdrop } from "./nirvana-backdrop";
 import { PageIcon } from "./page-icons";
 import { useWeather, WeatherPanel } from "./weather";
+import { photoSpots } from "@/lib/photo-spots";
 import { applyFx, applyTheme, storedFx, storedTheme, THEMES, themeLabels, type Theme } from "@/lib/theme";
 import { buildTripModel, countdown, dayKey, daysBetween, fmtDay, fmtMinutes, fmtShort, keyToDate, parseItinerary, parseWhen, type DayEvent, type ParsedPlan, type TimedBooking, type TripModel } from "@/lib/trip-time";
 
@@ -42,12 +43,8 @@ type Settings = {
   trip_name?: string;
   home_address?: string;
   home_place_id?: string;
-  home_lat?: number;
-  home_lng?: number;
   training_location?: string;
   training_place_id?: string;
-  training_lat?: number;
-  training_lng?: number;
   theme?: Theme;
   planning_mode?: "ai" | "manual" | null;
   planning_answers?: string;
@@ -88,19 +85,10 @@ const pageLabels: Record<string, string> = {
   explore: "Explore San Francisco",
   tripInfo: "Trip Information",
   gallery: "Photo Route",
-  return: "Return Day",
-  settings: "Settings"
+  return: "Return Day"
 };
 
 const listPages = ["prechecks", "packing", "departure", "return"];
-const photoSpots = [
-  ["golden-gate-overlook", "Golden Gate Overlook", "Langdon Ct, San Francisco"],
-  ["ferry-building", "Ferry Building", "1 Ferry Building, San Francisco"],
-  ["north-beach", "North Beach", "Washington Square / Columbus Ave"],
-  ["mission-district", "Mission District", "Dolores Park anchor"],
-  ["half-moon-bay", "Half Moon Bay", "Main Street / Coastside"],
-  ["wildcard", "Favorite surprise", "Something worth remembering"]
-];
 
 export default function Home() {
   const [data, setData] = useState<AppState>(emptyAppState);
@@ -1116,27 +1104,26 @@ function SettingsForm({ settings, onSubmit }: { settings: Settings; onSubmit: (f
     <form className="settings-grid" onSubmit={submit}>
       <label>Display name<input name="profileName" placeholder="Shown above your email in the menu" defaultValue={settings?.profile_name || ""} maxLength={80} /></label>
       <label>Trip name<input name="tripName" defaultValue={settings?.trip_name || ""} maxLength={120} /></label>
-      <AddressField label={<span>Home address <span className="help" title="Optional. It helps personalize the route map and itinerary context.">?</span></span>} name="home" defaultAddress={settings?.home_address || ""} defaultPlaceId={settings?.home_place_id || ""} defaultLat={settings?.home_lat} defaultLng={settings?.home_lng} />
-      <AddressField label="Training location" name="training" defaultAddress={settings?.training_location || ""} defaultPlaceId={settings?.training_place_id || ""} defaultLat={settings?.training_lat} defaultLng={settings?.training_lng} />
+      <AddressField label={<span>Home address <span className="help" title="Optional. It helps personalize the route map and itinerary context.">?</span></span>} name="home" defaultAddress={settings?.home_address || ""} defaultPlaceId={settings?.home_place_id || ""} />
+      <AddressField label="Training location" name="training" defaultAddress={settings?.training_location || ""} defaultPlaceId={settings?.training_place_id || ""} />
       <input type="hidden" name="theme" value={settings?.theme || "light"} />
       <button className="btn primary">Save settings</button>
     </form>
   );
 }
 
-function AddressField({ label, name, defaultAddress, defaultPlaceId, defaultLat, defaultLng }: { label: React.ReactNode; name: "home" | "training"; defaultAddress: string; defaultPlaceId: string; defaultLat?: number; defaultLng?: number }) {
+// Only the address text and Google's place id are kept; coordinates are deliberately never stored.
+function AddressField({ label, name, defaultAddress, defaultPlaceId }: { label: React.ReactNode; name: "home" | "training"; defaultAddress: string; defaultPlaceId: string }) {
   const [query, setQuery] = useState(defaultAddress);
-  const [place, setPlace] = useState({ placeId: defaultPlaceId, lat: defaultLat ?? "", lng: defaultLng ?? "" });
-  async function choose(placeId: string) {
-    const details = await api("/api/places/details", { method: "POST", body: JSON.stringify({ placeId }) });
+  const [placeId, setPlaceId] = useState(defaultPlaceId);
+  async function choose(picked: string) {
+    const details = await api("/api/places/details", { method: "POST", body: JSON.stringify({ placeId: picked }) });
     setQuery(details.address);
-    setPlace({ placeId: details.placeId, lat: details.lat ?? "", lng: details.lng ?? "" });
+    setPlaceId(details.placeId);
   }
   return (
     <label className="address-field">{label}<PlaceInput name={name === "home" ? "homeAddress" : "trainingLocation"} value={query} onChange={setQuery} onPick={suggestion => choose(suggestion.placeId)} />
-      <input type="hidden" name={`${name}PlaceId`} value={place.placeId} />
-      <input type="hidden" name={`${name}Lat`} value={place.lat} />
-      <input type="hidden" name={`${name}Lng`} value={place.lng} />
+      <input type="hidden" name={`${name}PlaceId`} value={placeId} />
     </label>
   );
 }
@@ -1177,11 +1164,7 @@ function settingPayload(settings: Settings) {
     tripName: settings?.trip_name || "",
     homeAddress: settings?.home_address || "",
     homePlaceId: settings?.home_place_id || "",
-    homeLat: settings?.home_lat ?? null,
-    homeLng: settings?.home_lng ?? null,
     trainingLocation: settings?.training_location || "",
-    trainingPlaceId: settings?.training_place_id || "",
-    trainingLat: settings?.training_lat ?? null,
-    trainingLng: settings?.training_lng ?? null
+    trainingPlaceId: settings?.training_place_id || ""
   };
 }

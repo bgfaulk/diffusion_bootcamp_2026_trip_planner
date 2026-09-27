@@ -2,14 +2,13 @@
 
 A Vercel-ready trip planner for short-lived training trips and San Francisco itinerary planning.
 
-- Email/password login with first-login account creation
-- Password update from the login screen for short-lived use
-- Neon Postgres-backed settings, lists, photos, and generated itinerary content
-- Google Places-powered address lookup for wizard/settings fields
-- Light/dark theme toggle
-- Profile dropdown, settings, setup wizard, and guarded API routes
-- Custom checklist items, delete actions, and checked items moved out of the way
-- San Francisco itinerary planner handoff modal for ChatGPT
+- Two-step email/password login with first-login account creation
+- Setup wizard: answer a few questions, hand ChatGPT one prompt, upload the trip-plan.json it returns
+- Overview with the day's bookings, itinerary stops, and the bootcamp agenda
+- Checklists, bookings, PDFs, photo route, and a structured itinerary view
+- Neon Postgres storage with per-field AES-256-GCM encryption keyed from SESSION_SECRET
+- Google Places address lookup and a weather proxy, both server-side so keys stay private
+- Light, Dark, and Digital Nirvana themes
 
 This repository intentionally contains no personal booking information, traveler names, PDFs, or private trip data. Runtime data belongs in Neon and Vercel environment variables, not git.
 
@@ -31,7 +30,8 @@ Set:
 
 - `DIFFUSION_DATABASE_URL`, `DIFFUSION_DATABASE_DATABASE_URL`, or `DATABASE_URL` from Neon
 - `GOOGLE_MAPS_API_KEY` from Google Cloud
-- `SESSION_SECRET` to a long random string
+- `SESSION_SECRET` to a long random string (required in production; it also derives the encryption key, so never rotate it without re-encrypting)
+- `WEATHER_API_KEY` from weatherapi.com (optional; the weather panel hides without it)
 
 Run:
 

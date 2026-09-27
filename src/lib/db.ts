@@ -151,7 +151,8 @@ export async function seedStarterItems(userId: string) {
   const sql = getSql();
   const existing = await sql`SELECT COUNT(*)::int AS count FROM list_items WHERE user_id = ${userId}`;
   if (Number(existing[0]?.count || 0) > 0) return;
-  const starter: Record<PageKey, string[]> = {
+  // No "gallery" entries: the Photo Route page shows its fixed stops, never list items.
+  const starter: Partial<Record<PageKey, string[]>> = {
     prechecks: [
       "Confirm traveler names match government IDs",
       "Add TSA PreCheck or Known Traveler Numbers if available",
@@ -179,7 +180,6 @@ export async function seedStarterItems(userId: string) {
       "Half Moon Bay coast drive",
       "Filoli Historic House and Garden"
     ],
-    gallery: ["Golden Gate Overlook", "Ferry Building", "North Beach", "Mission District", "Favorite surprise"],
     return: [
       "Check out on time",
       "Room sweep: chargers, closet, bathroom, safe",

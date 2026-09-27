@@ -1,6 +1,7 @@
 import { requireUser } from "@/lib/auth";
 import { encryptText } from "@/lib/crypto";
 import { getSql } from "@/lib/db";
+import { photoSpotIds } from "@/lib/photo-spots";
 import { asString, errorResponse, fail } from "@/lib/validation";
 
 export async function POST(request: Request) {
@@ -8,6 +9,7 @@ export async function POST(request: Request) {
     const user = await requireUser();
     const form = await request.formData();
     const spot = asString(form.get("spot"), 80);
+    if (!photoSpotIds.has(spot)) fail("Choose a stop on the photo route");
     const caption = encryptText(asString(form.get("caption"), 240));
     const file = form.get("photo");
     if (!(file instanceof File) || !file.type.startsWith("image/")) fail("Choose an image");

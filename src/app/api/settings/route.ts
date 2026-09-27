@@ -15,30 +15,28 @@ export async function POST(request: Request) {
     const homePlaceId = encryptText(asString(body.homePlaceId, 160));
     const trainingLocation = encryptText(asString(body.trainingLocation, 240));
     const trainingPlaceId = encryptText(asString(body.trainingPlaceId, 160));
-    const homeLat = null;
-    const homeLng = null;
-    const trainingLat = null;
-    const trainingLng = null;
+    // Coordinates are never stored (privacy). The legacy *_lat/*_lng columns are nulled on every save so
+    // anything written before that decision is scrubbed the next time the row is touched.
     await getSql()`
       INSERT INTO settings (
-        user_id, profile_name, trip_name, home_address, home_place_id, home_lat, home_lng,
-        training_location, training_place_id, training_lat, training_lng, theme, updated_at
+        user_id, profile_name, trip_name, home_address, home_place_id,
+        training_location, training_place_id, theme, updated_at
       )
       VALUES (
-        ${user.id}, ${profileName}, ${tripName}, ${homeAddress}, ${homePlaceId}, ${homeLat}, ${homeLng},
-        ${trainingLocation}, ${trainingPlaceId}, ${trainingLat}, ${trainingLng}, ${theme}, now()
+        ${user.id}, ${profileName}, ${tripName}, ${homeAddress}, ${homePlaceId},
+        ${trainingLocation}, ${trainingPlaceId}, ${theme}, now()
       )
       ON CONFLICT(user_id) DO UPDATE SET
         profile_name = excluded.profile_name,
         trip_name = excluded.trip_name,
         home_address = excluded.home_address,
         home_place_id = excluded.home_place_id,
-        home_lat = excluded.home_lat,
-        home_lng = excluded.home_lng,
+        home_lat = NULL,
+        home_lng = NULL,
         training_location = excluded.training_location,
         training_place_id = excluded.training_place_id,
-        training_lat = excluded.training_lat,
-        training_lng = excluded.training_lng,
+        training_lat = NULL,
+        training_lng = NULL,
         theme = excluded.theme,
         updated_at = now()
     `;
