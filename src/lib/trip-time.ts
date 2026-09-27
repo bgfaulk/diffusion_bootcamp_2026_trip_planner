@@ -215,7 +215,7 @@ export type Booking = {
   to_airport?: string;
 };
 export type TimedBooking = Booking & { start: When | null; end: When | null };
-export type DayEvent = { minutes: number | null; time: string; title: string; detail: string; kind: "booking" | "stop" | "training" };
+export type DayEvent = { minutes: number | null; time: string; title: string; detail: string; kind: "booking" | "stop" | "training"; bookingId?: string };
 export type Phase = "before" | "during" | "after" | "unknown";
 
 export type TripModel = {
@@ -244,13 +244,99 @@ export type TripModel = {
 const startLabels: Record<Booking["category"], string> = { flight: "Depart", hotel: "Check in", rental: "Pick up rental car", training: "Training begins", insurance: "Coverage starts", other: "Starts" };
 const endLabels: Record<Booking["category"], string> = { flight: "Arrive", hotel: "Check out", rental: "Return rental car", training: "Training wraps up", insurance: "Coverage ends", other: "Ends" };
 
+/** Every day a Training booking spans (the bootcamp agenda applies to each). */
+export function trainingDays(training: TimedBooking | undefined): number[] {
+  const keys: number[] = [];
+  if (!training?.start) return keys;
+  const first = dayKey(training.start), last = training.end ? Math.max(dayKey(training.end), first) : first;
+  for (let key = first, guard = 0; key <= last && guard < 14; key = addDays(key, 1), guard++) keys.push(key);
+  return keys;
+}
+
+/** What the bookings put on one day: the bootcamp agenda on training days, then each booking's start and end that
+ *  fall on that day. Built from Trip Information every time, so a booking that is added, changed or removed shows
+ *  up, moves or disappears on its own. Shared by the Overview's day view and the Explore itinerary. */
+export function bookingEvents(bookings: TimedBooking[], key: number, trainingKeys: number[], training?: TimedBooking): DayEvent[] {
+  const events: DayEvent[] = [];
+  if (trainingKeys.includes(key)) {
+    trainingAgenda.slots.forEach((slot, index) => events.push({ minutes: slot.minutes, time: fmtMinutes(slot.minutes), title: training ? `${slot.title} · ${training.title}` : slot.title, detail: slot.detail || (index === 1 ? training?.address || "" : ""), kind: "training", bookingId: training?.id }));
+  }
+  for (const b of bookings) {
+    if (b.category === "training" && trainingKeys.length) continue; // the agenda covers it
+    const who = b.provider && b.provider !== b.title ? `${b.title} · ${b.provider}` : b.title;
+    if (b.start && dayKey(b.start) === key) events.push({ minutes: b.start.minutes, time: fmtMinutes(b.start.minutes), title: `${startLabels[b.category]} · ${who}`, detail: [b.address, b.confirmation_number && `Conf. ${b.confirmation_number}`].filter(Boolean).join(" · "), kind: "booking", bookingId: b.id });
+    if (b.end && dayKey(b.end) === key && b.end_at !== b.start_at) events.push({ minutes: b.end.minutes, time: fmtMinutes(b.end.minutes), title: `${endLabels[b.category]} · ${who}`, detail: b.category === "flight" ? (b.end_at || "") : (b.address || ""), kind: "booking", bookingId: b.id });
+  }
+  return events;
+}
+
+// Words that mark a stop as really being a booking moment, by booking kind.
+const bookingWords: Record<Booking["category"], RegExp> = {
+  flight: /\b(flight|depart|departure|departs|arriv(e|es|al|ing)|land(s|ing|ed)?|board(s|ing)?|airport|take ?off|fly|flying)\b/i,
+  hotel: /\b(check[- ]?in|check[- ]?out|hotel|lodging)\b/i,
+  rental: /\b(rental|rent(al)? car|hire car|(pick ?up|return|drop ?off) (the |your |a )?(rental|car|vehicle)|car (return|pick ?up|drop ?off))\b/i,
+  training: /\b(bootcamp|boot camp|training|workshop|class|session|diffusion)\b/i,
+  insurance: /\binsurance\b/i,
+  other: /(?!)/
+};
+const genericProviders = /^(united|american|delta|airline|airlines|hotel|hertz|avis|budget|enterprise|national|alamo|the|and|inc|llc)$/i;
+const near = (a: number | null, b: number | null, minutes = 60) => a !== null && b !== null && Math.abs(a - b) <= minutes;
+
+/** Whether a plan stop is only restating a booking (the flight, hotel check-in, rental pickup, or the bootcamp itself).
+ *  It takes two signals, so a stop that merely mentions an airport or happens near a flight is left alone:
+ *  - the stop is on the booking's day and names its confirmation number; or
+ *  - it uses a booking word (depart, arrive, check-in, pickup...) AND names the provider, one of the flight's airports,
+ *    or sits within an hour of the booking's start or end; or
+ *  - on a bootcamp day, it is timed inside the agenda's hours and uses a training word, or is untimed and its place
+ *    is simply the bootcamp ("Bootcamp, day 2").
+ *  Untimed stops otherwise never match. This only ever runs on text that came from ChatGPT (at import, or one pass over
+ *  older plans), never on stops the person wrote in the app. */
+export function stopMatchesBooking(stop: Stop, key: number | null, b: TimedBooking, trainingKeys: number[]): boolean {
+  if (key === null) return false;
+  const text = `${stop.place} ${stop.why} ${stop.address}`.toLowerCase();
+  if (b.category === "training") {
+    if (!trainingKeys.includes(key)) return false;
+    if (stop.minutes === null) return /^(the )?(bootcamp|boot camp|training|workshop|diffusion)\b/i.test(stop.place.trim());
+    const first = trainingAgenda.slots[0].minutes - 60, last = trainingAgenda.slots[trainingAgenda.slots.length - 1].minutes + 60;
+    return bookingWords.training.test(text) && stop.minutes >= first && stop.minutes <= last;
+  }
+  const startsToday = Boolean(b.start && dayKey(b.start) === key), endsToday = Boolean(b.end && dayKey(b.end) === key);
+  if (!startsToday && !endsToday) return false;
+  const conf = (b.confirmation_number || "").trim().toLowerCase();
+  if (conf.length >= 4 && text.includes(conf)) return true;
+  if (!bookingWords[b.category].test(text)) return false;
+  const provider = (b.provider || "").trim().toLowerCase();
+  if (provider.length >= 4 && !genericProviders.test(provider) && text.includes(provider)) return true;
+  if (b.category === "flight") {
+    const codes = [b.from_airport, b.to_airport, ...airportCodes(b.start_at || ""), ...airportCodes(b.end_at || "")].filter((c): c is string => Boolean(c)).map(c => c.toUpperCase());
+    if (codes.some(code => new RegExp(`\\b${code}\\b`).test(`${stop.place} ${stop.why} ${stop.address}`.toUpperCase()))) return true;
+  }
+  return (startsToday && near(stop.minutes, b.start!.minutes)) || (endsToday && near(stop.minutes, b.end!.minutes));
+}
+
+/** The plan without stops that only restate a booking. `removed` counts what was dropped. */
+export function stripBookingStops(plan: ParsedPlan, bookings: TimedBooking[], trainingKeys: number[]): { plan: ParsedPlan; removed: number } {
+  let removed = 0;
+  const days = plan.days.map(day => {
+    const stops = day.stops.filter(stop => !bookings.some(b => stopMatchesBooking(stop, day.key, b, trainingKeys)));
+    removed += day.stops.length - stops.length;
+    return stops.length === day.stops.length ? day : { ...day, stops };
+  });
+  return { plan: removed ? { ...plan, days } : plan, removed };
+}
+
+/** Timed bookings, soonest first. The year hint fills in dates written without one. */
+export function timeBookings(input: Booking[], yearHint: number): TimedBooking[] {
+  return input
+    .map(b => ({ ...b, start: parseWhen(b.start_at, yearHint), end: parseWhen(b.end_at, yearHint) }))
+    .sort((a, b) => (a.start?.at.getTime() ?? Infinity) - (b.start?.at.getTime() ?? Infinity));
+}
+
 export function buildTripModel(input: { startDate?: string; endDate?: string; bookings: Booking[]; itinerary?: string | null; now: Date }): TripModel {
   const { now } = input;
   const todayKey = keyOf(now);
   const yearHint = parseWhen(input.startDate)?.y ?? now.getFullYear();
-  const bookings: TimedBooking[] = input.bookings
-    .map(b => ({ ...b, start: parseWhen(b.start_at, yearHint), end: parseWhen(b.end_at, yearHint) }))
-    .sort((a, b) => (a.start?.at.getTime() ?? Infinity) - (b.start?.at.getTime() ?? Infinity));
+  const bookings = timeBookings(input.bookings, yearHint);
   const flights = bookings.filter(b => b.category === "flight");
   const outbound = flights.find(f => /outbound|depart/i.test(f.title)) || flights[0];
   const homebound = flights.find(f => f !== outbound && /return|home|back/i.test(f.title)) || flights.find(f => f !== outbound);
@@ -262,6 +348,8 @@ export function buildTripModel(input: { startDate?: string; endDate?: string; bo
   const endWhen = parseWhen(input.endDate) || homebound?.start || hotel?.end || training?.end || training?.start || null;
   const startKey = startWhen ? dayKey(startWhen) : null;
   const endKey = endWhen ? dayKey(endWhen) : null;
+  // Training days: every day the Training booking spans gets the bootcamp agenda.
+  const trainingKeys = trainingDays(training);
   const plan = parseItinerary(input.itinerary, startKey);
 
   const phase: Phase = !startKey ? "unknown" : todayKey < startKey ? "before" : endKey && todayKey > endKey ? "after" : "during";
@@ -270,27 +358,12 @@ export function buildTripModel(input: { startDate?: string; endDate?: string; bo
   const dayNumber = focusKey && startKey ? daysBetween(startKey, focusKey) + 1 : null;
   const focusDay = focusKey !== null ? plan.days.find(day => day.key === focusKey) || (phase === "before" ? plan.days[0] : null) || null : null;
 
-  // Training days: every day the Training booking spans gets the bootcamp agenda.
-  const trainingKeys: number[] = [];
-  if (training?.start) {
-    const first = dayKey(training.start), last = training.end ? Math.max(dayKey(training.end), first) : first;
-    for (let key = first, guard = 0; key <= last && guard < 14; key = addDays(key, 1), guard++) trainingKeys.push(key);
-  }
   const agendaTitle = (slot: { title: string }) => training ? `${slot.title} · ${training.title}` : slot.title;
-  const agendaDetail = (slot: { detail: string }, index: number) => slot.detail || (index === 1 ? training?.address || "" : "");
 
   // Everything happening on the focus day: booking starts/ends plus itinerary stops, in time order.
   const events: DayEvent[] = [];
   if (focusKey !== null) {
-    if (trainingKeys.includes(focusKey)) {
-      trainingAgenda.slots.forEach((slot, index) => events.push({ minutes: slot.minutes, time: fmtMinutes(slot.minutes), title: agendaTitle(slot), detail: agendaDetail(slot, index), kind: "training" }));
-    }
-    for (const b of bookings) {
-      if (b.category === "training" && trainingKeys.length) continue; // the agenda covers it
-      const who = b.provider && b.provider !== b.title ? `${b.title} · ${b.provider}` : b.title;
-      if (b.start && dayKey(b.start) === focusKey) events.push({ minutes: b.start.minutes, time: fmtMinutes(b.start.minutes), title: `${startLabels[b.category]} · ${who}`, detail: [b.address, b.confirmation_number && `Conf. ${b.confirmation_number}`].filter(Boolean).join(" · "), kind: "booking" });
-      if (b.end && dayKey(b.end) === focusKey && b.end_at !== b.start_at) events.push({ minutes: b.end.minutes, time: fmtMinutes(b.end.minutes), title: `${endLabels[b.category]} · ${who}`, detail: b.category === "flight" ? (b.end_at || "") : (b.address || ""), kind: "booking" });
-    }
+    events.push(...bookingEvents(bookings, focusKey, trainingKeys, training));
     for (const stop of focusDay?.stops || []) events.push({ minutes: stop.minutes, time: stop.time, title: stop.place, detail: [stop.why, stop.address].filter(Boolean).join(" · "), kind: "stop" });
     events.sort((a, b) => (a.minutes ?? 1e9) - (b.minutes ?? 1e9));
   }

@@ -24,7 +24,7 @@ import { photoSpots, stockPhotos } from "@/lib/photo-spots";
 import { bookingEvent, buildIcs, downloadIcs, slug, trainingEvents, tripWindowEvent, type CalendarEvent } from "@/lib/calendar";
 import { formatBytes, MAX_PHOTO_EDGE, preparePhoto, type PreparedPhoto } from "@/lib/image";
 import { applyFx, applyTheme, storedFx, storedTheme, THEMES, themeLabels, type Theme } from "@/lib/theme";
-import { buildTripModel, countdown, dayKey, daysBetween, fmtDay, fmtMinutes, fmtShort, keyToDate, MAX_ITINERARY_CHARS, parseItinerary, parseWhen, serializeItinerary, timeMinutes, withStop, type DayEvent, type ParsedPlan, type Stop, type TimedBooking, type TripModel } from "@/lib/trip-time";
+import { bookingEvents, buildTripModel, countdown, dayKey, daysBetween, fmtDay, fmtMinutes, fmtShort, keyToDate, MAX_ITINERARY_CHARS, parseItinerary, parseWhen, serializeItinerary, stripBookingStops, timeMinutes, withStop, type DayEvent, type ParsedPlan, type Stop, type TimedBooking, type TripModel } from "@/lib/trip-time";
 
 type Item = { id: string; page: string; title: string; checked: boolean; position: number; source?: string };
 type TripInfo = {
@@ -69,7 +69,7 @@ type AppState = {
   items: Item[];
   photos: Record<string, { id: string; caption: string; imageUrl: string }>;
   stockHidden: string[]; // photo-route stops whose stock photo this person deleted
-  itinerary: null | { instructions?: string; response?: string; saved_plan?: string };
+  itinerary: null | { instructions?: string; response?: string; saved_plan?: string; cleaned_at?: string | null };
   tripInfo: TripInfo[];
   tripDocuments: TripDocument[];
   notifications: Notice[];
@@ -209,6 +209,35 @@ export default function Home() {
   // Shown on the login page after an inactivity sign-out.
   const [signOutNotice, setSignOutNotice] = useState("");
   const idle = useIdleTimeout(Boolean(data.user), () => { setSignOutNotice("You were signed out after an hour without activity."); void signOut(); });
+
+  // One pass over a plan saved before bookings were placed on the itinerary live: stops that only restate a booking
+  // are dropped, with Undo, and the plan is stamped so this never runs on it again (later stops are the person's own).
+  const tidied = useRef("");
+  useEffect(() => {
+    const plan = data.itinerary;
+    // Nothing to match against until bookings exist: leave the stamp off so the pass runs once they do.
+    if (!data.user || !plan?.saved_plan || plan.cleaned_at || !data.tripInfo.length || tidied.current === data.user.id) return;
+    tidied.current = data.user.id;
+    const original = plan.saved_plan;
+    const answers = parseAnswers(data.settings?.planning_answers);
+    const trip = buildTripModel({ startDate: answers.startDate, endDate: answers.endDate, bookings: data.tripInfo, itinerary: original, now: new Date() });
+    const stripped = stripBookingStops(trip.plan, trip.bookings, trip.trainingKeys);
+    const save = (savedPlan: string) => api("/api/itinerary", { method: "POST", body: JSON.stringify({ instructions: plan.instructions || "", response: plan.response || "", savedPlan, cleaned: true }) });
+    (async () => {
+      try {
+        await save(stripped.removed ? serializeItinerary(stripped.plan) : original);
+        if (stripped.removed) {
+          notify.info(`${stripped.removed} itinerary ${stripped.removed === 1 ? "stop" : "stops"} that repeated a booking ${stripped.removed === 1 ? "was" : "were"} removed. Those times now come from Trip Information.`, {
+            label: "Undo",
+            run: () => save(original).then(load).then(() => notify.success("Stops put back")).catch(error => notify.error(error, "Could not put the stops back"))
+          });
+        }
+        await load();
+      } catch (error) {
+        notify.error(error, "Could not tidy the itinerary");
+      }
+    })();
+  }, [data.user, data.itinerary, data.tripInfo, data.settings?.planning_answers]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function apply(next: Partial<AppState>) {
     setData(normalizeAppState(next));
@@ -554,14 +583,14 @@ export default function Home() {
         )}
         {page === "overview" && <Overview tripName={tripName} settings={data.settings} answers={answers} itinerary={data.itinerary} tripInfo={data.tripInfo} goTo={setPage} owner={Boolean(data.user.owner)} />}
         {listPages.includes(page) && <ListPage pageKey={page} items={data.items} onItems={patchItems} />}
-        {page === "explore" && <ExplorePage items={data.items.filter(item => item.page === "explore")} itinerary={data.itinerary} startDate={answers.startDate} openModal={() => setItineraryOpen(true)} reload={load} onItems={patchItems} />}
+        {page === "explore" && <ExplorePage items={data.items.filter(item => item.page === "explore")} itinerary={data.itinerary} tripInfo={data.tripInfo} answers={answers} openModal={() => setItineraryOpen(true)} reload={load} onItems={patchItems} goTo={setPage} />}
         {page === "tripInfo" && <TripInfoPage tripInfo={data.tripInfo} tripDocuments={data.tripDocuments} reload={load} answers={answers} settings={data.settings} email={data.user.email} />}
         {page === "gallery" && <Gallery photos={data.photos} stockHidden={data.stockHidden} openViewer={setViewer} reload={load} />}
         {page === "settings" && <SettingsPage settings={data.settings} saveSettings={saveSettings} reload={load} tab={settingsTab} onTab={setSettingsTab} guideReadAt={data.stars?.flags.guideReadAt ?? null} onGuideRead={markGuideRead} />}
         {page === "organizer" && data.user.owner && <OrganizerPage userId={data.user.id} />}
       </main>
 
-      {itineraryOpen && <ItineraryModal items={data.items.filter(item => item.page === "explore")} itinerary={data.itinerary} answers={answers} hasTripData={Boolean(data.itinerary?.saved_plan) || data.tripInfo.length > 0} onClose={() => setItineraryOpen(false)} reload={load} />}
+      {itineraryOpen && <ItineraryModal items={data.items.filter(item => item.page === "explore")} itinerary={data.itinerary} answers={answers} tripInfo={data.tripInfo} hasTripData={Boolean(data.itinerary?.saved_plan) || data.tripInfo.length > 0} onClose={() => setItineraryOpen(false)} reload={load} />}
       {viewer && <PhotoViewer spot={viewer} photos={data.photos} stockHidden={data.stockHidden} onClose={() => setViewer(null)} onDeleted={load} />}
       {themeOpen && <ThemeModal theme={theme} fx={fx} onTheme={chooseTheme} onFx={toggleFx} onClose={() => setThemeOpen(false)} />}
       {notificationsOpen && <NotificationsModal items={data.notifications} done={tourDone} onChange={list => setData(current => ({ ...current, notifications: list }))} onClose={() => setNotificationsOpen(false)} onAction={action => {
@@ -700,7 +729,6 @@ function TodayPanel({ trip, now, goTo }: { trip: TripModel; now: Date; goTo: (pa
   const past = live ? trip.events.filter(event => event.minutes !== null && event.minutes < nowMinutes) : [];
   const upcoming = live ? trip.events.filter(event => !past.includes(event)) : trip.events;
   const nextIndex = live ? upcoming.findIndex(event => event.minutes !== null) : -1;
-  const tag = (kind: DayEvent["kind"]) => kind === "booking" ? "Booking" : kind === "training" ? "Training" : "Itinerary";
   return (
     <section className="day-panel">
       <div className="panel-head"><div><h2>{heading}</h2><p className="muted">{sub}</p></div>{trip.phase !== "after" && <button className="link-button" onClick={() => goTo("explore")}>Edit itinerary</button>}</div>
@@ -710,7 +738,7 @@ function TodayPanel({ trip, now, goTo }: { trip: TripModel; now: Date; goTo: (pa
             <li key={index} className={`${event.kind}${index === nextIndex ? " next" : ""}`}>
               <span className="day-time">{event.time || "Any time"}</span>
               <div><strong>{event.title}</strong>{event.detail && <span>{event.detail}</span>}</div>
-              <em>{index === nextIndex ? "Up next" : tag(event.kind)}</em>
+              <em>{index === nextIndex ? "Up next" : eventTag(event.kind)}</em>
             </li>
           ))}
         </ol>
@@ -868,16 +896,37 @@ function ChecklistItem({ item, onItems }: { item: Item; onItems: ItemsPatch }) {
   );
 }
 
-function ExplorePage({ items, itinerary, startDate, openModal, reload, onItems }: { items: Item[]; itinerary: AppState["itinerary"]; startDate: string; openModal: () => void; reload: () => Promise<void>; onItems: ItemsPatch }) {
+// The itinerary is the saved plan's stops plus, on each day, whatever the bookings put there (flights, hotel
+// check-in and check-out, rental pickup and return, the bootcamp agenda). The booking rows are built from Trip
+// Information on every render, so a booking that is added, changed or removed shows up, moves or disappears on
+// its own; days the plan doesn't cover but a booking lands on are shown too. ChatGPT text is stripped of stops that
+// restate a booking when it is imported (see the planner's one-time tidy for older plans); stops written here are
+// never touched.
+function ExplorePage({ items, itinerary, tripInfo, answers, openModal, reload, onItems, goTo }: { items: Item[]; itinerary: AppState["itinerary"]; tripInfo: TripInfo[]; answers: WizardAnswers; openModal: () => void; reload: () => Promise<void>; onItems: ItemsPatch; goTo: (page: string) => void }) {
   const [tab, setTab] = useState<"itinerary" | "places">("itinerary");
   const [confirmClear, setConfirmClear] = useState(false);
   // Which stop the editor is open on: a day and a stop index, or a day alone to add a stop to it.
   const [editing, setEditing] = useState<{ day: number; stop: number | null } | null>(null);
   useEscape(confirmClear, () => setConfirmClear(false));
   const saved = itinerary?.saved_plan || "";
-  const start = parseWhen(startDate);
-  const plan = useMemo(() => parseItinerary(saved, start ? dayKey(start) : null), [saved, start?.y, start?.m, start?.d]); // eslint-disable-line react-hooks/exhaustive-deps
-  const title = plan.days.length && plan.intro[0] ? plan.intro[0] : saved ? "Your itinerary" : "Build a custom itinerary";
+  const trip = useMemo(() => buildTripModel({ startDate: answers.startDate, endDate: answers.endDate, bookings: tripInfo, itinerary: saved, now: new Date() }), [answers.startDate, answers.endDate, tripInfo, saved]);
+  // The plan as shown and edited: its own days, plus a day for each date a booking lands on that the plan skips.
+  const plan = useMemo(() => {
+    const days = [...trip.plan.days];
+    if (trip.startKey !== null) {
+      const known = new Set(days.map(day => day.key));
+      const candidates = new Set<number>(trip.trainingKeys);
+      for (const b of trip.bookings) for (const when of [b.start, b.end]) if (when) candidates.add(dayKey(when));
+      for (const key of candidates) {
+        if (known.has(key) || !bookingEvents(trip.bookings, key, trip.trainingKeys, trip.training).length) continue;
+        const index = daysBetween(trip.startKey, key) + 1;
+        days.push({ label: `Day ${index} - ${fmtDay(key)}`, index, key, stops: [] });
+      }
+      days.sort((a, b) => (a.key ?? 1e9) - (b.key ?? 1e9));
+    }
+    return { ...trip.plan, days };
+  }, [trip]);
+  const title = plan.days.length && plan.intro[0] ? plan.intro[0] : saved || plan.days.length ? "Your itinerary" : "Build a custom itinerary";
   async function clear() {
     await api("/api/itinerary/clear", { method: "POST", body: JSON.stringify({}) });
     setConfirmClear(false);
@@ -888,7 +937,8 @@ function ExplorePage({ items, itinerary, startDate, openModal, reload, onItems }
     const text = serializeItinerary(next);
     // The API slices longer plans rather than rejecting them, which would drop the last stops without a word.
     if (text.length > MAX_ITINERARY_CHARS) throw new Error("This itinerary is as long as it can be. Shorten a note or remove a stop before adding more.");
-    await api("/api/itinerary", { method: "POST", body: JSON.stringify({ instructions: itinerary?.instructions || "", response: itinerary?.response || "", savedPlan: text }) });
+    // Stops written here are the person's own: stamped cleaned so nothing ever removes them automatically.
+    await api("/api/itinerary", { method: "POST", body: JSON.stringify({ instructions: itinerary?.instructions || "", response: itinerary?.response || "", savedPlan: text, cleaned: true }) });
     setEditing(null);
     notify.success(done);
     await reload();
@@ -908,13 +958,14 @@ function ExplorePage({ items, itinerary, startDate, openModal, reload, onItems }
       ]} />
       {tab === "itinerary" && (
         <TabPanel id="itinerary">
-          {saved ? <ItineraryView plan={plan} raw={saved} onEdit={(day, stop) => setEditing({ day, stop })} /> : (
+          {!saved && (
             <div className="callout">
               <h2>No itinerary yet</h2>
-              <p>Describe the kind of San Francisco trip you want, send the prepared prompt to ChatGPT, and bring the plan back here. Your places to visit are used as starting ideas.</p>
+              <p>{plan.days.length ? "Your bookings are already placed on their days below. " : ""}Describe the kind of San Francisco trip you want, send the prepared prompt to ChatGPT, and bring the plan back here. Your places to visit are used as starting ideas.</p>
               <div className="button-row"><button className="btn primary" onClick={openModal}>Plan with ChatGPT</button></div>
             </div>
           )}
+          {(saved || plan.days.length > 0) && <ItineraryView plan={plan} raw={saved} trip={trip} onEdit={(day, stop) => setEditing({ day, stop })} onBooking={() => goTo("tripInfo")} />}
         </TabPanel>
       )}
       {tab === "places" && <TabPanel id="places"><ProgressBlock pageKey="explore" done={items.filter(item => item.checked).length} total={items.length} inline /><ChecklistBody pageKey="explore" items={items} onItems={onItems} placeholder="Add a place you want to visit" /></TabPanel>}
@@ -943,40 +994,64 @@ function ExplorePage({ items, itinerary, startDate, openModal, reload, onItems }
   );
 }
 
-// The saved plan, laid out as day cards instead of raw text. Plans that don't parse into days fall back to prose.
-function ItineraryView({ plan, raw, onEdit }: { plan: ParsedPlan; raw: string; onEdit: (day: number, stop: number | null) => void }) {
+// The label on a day-list row, by where the row came from.
+const eventTag = (kind: DayEvent["kind"]) => kind === "booking" ? "Booking" : kind === "training" ? "Training" : "Itinerary";
+
+// The plan laid out as day cards instead of raw text, with each day's booking moments slotted in by time. Booking
+// rows open Trip Information, since that is where they are edited. Plans that don't parse into days fall back to prose.
+type DayRow = { minutes: number | null } & ({ kind: "stop"; index: number; stop: Stop } | { kind: "event"; event: DayEvent });
+function ItineraryView({ plan, raw, trip, onEdit, onBooking }: { plan: ParsedPlan; raw: string; trip: TripModel; onEdit: (day: number, stop: number | null) => void; onBooking: () => void }) {
   if (!plan.days.length) return <article className="plan-prose">{raw.split(/\n{2,}/).map((paragraph, index) => <p key={index}>{paragraph}</p>)}</article>;
   const overview = plan.intro.slice(1); // the first intro line is the plan title, shown as the page heading
   const stops = plan.days.reduce((sum, day) => sum + day.stops.length, 0);
+  const rowsFor = (day: ParsedPlan["days"][number]): DayRow[] => {
+    const rows: DayRow[] = day.stops.map((stop, index) => ({ kind: "stop", index, stop, minutes: stop.minutes }));
+    if (day.key !== null) for (const event of bookingEvents(trip.bookings, day.key, trip.trainingKeys, trip.training)) rows.push({ kind: "event", event, minutes: event.minutes });
+    return rows.sort((a, b) => (a.minutes ?? 1e9) - (b.minutes ?? 1e9));
+  };
+  const dayRows = plan.days.map(rowsFor);
+  const bookingRows = dayRows.reduce((sum, rows) => sum + rows.filter(row => row.kind === "event").length, 0);
   return (
     <div className="plan-view">
       <section className="plan-summary">
-        <span className="plan-meta">{plan.days.length} {plan.days.length === 1 ? "day" : "days"} · {stops} {stops === 1 ? "stop" : "stops"}</span>
-        {overview.length ? overview.map((paragraph, index) => <p key={index}>{paragraph}</p>) : <p className="muted">Your saved plan, day by day.</p>}
+        <span className="plan-meta">{plan.days.length} {plan.days.length === 1 ? "day" : "days"} · {stops} {stops === 1 ? "stop" : "stops"}{bookingRows > 0 && ` · ${bookingRows} from your bookings`}</span>
+        {overview.length ? overview.map((paragraph, index) => <p key={index}>{paragraph}</p>) : <p className="muted">Your saved plan, day by day. Flights, hotel, rental car and bootcamp times come from Trip Information and follow it when a booking changes.</p>}
       </section>
       <div className="plan-days">
-        {plan.days.map((day, dayIndex) => (
+        {plan.days.map((day, dayIndex) => {
+          const rows = dayRows[dayIndex];
+          return (
           <section className="plan-day" key={`${day.index}-${day.label}`}>
             <header>
-              <span className="eyebrow">{day.key ? `Day ${day.index} · ${fmtDay(day.key)}` : day.label}</span>
+              <span className="eyebrow">{day.key ? `${day.index >= 1 ? `Day ${day.index} · ` : ""}${fmtDay(day.key)}` : day.label}</span>
               <span className="plan-day-tools"><span className="muted">{day.stops.length} {day.stops.length === 1 ? "stop" : "stops"}</span><button type="button" className="link-button" onClick={() => onEdit(dayIndex, null)}>+ Add stop</button></span>
             </header>
-            {day.stops.length ? (
+            {rows.length ? (
               <ol className="day-list">
-                {day.stops.map((stop, index) => (
-                  <li key={index} className="stop">
+                {rows.map((row, index) => row.kind === "stop" ? (
+                  <li key={`stop-${row.index}`} className="stop">
                     {/* The whole card opens the editor; the "Edit" tag is the visible hint. */}
-                    <button type="button" className="stop-open" onClick={() => onEdit(dayIndex, index)} aria-label={`Edit ${stop.place || "stop"}`}>
-                      <span className="day-time">{stop.time || "Any time"}</span>
-                      <div><strong>{stop.place}</strong>{(stop.why || stop.address) && <span>{[stop.why, stop.address].filter(Boolean).join(" · ")}</span>}</div>
+                    <button type="button" className="stop-open" onClick={() => onEdit(dayIndex, row.index)} aria-label={`Edit ${row.stop.place || "stop"}`}>
+                      <span className="day-time">{row.stop.time || "Any time"}</span>
+                      <div><strong>{row.stop.place}</strong>{(row.stop.why || row.stop.address) && <span>{[row.stop.why, row.stop.address].filter(Boolean).join(" · ")}</span>}</div>
                       <em>Edit</em>
+                    </button>
+                  </li>
+                ) : (
+                  <li key={`event-${index}`} className={`${row.event.kind} linked`}>
+                    {/* Booking moments are edited on Trip Information; the card takes you there. */}
+                    <button type="button" className="stop-open" onClick={onBooking} aria-label={`${row.event.title}, open Trip Information`}>
+                      <span className="day-time">{row.event.time || "Any time"}</span>
+                      <div><strong>{row.event.title}</strong>{row.event.detail && <span>{row.event.detail}</span>}</div>
+                      <em>{eventTag(row.event.kind)}</em>
                     </button>
                   </li>
                 ))}
               </ol>
             ) : <p className="muted">Nothing planned yet.</p>}
           </section>
-        ))}
+          );
+        })}
       </div>
       {plan.notes.length > 0 && (
         <section className="plan-notes">
@@ -1044,7 +1119,7 @@ function StopModal({ plan, day, stop, onClose, onSave, onDelete }: { plan: Parse
   );
 }
 
-function ItineraryModal({ items, itinerary, answers, hasTripData, onClose, reload }: { items: Item[]; itinerary: AppState["itinerary"]; answers: WizardAnswers; hasTripData: boolean; onClose: () => void; reload: () => Promise<void> }) {
+function ItineraryModal({ items, itinerary, answers, tripInfo, hasTripData, onClose, reload }: { items: Item[]; itinerary: AppState["itinerary"]; answers: WizardAnswers; tripInfo: TripInfo[]; hasTripData: boolean; onClose: () => void; reload: () => Promise<void> }) {
   const existing = Boolean(itinerary?.saved_plan);
   const [instructions, setInstructions] = useState(itinerary?.instructions || "");
   const [response, setResponse] = useState(itinerary?.response || "");
@@ -1062,7 +1137,11 @@ function ItineraryModal({ items, itinerary, answers, hasTripData, onClose, reloa
     if (!response.trim()) return setError("Paste ChatGPT's itinerary first.");
     setError(""); setBusy(true);
     try {
-      await api("/api/itinerary", { method: "POST", body: JSON.stringify({ instructions, response, savedPlan: response }) });
+      // ChatGPT's text, with any stops that only restate a booking left out: the bookings place those moments themselves.
+      const trip = buildTripModel({ startDate: answers.startDate, endDate: answers.endDate, bookings: tripInfo, itinerary: response, now: new Date() });
+      const stripped = stripBookingStops(trip.plan, trip.bookings, trip.trainingKeys);
+      await api("/api/itinerary", { method: "POST", body: JSON.stringify({ instructions, response, savedPlan: stripped.removed ? serializeItinerary(stripped.plan) : response, cleaned: true }) });
+      if (stripped.removed) notify.success(`${stripped.removed} ${stripped.removed === 1 ? "line" : "lines"} that repeated a booking left out; those times come from Trip Information`);
       await reload();
       onClose();
       notify.success("Itinerary saved");

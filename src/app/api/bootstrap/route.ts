@@ -44,7 +44,7 @@ export const GET = withTraffic("bootstrap", async (_request, ctx) => {
         ON latest.spot = p.spot AND latest.latest = p.created_at
       WHERE p.user_id = ${user.id}
     `,
-    sql`SELECT instructions, response, saved_plan FROM itinerary WHERE user_id = ${user.id}`,
+    sql`SELECT instructions, response, saved_plan, cleaned_at FROM itinerary WHERE user_id = ${user.id}`,
     sql`SELECT * FROM trip_info WHERE user_id = ${user.id} ORDER BY created_at DESC`,
     sql`SELECT id, label, file_name, content_type, created_at FROM trip_documents WHERE user_id = ${user.id} ORDER BY created_at DESC`,
     sql`SELECT id, kind, title, body, data, read_at, created_at FROM notifications WHERE user_id = ${user.id} ORDER BY created_at DESC LIMIT 100`

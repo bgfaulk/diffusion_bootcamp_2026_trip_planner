@@ -259,7 +259,7 @@ If you can't tell one of these from the bookings, ask me before you answer.
 
 Build out:
 - "records": give every booking its exact dates and local times in "startAt" and "endAt" (flight departure/arrival with airport codes, hotel check-in/checkout, rental pickup/return). Include the bootcamp itself as a "training" record at ${trainingAddress} (${trainingDetail}).
-- "itinerary": a day-by-day plan from the day I leave home to the day I get back, built around the bootcamp and booking times, with realistic travel time between stops (including the commute to Redwood City).
+- "itinerary": a day-by-day plan from the day I leave home to the day I get back, built around the bootcamp and booking times, with realistic travel time between stops (including the commute to Redwood City). Do not list the flights, hotel check-in or check-out, rental pickup or return, or the bootcamp sessions themselves as itinerary items; the app places those on the right days from "records". Include only what happens around them.
 - "prechecks": things to confirm before the trip (IDs, reservations, check-in times).
 - "packing": a packing list for these travelers, this season, and these plans.
 - "departure": a departure-day checklist timed to the outbound flight (when to leave home, check in, and reach the gate).
@@ -319,15 +319,12 @@ export const sampleResponse = JSON.stringify({
         { time: "7:00 PM", place: "North Beach dinner", why: "Walkable from the hotel, classic Italian", address: "Columbus Ave & Green St" }
       ] },
       { label: "Day 2 - Tue, Oct 13", items: [
-        { time: "9:00 AM", place: "Bootcamp, day 1", why: "Training", address: "100 Oracle Pkwy, Redwood City" },
         { time: "6:30 PM", place: "Redwood Shores Lagoon walk", why: "Easy stroll right after class", address: "Redwood Shores, Redwood City" }
       ] },
       { label: "Day 3 - Wed, Oct 14", items: [
-        { time: "9:00 AM", place: "Bootcamp, day 2", why: "Training", address: "100 Oracle Pkwy, Redwood City" },
         { time: "6:00 PM", place: "Golden Gate Overlook at sunset", why: "Rental car day, 20-minute drive", address: "Langdon Ct, San Francisco" }
       ] },
       { label: "Day 4 - Thu, Oct 15", items: [
-        { time: "9:00 AM", place: "Bootcamp, day 3", why: "Training", address: "100 Oracle Pkwy, Redwood City" },
         { time: "7:00 PM", place: "Mission District tacos", why: "Casual last-night dinner", address: "Valencia St & 18th St" }
       ] }
     ],
