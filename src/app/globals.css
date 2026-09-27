@@ -32,7 +32,7 @@
 }
 :root[data-theme="dark"] body { background:radial-gradient(circle at 50% 0%, #1b2430, #07090c 60%) fixed; }
 :root[data-theme="dark"] .eyebrow { color:#fcb711; }
-:root[data-theme="dark"] .primary-nav button.active, :root[data-theme="dark"] .btn.primary { box-shadow:0 0 18px rgba(0,137,208,.35); }
+:root[data-theme="dark"] .btn.primary { box-shadow:0 0 18px rgba(0,137,208,.35); }
 
 * { box-sizing: border-box; }
 body {
@@ -131,14 +131,22 @@ h2 { font-size: 24px; }
 .abc-logo.small .abc-feathers { gap:3px; }
 .abc-logo.small .abc-feathers i { width:9px; height:3px; }
 .primary-nav { display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: 8px; }
-.primary-nav button { min-width: 0; }
-.primary-nav button, .profile-button, .profile-popover button {
+.profile-button, .profile-popover button {
   min-height: 42px; width: 100%; border: 1px solid var(--line); border-radius: 7px; background: var(--panel); color: var(--ink); padding: 9px 11px; text-align: left;
 }
-.primary-nav button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
-.primary-nav button { display:flex; justify-content:space-between; align-items:center; gap:10px; }
+/* Pages are plain text links under their group headings (no card around each one); the active page is in the
+   accent color with a short bar at its left edge. Phones restyle these as rail cards further down. */
+.primary-nav button { position:relative; display:flex; justify-content:space-between; align-items:center; gap:10px; width:100%; min-width:0; min-height:36px; padding:7px 10px 7px 14px; border:0; border-radius:7px; background:none; color:var(--ink); font-weight:750; text-align:left; }
+.primary-nav button::before { content:""; position:absolute; left:2px; top:8px; bottom:8px; width:3px; border-radius:2px; background:transparent; }
+.primary-nav button:hover, .primary-nav button:focus-visible { color:var(--accent-dark); background:var(--soft); }
+.primary-nav button.active { color:var(--accent-dark); font-weight:850; }
+.primary-nav button.active::before { background:var(--accent); }
+/* Hovering a page link rocks its icon back and forth until the pointer leaves. */
+.primary-nav button .page-icon { transform-origin:50% 60%; }
+.primary-nav button:hover .page-icon, .primary-nav button:focus-visible .page-icon { animation:nav-icon-rock .55s ease-in-out infinite alternate; }
+@keyframes nav-icon-rock { from { transform:rotate(-12deg) translateY(-1px); } to { transform:rotate(12deg) translateY(-1px); } }
 .nav-count { min-width:24px; padding:1px 8px; border-radius:999px; background:color-mix(in srgb, var(--accent) 14%, transparent); color:var(--accent-dark); font-size:12px; font-weight:850; text-align:center; }
-.primary-nav button.active .nav-count { background:rgba(255,255,255,.22); color:#fff; }
+.primary-nav button.active .nav-count { background:var(--accent); color:#fff; }
 /* Pages are grouped by when they matter (get ready, travel days, on the trip). Each group's heading folds its
    pages away; a folded heading carries the group's remaining-item count. Overview and Organizer stand alone. */
 .nav-group { display:grid; gap:8px; }
@@ -506,7 +514,7 @@ a { color:var(--accent-dark); font-weight:800; }
 .abc-sound.attention { border-color:#fcb711; color:#fcb711; animation:abcPulse 1.6s ease-in-out infinite; }
 @keyframes abcPulse { 0%, 100% { box-shadow:0 0 0 0 rgba(252,183,17,.45); } 50% { box-shadow:0 0 0 8px rgba(252,183,17,0); } }
 @media (prefers-reduced-motion: reduce) {
-  .progress-star, .trip-stat.stars strong, .trip-stat.rank .rank-row { animation:none; transition:none; }
+  .progress-star, .trip-stat.stars strong, .trip-stat.rank .rank-row, .primary-nav button:hover .page-icon, .primary-nav button:focus-visible .page-icon { animation:none; transition:none; }
   .abc-sound.attention { animation:none; }
   .abc-letters, .abc-letter, .abc-feathers i { transition:none; }
   .abc-letters.flash { transform:none; }
@@ -533,7 +541,11 @@ a { color:var(--accent-dark); font-weight:800; }
   .primary-nav::-webkit-scrollbar { display:none; }
   /* The rail is one flat row: group wrappers dissolve and headings are not rendered on phones. */
   .nav-group { display:contents; }
-  .primary-nav button, .sidebar.collapsed .primary-nav button { flex:0 0 auto; position:relative; width:auto; min-width:76px; min-height:58px; flex-direction:column; justify-content:center; gap:4px; padding:6px 10px; border-radius:10px; scroll-snap-align:center; font-size:11px; }
+  .primary-nav button, .sidebar.collapsed .primary-nav button { flex:0 0 auto; position:relative; width:auto; min-width:76px; min-height:58px; flex-direction:column; justify-content:center; gap:4px; padding:6px 10px; border:1px solid var(--line); border-radius:10px; background:var(--panel); color:var(--ink); scroll-snap-align:center; font-size:11px; }
+  .primary-nav button::before { display:none; }
+  .primary-nav button:hover, .primary-nav button:focus-visible { color:var(--ink); background:var(--panel); }
+  .primary-nav button.active { background:var(--accent); border-color:var(--accent); color:#fff; }
+  .primary-nav button.active .nav-count { background:rgba(255,255,255,.22); color:#fff; }
   .primary-nav button .page-icon { width:22px; height:22px; }
   .nav-label { flex:none; text-align:center; white-space:nowrap; overflow-wrap:normal; }
   .nav-count, .sidebar.collapsed .nav-count { position:absolute; top:4px; right:6px; min-width:18px; padding:0 5px; font-size:10px; line-height:16px; }
@@ -1021,7 +1033,7 @@ a { color:var(--accent-dark); font-weight:800; }
 .stat-tile .muted { font-size:12px; }
 .stat-tile.warn strong { color:var(--bridge); }
 .stat-tile.bad strong { color:var(--danger); }
-.org-panel { display:grid; gap:12px; padding:16px; background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow); min-width:0; }
+.org-panel { display:grid; align-content:start; gap:12px; padding:16px; background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow); min-width:0; }
 .org-panel .panel-head p { margin:2px 0 0; font-size:13px; }
 .two-up { display:grid; grid-template-columns:repeat(auto-fit, minmax(min(100%, 460px), 1fr)); gap:14px; }
 .reloading { opacity:.6; transition:opacity .2s; }
