@@ -256,11 +256,12 @@ function UsersTab({ userId, ...shared }: Shared & { userId: string }) {
       await reload();
     } catch (err) { setMessage(err instanceof Error ? err.message : "That didn't work"); } finally { setBusy(""); }
   }
-  async function resetLink(account: Account) {
+  async function resetLink(account: Account, send = false) {
     setMessage(""); setBusy(account.id);
     try {
-      const result = await api("/api/reset-link", { method: "POST", body: JSON.stringify({ email: account.email }) });
-      setLink({ email: account.email, url: `${location.origin}/?reset=${result.token}`, expiresAt: result.expiresAt });
+      const result = await api("/api/reset-link", { method: "POST", body: JSON.stringify({ email: account.email, send }) });
+      if (send && result.sent) { setLink(null); setMessage(`Emailed a reset link to ${account.email}. It works once and expires in 24 hours.`); }
+      else setLink({ email: account.email, url: `${location.origin}/?reset=${result.token}`, expiresAt: result.expiresAt });
     } catch (err) { setMessage(err instanceof Error ? err.message : "Could not create a reset link"); } finally { setBusy(""); }
   }
 
@@ -293,7 +294,8 @@ function UsersTab({ userId, ...shared }: Shared & { userId: string }) {
                   <td>
                     {self || account.owner ? <span className="muted">{self ? "This is you" : "Organizer"}</span> : (
                       <div className="row-actions">
-                        <button type="button" className="link-button" disabled={busy === account.id} onClick={() => resetLink(account)}>Reset link</button>
+                        <button type="button" className="link-button" disabled={busy === account.id} onClick={() => resetLink(account, true)}>Email reset link</button>
+                        <button type="button" className="link-button" disabled={busy === account.id} onClick={() => resetLink(account)}>Copy reset link</button>
                         <button type="button" className="link-button" disabled={busy === account.id || !account.sessions} onClick={() => setPending({ account, action: "revoke" })}>Sign out everywhere</button>
                         {account.suspendedAt
                           ? <button type="button" className="link-button" disabled={busy === account.id} onClick={() => act(account, "unsuspend")}>Reinstate</button>

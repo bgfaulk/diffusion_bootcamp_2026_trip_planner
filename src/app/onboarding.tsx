@@ -9,7 +9,7 @@ import { passwordChecks } from "@/lib/validation";
 import { chimeEnabled, chimeReady, playChimeNote, primeChime, setChimeEnabled } from "@/lib/chime";
 import { buildWizardPrompt, extractJson, interestOptions, normalizePlan, sampleResponse, trainingAddress, trainingDetail, type EmailAccess, type WizardAnswers } from "@/lib/plan";
 
-type AuthStep = "signin" | "create" | "reset";
+type AuthStep = "signin" | "create" | "reset" | "forgot";
 
 const emailCookie = "trip_email";
 const rememberDays = 7;
@@ -49,6 +49,7 @@ export function LoginScreen({ onSignedIn }: { onSignedIn: () => Promise<void> })
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [resetToken, setResetToken] = useState("");
+  const [sentTo, setSentTo] = useState("");
 
   useEffect(() => {
     const link = resetLinkFromUrl();
@@ -60,7 +61,7 @@ export function LoginScreen({ onSignedIn }: { onSignedIn: () => Promise<void> })
   const checks = passwordChecks(password);
   const rulesMet = checks.every(check => check.ok);
   const confirmOk = step !== "create" || (confirm !== "" && confirm === password);
-  const canSubmit = !busy && email.trim() !== "" && password !== "" && (!newPassword || rulesMet) && confirmOk;
+  const canSubmit = !busy && email.trim() !== "" && (step === "forgot" || (password !== "" && (!newPassword || rulesMet) && confirmOk));
 
   function goTo(next: AuthStep) {
     setStep(next);
@@ -68,6 +69,7 @@ export function LoginScreen({ onSignedIn }: { onSignedIn: () => Promise<void> })
     setConfirm("");
     setInviteCode("");
     setError("");
+    setSentTo("");
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -75,6 +77,17 @@ export function LoginScreen({ onSignedIn }: { onSignedIn: () => Promise<void> })
     if (!canSubmit) return;
     setError("");
     setBusy(true);
+    if (step === "forgot") {
+      try {
+        await api("/api/auth/forgot", { method: "POST", body: JSON.stringify({ email, website }) });
+        setSentTo(email.trim());
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Could not send a reset link");
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
     primeChime(); // inside the submit gesture, so the loader's chime is allowed to play
     try {
       await api("/api/auth", { method: "POST", body: JSON.stringify({ email, password, intent: step, website, token: resetToken, inviteCode }) });
@@ -87,7 +100,7 @@ export function LoginScreen({ onSignedIn }: { onSignedIn: () => Promise<void> })
     }
   }
 
-  const heading = { signin: "Sign in", create: "Create your account", reset: "Set a new password" }[step];
+  const heading = { signin: "Sign in", create: "Create your account", reset: "Set a new password", forgot: "Reset your password" }[step];
 
   return (
     <main className="login-page">
@@ -97,8 +110,18 @@ export function LoginScreen({ onSignedIn }: { onSignedIn: () => Promise<void> })
         <h1>{heading}</h1>
         {/* Honeypot: hidden from people and screen readers, so only bots fill it in. */}
         <label className="honeypot" aria-hidden="true">Website<input tabIndex={-1} autoComplete="off" value={website} onChange={event => setWebsite(event.target.value)} /></label>
+        {step === "forgot" && sentTo ? (
+          <div className="stack">
+            <p className="muted">If <strong>{sentTo}</strong> has an account, a reset link is on its way. It works once and expires in 24 hours. Check spam if it doesn&apos;t show up in a minute.</p>
+          </div>
+        ) : (
         <form onSubmit={submit} className="stack" key={step}>
-          {step === "reset" ? (
+          {step === "forgot" ? (
+            <>
+              <p className="muted">Enter the email you signed up with and we&apos;ll send you a link to set a new password.</p>
+              <label>Email<input id="username" name="username" type="email" required maxLength={254} autoFocus autoComplete="username" value={email} onChange={event => setEmail(event.target.value)} /></label>
+            </>
+          ) : step === "reset" ? (
             <>
               {/* The account comes from the reset link. Repeat its email as the username so password managers pair
                   the new password with it. Kept in the layout (not display:none) because some managers skip hidden fields. */}
@@ -108,7 +131,7 @@ export function LoginScreen({ onSignedIn }: { onSignedIn: () => Promise<void> })
           ) : (
             <label>Email<input id="username" name="username" type="email" required maxLength={254} autoFocus autoComplete="username" value={email} onChange={event => setEmail(event.target.value)} /></label>
           )}
-          <PasswordField id={step === "signin" ? "current-password" : "new-password"} label={step === "reset" ? "New password" : "Password"} value={password} onChange={setPassword} autoFocus={step === "reset"} autoComplete={step === "signin" ? "current-password" : "new-password"} />
+          {step !== "forgot" && <PasswordField id={step === "signin" ? "current-password" : "new-password"} label={step === "reset" ? "New password" : "Password"} value={password} onChange={setPassword} autoFocus={step === "reset"} autoComplete={step === "signin" ? "current-password" : "new-password"} />}
           {newPassword && (
             <ul className="password-rules" aria-live="polite">
               {checks.map(check => <li key={check.label} className={check.ok ? "ok" : ""}><RuleIcon ok={check.ok} />{check.label}</li>)}
@@ -124,15 +147,17 @@ export function LoginScreen({ onSignedIn }: { onSignedIn: () => Promise<void> })
             </>
           )}
           {error && <p className="error">{error}</p>}
-          <button className="btn primary" disabled={!canSubmit}>{busy ? "One moment..." : { signin: "Sign in", create: "Create account", reset: "Update password" }[step]}</button>
+          <button className="btn primary" disabled={!canSubmit}>{busy ? "One moment..." : { signin: "Sign in", create: "Create account", reset: "Update password", forgot: "Email me a reset link" }[step]}</button>
         </form>
+        )}
         {step === "signin" && (
           <>
-            <p className="muted login-help">Forgot your password? Ask the trip organizer for a reset link.</p>
+            <button type="button" className="link-button" onClick={() => goTo("forgot")}>Forgot your password? Email me a reset link</button>
             <button type="button" className="link-button" onClick={() => goTo("create")}>First time here? Create an account</button>
           </>
         )}
         {step === "create" && <button type="button" className="link-button" onClick={() => goTo("signin")}>Already have an account? Sign in</button>}
+        {step === "forgot" && <button type="button" className="link-button" onClick={() => goTo("signin")}>Back to sign in</button>}
         {step === "reset" && <button className="link-button" onClick={() => { setResetToken(""); history.replaceState(null, "", location.pathname); goTo("signin"); }}>Back to sign in</button>}
       </section>
     </main>

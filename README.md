@@ -35,8 +35,11 @@ Set:
 - `OWNER_EMAIL` to the organizer's sign-in email. That account gets the Organizer page: request volume,
   latency and errors per route, database and table sizes with a growth chart, every registered account with
   suspend / sign-out-everywhere / delete / reset-link actions, and an activity log (who, IP, route, status,
-  timing, error text) over a Grafana-style time window. There is no email sending, so the organizer sends
-  reset links by hand; links last 24 hours and work once. Every API request is written to `audit_log`
+  timing, error text) over a Grafana-style time window. Reset links last 24 hours and work once.
+- `GMAIL_APP_PASSWORD`: an app password for `OWNER_EMAIL` (which must be a Gmail account). With it, the login
+  screen's "Forgot your password?" emails a reset link and the Organizer page can email one directly. Create it
+  at Google Account > Security > 2-Step Verification > App passwords (2-Step Verification has to be on).
+  Without it, people ask the organizer, who copies a link from the Organizer page. Every API request is written to `audit_log`
   (kept for 400 days).
 - `SIGNUP_CODE` to an invite code the organizer shares with attendees; it gates new accounts (creation is refused in production without it).
 
