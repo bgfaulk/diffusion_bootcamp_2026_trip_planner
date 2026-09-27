@@ -561,7 +561,10 @@ a { color:var(--accent-dark); font-weight:800; }
   .profile-button { grid-template-columns:38px; gap:0; min-height:0; padding:2px; border:0; background:transparent; }
   .profile-button > span:not(.avatar) { display:none; }
   .profile-popover { left:auto; right:0; bottom:auto; top:calc(100% + 8px); width:min(280px, calc(100vw - 28px)); }
-  .sidebar > .primary-nav { position:fixed; left:0; right:0; bottom:0; z-index:20; display:flex; gap:6px; padding:8px 10px calc(8px + env(safe-area-inset-bottom)); overflow-x:auto; overscroll-behavior-x:contain; scroll-snap-type:x proximity; -webkit-overflow-scrolling:touch; scrollbar-width:none; background:color-mix(in srgb, var(--panel) 94%, transparent); backdrop-filter:blur(14px); border-top:1px solid var(--line); box-shadow:0 -10px 30px rgba(29,37,40,.08); }
+  /* The rail is opaque and promoted to its own compositor layer (translateZ). It lives inside the sticky top bar, and on
+     iOS Safari a fixed, blurred, scrollable element inside a sticky ancestor is re-rasterized as the page scrolls, which
+     showed as the rail blinking out for a frame. No backdrop-filter and no legacy -webkit-overflow-scrolling here. */
+  .sidebar > .primary-nav { position:fixed; left:0; right:0; bottom:0; z-index:20; display:flex; gap:6px; padding:8px 10px calc(8px + env(safe-area-inset-bottom)); overflow-x:auto; overscroll-behavior-x:contain; scroll-snap-type:x proximity; scrollbar-width:none; background:var(--panel); border-top:1px solid var(--line); box-shadow:0 -10px 30px rgba(29,37,40,.08); transform:translateZ(0); }
   .primary-nav::-webkit-scrollbar { display:none; }
   /* The rail is one flat row: group wrappers dissolve and headings are not rendered on phones. */
   .nav-group { display:contents; }
@@ -767,6 +770,8 @@ a { color:var(--accent-dark); font-weight:800; }
 @media (max-width: 900px) {
   /* Phones: no blur (it would trap the fixed bottom rail inside the top bar) and the side border becomes a bottom one. */
   :root[data-theme="nirvana"] .sidebar { background:rgba(2,6,12,.96); border-right:0; border-bottom-color:var(--cyan-line); backdrop-filter:none; }
+  /* The bottom rail is fully opaque here too; Nirvana's --panel is translucent and the rail must not blend while scrolling. */
+  :root[data-theme="nirvana"] .sidebar > .primary-nav { background:rgb(2,6,12); }
 }
 :root[data-theme="nirvana"] .brand-divider { background:var(--cyan-line); }
 :root[data-theme="nirvana"] .brand strong { display:block; font-family:var(--display); font-size:.74rem; letter-spacing:.12em; text-transform:uppercase; }

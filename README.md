@@ -144,7 +144,8 @@ vercel env pull .env.local --yes
 `vercel.json` defines the daily health-check cron. A redeploy does not sign anyone out or discard saved
 work: sessions and data live in Neon, and open tabs keep running until they reload. Each build stamps its
 API responses with `X-App-Build`; an open tab from an older build shows a "Reload" toast the first time it
-notices, and if one of its requests fails against the newer build the error says to reload.
+notices, reloads itself when it comes back from the background with nothing typed, and if one of its requests
+fails against the newer build the error says to reload.
 
 ## Layout
 
