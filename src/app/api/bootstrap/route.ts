@@ -25,7 +25,7 @@ export async function GET() {
     sql`SELECT * FROM settings WHERE user_id = ${user.id}`,
     sql`SELECT * FROM list_items WHERE user_id = ${user.id} ORDER BY checked ASC, position ASC, created_at ASC`,
     sql`
-      SELECT p.id, p.spot, p.caption, p.content_type, p.image_base64, p.created_at
+      SELECT p.id, p.spot, p.caption
       FROM photos p
       JOIN (SELECT spot, max(created_at) AS latest FROM photos WHERE user_id = ${user.id} GROUP BY spot) latest
         ON latest.spot = p.spot AND latest.latest = p.created_at
@@ -43,7 +43,7 @@ export async function GET() {
     photos: Object.fromEntries(photos.map((photo: any) => [photo.spot, {
       id: photo.id,
       caption: decryptText(photo.caption),
-      imageUrl: `data:${photo.content_type};base64,${decryptText(photo.image_base64)}`
+      imageUrl: `/api/photos/${photo.id}`
     }])),
     itinerary: itinerary[0] ? decryptRow(itinerary[0], ["instructions", "response", "saved_plan"]) : null,
     tripInfo: tripInfo.map((item: any) => decryptRow(item, ["title", "provider", "confirmation_number", "start_at", "end_at", "address", "phone", "notes"])),
