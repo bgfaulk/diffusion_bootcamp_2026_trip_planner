@@ -816,8 +816,8 @@ export function AbcLoader({ done, failed, onFinish, onFailed, messages = loaderM
   );
 }
 
-// The letters at a given beat (0 = dark, 1-3 = A, B, C lit, 4 = flash). Under them, either the six peacock
-// feathers (sidebar mark) or the word FITNESS, whose letters light up in thirds as A, B and C do.
+// The letters at a given beat (0 = dark, 1-3 = A, B, C lit, 4 = flash). Under them, the word FITNESS, whose
+// letters light up in thirds as A, B and C do (the older six-feather bar is kept for anything that asks for it).
 const peacock = ["#fcb711", "#f37021", "#cc004c", "#6460aa", "#0089d0", "#0db14b"];
 const fitness = "FITNESS".split("");
 function AbcLetters({ beat, word = false }: { beat: number; word?: boolean }) {
@@ -844,5 +844,5 @@ export function AbcMark({ small = false }: { small?: boolean }) {
     const timer = setTimeout(() => setBeat(beat < beatMs.length - 1 ? beat + 1 : 0), beat === 0 ? 1100 : Math.round(beatMs[beat] * 1.25));
     return () => clearTimeout(timer);
   }, [beat, still]);
-  return <div className={small ? "abc-logo small" : "abc-logo"} aria-hidden="true"><AbcLetters beat={still ? 3 : beat} word={!small} /></div>;
+  return <div className={small ? "abc-logo small" : "abc-logo"} aria-hidden="true"><AbcLetters beat={still ? 3 : beat} word /></div>;
 }
