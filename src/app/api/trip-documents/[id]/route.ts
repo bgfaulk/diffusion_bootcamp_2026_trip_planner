@@ -17,11 +17,14 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     const document = rows[0] as { file_name: string; content_type: string; file_base64: string };
     const url = new URL(request.url);
     const disposition = url.searchParams.get("download") ? "attachment" : "inline";
-    const fileName = decryptText(document.file_name);
+    // The header only allows printable ASCII; anything else (quotes, control characters, non-Latin
+    // names) would let a stored file name break out of the header value.
+    const fileName = decryptText(document.file_name).replace(/[^\x20-\x7e]|["\\]/g, "").trim() || "document.pdf";
     return new Response(Buffer.from(decryptText(document.file_base64), "base64"), {
       headers: {
         "Content-Type": document.content_type,
-        "Content-Disposition": `${disposition}; filename="${fileName.replace(/"/g, "")}"`
+        "Content-Disposition": `${disposition}; filename="${fileName}"`,
+        "X-Content-Type-Options": "nosniff"
       }
     });
   } catch (error) {
