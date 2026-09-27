@@ -76,6 +76,7 @@ export async function ensureSchema() {
     sql`ALTER TABLE settings ADD COLUMN IF NOT EXISTS planning_mode TEXT`,
     sql`ALTER TABLE settings ADD COLUMN IF NOT EXISTS planning_answers TEXT`,
     sql`ALTER TABLE settings ADD COLUMN IF NOT EXISTS chime_muted BOOLEAN NOT NULL DEFAULT false`,
+    sql`ALTER TABLE settings ADD COLUMN IF NOT EXISTS calendar_guest TEXT`,
     sql`
       CREATE TABLE IF NOT EXISTS notifications (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

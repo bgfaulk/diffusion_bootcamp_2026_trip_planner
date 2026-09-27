@@ -28,7 +28,9 @@ trip data, or group links. Runtime data belongs in Neon and Vercel environment v
 - Overview: trip name, dates, what is next, and today's schedule.
 - Get ready: Pre-checks and Packing checklists.
 - Travel days: Departure Day and Return Day checklists.
-- On the trip: Explore San Francisco (itinerary and places), Trip Information (bookings and PDFs), and
+- On the trip: Explore San Francisco (itinerary and places), Trip Information (bookings and PDFs, with
+  "Add to calendar" .ics downloads for the whole trip, one booking, or the training days; a calendar guest
+  from Settings is invited on every event), and
   Photo Route (one photo per stop, shrunk before upload).
 - Settings: profile, trip details, account deletion, and the in-app User Guide.
 - Organizer (owner only): see below.

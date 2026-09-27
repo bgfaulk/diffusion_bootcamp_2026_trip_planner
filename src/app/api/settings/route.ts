@@ -3,7 +3,7 @@ import { withAudit, withTraffic } from "@/lib/audit";
 import { encryptText } from "@/lib/crypto";
 import { getSql } from "@/lib/db";
 import { isTheme } from "@/lib/theme";
-import { asBooleanOrNull, asString, errorResponse } from "@/lib/validation";
+import { asBooleanOrNull, asString, errorResponse, validateEmail } from "@/lib/validation";
 
 export const POST = withAudit("settings.save", async (request, ctx) => {
   try {
@@ -16,6 +16,9 @@ export const POST = withAudit("settings.save", async (request, ctx) => {
     const homePlaceId = encryptText(asString(body.homePlaceId, 160));
     const trainingLocation = encryptText(asString(body.trainingLocation, 240));
     const trainingPlaceId = encryptText(asString(body.trainingPlaceId, 160));
+    // Optional guest for calendar invites; validated as an email when present, cleared when blank.
+    const guestValue = asString(body.calendarGuest, 254);
+    const calendarGuest = encryptText(guestValue ? validateEmail(guestValue) : "");
     // Optional: a save that doesn't mention the chime keeps whatever is stored.
     const chimeMuted = asBooleanOrNull(body.chimeMuted);
     // Coordinates are never stored (privacy). The legacy *_lat/*_lng columns are nulled on every save so
@@ -23,11 +26,11 @@ export const POST = withAudit("settings.save", async (request, ctx) => {
     await getSql()`
       INSERT INTO settings (
         user_id, profile_name, trip_name, home_address, home_place_id,
-        training_location, training_place_id, theme, chime_muted, updated_at
+        training_location, training_place_id, theme, chime_muted, calendar_guest, updated_at
       )
       VALUES (
         ${user.id}, ${profileName}, ${tripName}, ${homeAddress}, ${homePlaceId},
-        ${trainingLocation}, ${trainingPlaceId}, ${theme}, ${chimeMuted ?? false}, now()
+        ${trainingLocation}, ${trainingPlaceId}, ${theme}, ${chimeMuted ?? false}, ${calendarGuest}, now()
       )
       ON CONFLICT(user_id) DO UPDATE SET
         profile_name = excluded.profile_name,
@@ -42,6 +45,7 @@ export const POST = withAudit("settings.save", async (request, ctx) => {
         training_lng = NULL,
         theme = excluded.theme,
         chime_muted = COALESCE(${chimeMuted}, settings.chime_muted),
+        calendar_guest = excluded.calendar_guest,
         updated_at = now()
     `;
     return Response.json({ ok: true });
