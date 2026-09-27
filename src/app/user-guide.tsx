@@ -42,7 +42,7 @@ export function UserGuide({ readAt = null, onRead }: { readAt?: string | null; o
       <ul>
         <li>Shows your trip name, your dates, and what is next: the closest booking or itinerary stop.</li>
         <li>Lists today&rsquo;s schedule. Earlier items sit under &ldquo;Earlier today,&rdquo; and finished ones under &ldquo;Done.&rdquo;</li>
-        <li>&ldquo;Edit itinerary&rdquo; opens the same planning tools as the Explore page.</li>
+        <li>&ldquo;Edit itinerary&rdquo; opens the Explore page, where any stop can be changed.</li>
       </ul>
       <h3>Pre-checks, Packing, Departure Day, and Return Day</h3>
       <ul>
@@ -53,6 +53,7 @@ export function UserGuide({ readAt = null, onRead }: { readAt?: string | null; o
       <h3>Explore San Francisco</h3>
       <ul>
         <li><strong>Itinerary</strong> shows your day-by-day plan. &ldquo;Plan with ChatGPT&rdquo; builds a prompt from your places, dates, and interests. Open ChatGPT with it, then paste the answer back or upload the trip-plan.json file. &ldquo;Clear itinerary&rdquo; starts over.</li>
+        <li>Tap any stop to change its time, place, why it fits, or address, move it to another day, or remove it. &ldquo;+ Add stop&rdquo; on a day adds one. Saved changes show up on the Overview right away.</li>
         <li><strong>Places to visit</strong> is a checklist of spots you want to see. &ldquo;Use my places to visit&rdquo; feeds them into the ChatGPT prompt.</li>
       </ul>
       <h3>Trip Information</h3>

@@ -25,13 +25,22 @@ export function NirvanaBackdrop({ dim }: { dim: boolean }) {
       speed: 50 + Math.random() * 180, len: 4 + Math.floor(Math.random() * 12),
       orange: Math.random() < 0.06, flicker: Math.random()
     });
+    // The canvas is sized from its own box (CSS 100lvh), so a phone's collapsing address bar or a pull-to-refresh
+    // rubber-band, which fire resize events, don't change anything. When the size really changes, existing drops
+    // carry on: columns are only added for new width and dropped beyond it, so the rain never restarts wholesale.
     function size() {
       const dpr = Math.min(devicePixelRatio || 1, 2);
-      W = innerWidth; H = innerHeight;
+      const box = canvas!.getBoundingClientRect();
+      const nextW = Math.round(box.width) || innerWidth, nextH = Math.round(box.height) || innerHeight;
+      if (nextW === W && nextH === H && drops.length) return false;
+      W = nextW; H = nextH;
       canvas!.width = W * dpr; canvas!.height = H * dpr;
       ctx!.setTransform(dpr, 0, 0, dpr, 0, 0);
-      drops = [];
-      for (let c = 0; c < Math.ceil(W / STEP); c++) if (Math.random() < 0.6) drops.push(makeDrop(c * STEP, true));
+      const columns = Math.ceil(W / STEP);
+      drops = drops.filter(d => d.x < columns * STEP);
+      const taken = new Set(drops.map(d => d.x));
+      for (let c = 0; c < columns; c++) if (!taken.has(c * STEP) && Math.random() < 0.6) drops.push(makeDrop(c * STEP, true));
+      return true;
     }
     function fade(x: number, y: number) {
       if (dimRef.current) return 1;
@@ -97,11 +106,16 @@ export function NirvanaBackdrop({ dim }: { dim: boolean }) {
       floor(t); rain(dt, t);
       raf = requestAnimationFrame(frame);
     }
-    function onResize() { size(); if (reduced) still(); }
+    let pending = 0;
+    function onResize() {
+      // Coalesce the burst of resize events a phone emits while scrolling; redraw once, from the current state.
+      if (pending) return;
+      pending = requestAnimationFrame(() => { pending = 0; if (size()) { if (reduced) still(); else { ctx!.fillStyle = "#020409"; ctx!.fillRect(0, 0, W, H); floor(last); rain(0, last); } } });
+    }
     size();
     addEventListener("resize", onResize);
     if (reduced) still(); else raf = requestAnimationFrame(frame);
-    return () => { cancelAnimationFrame(raf); removeEventListener("resize", onResize); };
+    return () => { cancelAnimationFrame(raf); cancelAnimationFrame(pending); removeEventListener("resize", onResize); };
   }, []);
 
   return <canvas ref={canvasRef} className="nirvana-grid" aria-hidden="true" />;

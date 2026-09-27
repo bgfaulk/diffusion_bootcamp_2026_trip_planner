@@ -637,7 +637,8 @@ a { color:var(--accent-dark); font-weight:800; }
 :root[data-theme="nirvana"] a { color:var(--cyan); font-weight:400; }
 
 /* atmosphere: canvas (rain + floor) sits behind everything, vignette above it, scanlines on top */
-.nirvana-grid { position:fixed; inset:0; z-index:-2; display:block; width:100%; height:100%; }
+/* Sized to the large viewport so a phone's collapsing browser chrome doesn't resize (and clear) the canvas. */
+.nirvana-grid { position:fixed; inset:0 auto auto 0; z-index:-2; display:block; width:100%; height:100%; height:100lvh; }
 :root[data-theme="nirvana"] body::before { content:""; position:fixed; inset:0; z-index:-1; pointer-events:none; background:radial-gradient(ellipse at center, rgba(0,0,0,0) 50%, rgba(0,0,0,.7) 100%); }
 :root[data-theme="nirvana"]:not([data-fx="off"]) body::after { content:""; position:fixed; inset:0; z-index:50; pointer-events:none; background:repeating-linear-gradient(to bottom, rgba(0,0,0,0) 0, rgba(0,0,0,0) 2px, rgba(0,0,0,.1) 3px, rgba(0,0,0,0) 4px); mix-blend-mode:multiply; }
 
@@ -744,6 +745,8 @@ a { color:var(--accent-dark); font-weight:800; }
 :root[data-theme="nirvana"] :is(.plan-summary, .plan-day, .plan-notes, .plan-prose) { position:relative; background:var(--panel); border:1px solid var(--cyan-line); box-shadow:inset 0 0 18px rgba(0,229,255,.06); backdrop-filter:blur(6px); }
 :root[data-theme="nirvana"] .plan-summary { border-color:var(--cyan-dim); clip-path:var(--cut); }
 :root[data-theme="nirvana"] .plan-day .day-list li { background:rgba(2,8,14,.7); }
+:root[data-theme="nirvana"] .stop-open:hover { background:rgba(0,229,255,.08); }
+:root[data-theme="nirvana"] .stop-open:focus-visible { outline-color:var(--cyan); }
 :root[data-theme="nirvana"] .plan-meta { font-weight:400; letter-spacing:.16em; color:var(--cyan-dim); }
 :root[data-theme="nirvana"] .plan-file { border-color:var(--cyan-line); }
 :root[data-theme="nirvana"] .plan-file summary { color:var(--cyan); font-weight:400; letter-spacing:.06em; }
@@ -919,6 +922,22 @@ a { color:var(--accent-dark); font-weight:800; }
 .plan-summary { display:grid; gap:8px; padding:20px 24px; background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow); }
 .plan-meta { color:var(--accent-dark); font-size:12px; font-weight:850; text-transform:uppercase; letter-spacing:.06em; }
 .plan-days { display:grid; gap:14px; }
+/* Itinerary stops are buttons that open the editor: the card's grid moves onto the button so the whole card is the target. */
+.plan-day .day-list li.stop { display:block; padding:0; }
+.stop-open { all:unset; box-sizing:border-box; display:grid; grid-template-columns:92px minmax(0,1fr) auto; gap:14px; align-items:start; width:100%; padding:12px 14px; border-radius:inherit; cursor:pointer; color:inherit; }
+.stop-open > div { display:grid; gap:2px; min-width:0; }
+.stop-open > div span { color:var(--muted); }
+.stop-open em { opacity:0; transition:opacity .15s; }
+.stop-open:hover em, .stop-open:focus-visible em { opacity:1; }
+.stop-open:hover { background:color-mix(in srgb, var(--accent) 7%, transparent); }
+.stop-open:focus-visible { outline:2px solid var(--accent); outline-offset:-2px; }
+.plan-day-tools { display:inline-flex; align-items:center; gap:12px; white-space:nowrap; }
+/* The day label and its tools never break mid-phrase; on narrow screens the tools drop to their own line instead. */
+.plan-day > header { flex-wrap:wrap; row-gap:4px; }
+.plan-day > header .eyebrow { white-space:nowrap; }
+.stop-modal-actions { align-items:center; flex-wrap:wrap; }
+.stop-delete-confirm { display:inline-flex; align-items:center; gap:10px; margin-left:auto; }
+.danger-link { color:var(--danger); margin-left:auto; }
 .plan-day { display:grid; gap:10px; padding:16px 18px; background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow); }
 .plan-day > header { display:flex; justify-content:space-between; align-items:baseline; gap:12px; }
 .plan-day > header .eyebrow { margin:0; font-size:13px; }
@@ -961,6 +980,8 @@ a { color:var(--accent-dark); font-weight:800; }
   .hero-next { border-left:0; border-top:1px solid var(--line); padding:14px 0 0; }
   .day-list li { grid-template-columns:1fr; gap:4px; }
   .day-list em { justify-self:start; }
+  .stop-open { grid-template-columns:1fr; gap:4px; }
+  .stop-open em { opacity:1; justify-self:start; }
   .checklist-hero { grid-template-columns:1fr; gap:18px; padding:20px; }
   .trip-form.in-modal { grid-template-columns:1fr; }
   .progress-block { padding-left:0; border-left:0; padding-top:16px; border-top:1px solid var(--line); }
