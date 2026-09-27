@@ -135,6 +135,11 @@ export default function Home() {
 
   async function load() { await loadState(); }
 
+  // Checklist edits change one row; apply them to local state instead of refetching every table.
+  function patchItems(update: (items: Item[]) => Item[]) {
+    setData(current => ({ ...current, items: update(current.items) }));
+  }
+
   async function enterAfterSignIn() {
     setEnterDone(false);
     setEntering(true);
@@ -362,8 +367,8 @@ export default function Home() {
           </div>
         )}
         {page === "overview" && <Overview tripName={tripName} settings={data.settings} answers={answers} itinerary={data.itinerary} tripInfo={data.tripInfo} goTo={setPage} />}
-        {listPages.includes(page) && <ListPage pageKey={page} items={data.items} reload={load} />}
-        {page === "explore" && <ExplorePage items={data.items.filter(item => item.page === "explore")} itinerary={data.itinerary} startDate={answers.startDate} openModal={() => setItineraryOpen(true)} reload={load} />}
+        {listPages.includes(page) && <ListPage pageKey={page} items={data.items} onItems={patchItems} />}
+        {page === "explore" && <ExplorePage items={data.items.filter(item => item.page === "explore")} itinerary={data.itinerary} startDate={answers.startDate} openModal={() => setItineraryOpen(true)} reload={load} onItems={patchItems} />}
         {page === "tripInfo" && <TripInfoPage tripInfo={data.tripInfo} tripDocuments={data.tripDocuments} tripImport={data.tripImport} reload={load} />}
         {page === "gallery" && <Gallery photos={data.photos} openViewer={setViewer} reload={load} />}
         {page === "settings" && <SettingsPage settings={data.settings} saveSettings={saveSettings} reload={load} />}
@@ -549,7 +554,9 @@ const listTaglines: Record<string, string> = {
   return: "Check out, hand back the keys, and get home."
 };
 
-function ListPage({ pageKey, items, reload }: { pageKey: string; items: Item[]; reload: () => Promise<void> }) {
+type ItemsPatch = (update: (items: Item[]) => Item[]) => void;
+
+function ListPage({ pageKey, items, onItems }: { pageKey: string; items: Item[]; onItems: ItemsPatch }) {
   const visible = items.filter(item => item.page === pageKey);
   const done = visible.filter(item => item.checked).length;
   const total = visible.length;
@@ -561,7 +568,7 @@ function ListPage({ pageKey, items, reload }: { pageKey: string; items: Item[]; 
         <div>
           <p className="eyebrow">{listTaglines[pageKey] || "Editable checklist"}</p>
           <h1>{pageLabels[pageKey]}</h1>
-          <AddItemForm pageKey={pageKey} reload={reload} />
+          <AddItemForm pageKey={pageKey} onItems={onItems} />
         </div>
         <div className="progress-block" role="group" aria-label="Progress">
           <strong>{done}<small>of {total} done</small></strong>
@@ -569,26 +576,26 @@ function ListPage({ pageKey, items, reload }: { pageKey: string; items: Item[]; 
           <span>{status}</span>
         </div>
       </header>
-      <Checklist pageKey={pageKey} items={items} reload={reload} />
+      <Checklist pageKey={pageKey} items={items} onItems={onItems} />
     </section>
   );
 }
 
-function AddItemForm({ pageKey, reload, placeholder = "Add an item" }: { pageKey: string; reload: () => Promise<void>; placeholder?: string }) {
+function AddItemForm({ pageKey, onItems, placeholder = "Add an item" }: { pageKey: string; onItems: ItemsPatch; placeholder?: string }) {
   async function add(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
     const title = String(new FormData(form).get("title") || "").trim();
     if (!title) return;
-    await api("/api/items", { method: "POST", body: JSON.stringify({ page: pageKey, title }) });
+    const { item } = await api("/api/items", { method: "POST", body: JSON.stringify({ page: pageKey, title }) });
     form.reset();
-    await reload();
+    onItems(items => [...items, item]);
   }
   return <form className="item-form" onSubmit={add}><input name="title" placeholder={placeholder} maxLength={180} aria-label={placeholder} /><button className="btn primary">Add</button></form>;
 }
 
 // Open items first; finished ones collapse into a "Done" group underneath so the list stays about what's left.
-function Checklist({ pageKey, items, reload }: { pageKey: string; items: Item[]; reload: () => Promise<void> }) {
+function Checklist({ pageKey, items, onItems }: { pageKey: string; items: Item[]; onItems: ItemsPatch }) {
   const [showDone, setShowDone] = useState(true);
   const visible = items.filter(item => item.page === pageKey);
   const open = visible.filter(item => !item.checked);
@@ -596,12 +603,12 @@ function Checklist({ pageKey, items, reload }: { pageKey: string; items: Item[];
   return (
     <div className="check-groups">
       {!visible.length && <p className="check-empty">Nothing here yet. Add your first item above.</p>}
-      {open.length > 0 && <ol className="check-list">{open.map(item => <ChecklistItem key={item.id} item={item} reload={reload} />)}</ol>}
+      {open.length > 0 && <ol className="check-list">{open.map(item => <ChecklistItem key={item.id} item={item} onItems={onItems} />)}</ol>}
       {visible.length > 0 && !open.length && <p className="check-empty all-done">Everything is checked off. Nice work.</p>}
       {done.length > 0 && (
         <section className="check-section">
           <div className="check-section-head"><h2>Done · {done.length}</h2><button type="button" className="link-button" onClick={() => setShowDone(show => !show)}>{showDone ? "Hide" : "Show"}</button></div>
-          {showDone && <ol className="check-list">{done.map(item => <ChecklistItem key={item.id} item={item} reload={reload} />)}</ol>}
+          {showDone && <ol className="check-list">{done.map(item => <ChecklistItem key={item.id} item={item} onItems={onItems} />)}</ol>}
         </section>
       )}
     </div>
@@ -609,18 +616,24 @@ function Checklist({ pageKey, items, reload }: { pageKey: string; items: Item[];
 }
 
 // Places-to-visit tab on Explore: same list with its own add form.
-function ChecklistBody({ pageKey, items, reload, placeholder = "Add an item" }: { pageKey: string; items: Item[]; reload: () => Promise<void>; placeholder?: string }) {
-  return <><AddItemForm pageKey={pageKey} reload={reload} placeholder={placeholder} /><Checklist pageKey={pageKey} items={items} reload={reload} /></>;
+function ChecklistBody({ pageKey, items, onItems, placeholder = "Add an item" }: { pageKey: string; items: Item[]; onItems: ItemsPatch; placeholder?: string }) {
+  return <><AddItemForm pageKey={pageKey} onItems={onItems} placeholder={placeholder} /><Checklist pageKey={pageKey} items={items} onItems={onItems} /></>;
 }
 
-function ChecklistItem({ item, reload }: { item: Item; reload: () => Promise<void> }) {
+function ChecklistItem({ item, onItems }: { item: Item; onItems: ItemsPatch }) {
   async function toggle() {
-    await api("/api/items", { method: "PATCH", body: JSON.stringify({ id: item.id, checked: !item.checked }) });
-    await reload();
+    const checked = !item.checked;
+    // Flip it right away and move it to the end of its new group, which is where the server puts it too.
+    onItems(items => [...items.filter(other => other.id !== item.id), { ...item, checked }]);
+    try {
+      await api("/api/items", { method: "PATCH", body: JSON.stringify({ id: item.id, checked }) });
+    } catch {
+      onItems(items => items.map(other => (other.id === item.id ? { ...other, checked: !checked } : other)));
+    }
   }
   async function remove() {
     await api("/api/items", { method: "DELETE", body: JSON.stringify({ id: item.id }) });
-    await reload();
+    onItems(items => items.filter(other => other.id !== item.id));
   }
   return (
     <li className={item.checked ? "check-card done" : "check-card"}>
@@ -634,7 +647,7 @@ function ChecklistItem({ item, reload }: { item: Item; reload: () => Promise<voi
   );
 }
 
-function ExplorePage({ items, itinerary, startDate, openModal, reload }: { items: Item[]; itinerary: AppState["itinerary"]; startDate: string; openModal: () => void; reload: () => Promise<void> }) {
+function ExplorePage({ items, itinerary, startDate, openModal, reload, onItems }: { items: Item[]; itinerary: AppState["itinerary"]; startDate: string; openModal: () => void; reload: () => Promise<void>; onItems: ItemsPatch }) {
   const [tab, setTab] = useState<"itinerary" | "places">("itinerary");
   const [confirmClear, setConfirmClear] = useState(false);
   const saved = itinerary?.saved_plan || "";
@@ -670,7 +683,7 @@ function ExplorePage({ items, itinerary, startDate, openModal, reload }: { items
           )}
         </TabPanel>
       )}
-      {tab === "places" && <TabPanel id="places"><ChecklistBody pageKey="explore" items={items} reload={reload} placeholder="Add a place you want to visit" /></TabPanel>}
+      {tab === "places" && <TabPanel id="places"><ChecklistBody pageKey="explore" items={items} onItems={onItems} placeholder="Add a place you want to visit" /></TabPanel>}
       {confirmClear && (
         <div className="modal-backdrop" onClick={() => setConfirmClear(false)}>
           <section className="modal confirm-modal" role="dialog" aria-modal="true" onClick={event => event.stopPropagation()}>
