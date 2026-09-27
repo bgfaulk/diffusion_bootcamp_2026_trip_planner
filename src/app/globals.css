@@ -280,6 +280,10 @@ a { color:var(--accent-dark); font-weight:800; }
 .photo-stop small { display:block; color:var(--muted); }
 .photo-frame { aspect-ratio:4/3; border:1px solid var(--line); border-radius:7px; overflow:hidden; display:grid; place-items:center; text-align:center; color:var(--accent-dark); font-weight:900; background:linear-gradient(140deg, color-mix(in srgb, var(--accent) 22%, transparent), color-mix(in srgb, var(--bay) 16%, transparent)); }
 .photo-frame img { width:100%; height:100%; object-fit:cover; display:block; }
+/* Stock photos carry a small corner tag so they read as placeholders, not the attendee's own shot. */
+.photo-frame.stock { position:relative; }
+.stock-tag { position:absolute; top:8px; left:8px; padding:2px 8px; border-radius:999px; background:rgba(0,0,0,.55); color:#fff; font-style:normal; font-size:10px; font-weight:850; letter-spacing:.08em; text-transform:uppercase; backdrop-filter:blur(4px); }
+.stock-credit { font-size:13px; }
 .login-page { min-height:100vh; display:grid; place-items:center; padding:20px; }
 .login-card { width:min(560px, 100%); padding:28px; display:grid; gap:16px; }
 .stack { display:grid; gap:12px; }
@@ -858,6 +862,7 @@ a { color:var(--accent-dark); font-weight:800; }
 :root[data-theme="nirvana"] .photo-path polyline { stroke:var(--cyan); stroke-width:3; stroke-dasharray:0 9; opacity:1; filter:drop-shadow(0 0 4px var(--cyan)); }
 :root[data-theme="nirvana"] .photo-path circle { fill:var(--void); stroke:var(--cyan); stroke-width:2; filter:drop-shadow(0 0 6px var(--cyan)); }
 :root[data-theme="nirvana"] .photo-path circle.filled { fill:var(--cyan); }
+:root[data-theme="nirvana"] .stock-tag { border-radius:0; background:rgba(2,8,14,.8); color:var(--cyan); box-shadow:inset 0 0 0 1px var(--cyan-line); font-family:var(--display); letter-spacing:.18em; }
 :root[data-theme="nirvana"] .photo-frame { font-family:var(--display); font-size:.78rem; letter-spacing:.2em; text-transform:uppercase; color:var(--cyan); border-color:var(--cyan-line); background:linear-gradient(140deg, rgba(0,229,255,.16), rgba(255,122,26,.08)), repeating-linear-gradient(0deg, rgba(0,229,255,.06) 0 1px, transparent 1px 18px), repeating-linear-gradient(90deg, rgba(0,229,255,.06) 0 1px, transparent 1px 18px); }
 :root[data-theme="nirvana"] .viewer-media { color:var(--cyan); border-color:var(--cyan-line); background:rgba(0,229,255,.03); }
 :root[data-theme="nirvana"] .abc-stage { background:radial-gradient(circle at 50% 42%, #061018, var(--void) 70%); }

@@ -20,7 +20,7 @@ import { Help } from "./help";
 import { ExtraItemsNote, ProgressBlock, StarCells, StarsProvider, useStars, useStarsRefresh, type StarsPayload } from "./stars";
 import { PRIZE_NOTE, starRules, type LeaderRow, type StarState } from "@/lib/stars-rules";
 import { WhatsAppModal } from "./whatsapp-modal";
-import { photoSpots } from "@/lib/photo-spots";
+import { photoSpots, stockPhotos } from "@/lib/photo-spots";
 import { bookingEvent, buildIcs, downloadIcs, slug, trainingEvents, tripWindowEvent, type CalendarEvent } from "@/lib/calendar";
 import { formatBytes, MAX_PHOTO_EDGE, preparePhoto, type PreparedPhoto } from "@/lib/image";
 import { applyFx, applyTheme, storedFx, storedTheme, THEMES, themeLabels, type Theme } from "@/lib/theme";
@@ -66,6 +66,7 @@ type AppState = {
   settings: Settings;
   items: Item[];
   photos: Record<string, { id: string; caption: string; imageUrl: string }>;
+  stockHidden: string[]; // photo-route stops whose stock photo this person deleted
   itinerary: null | { instructions?: string; response?: string; saved_plan?: string };
   tripInfo: TripInfo[];
   tripDocuments: TripDocument[];
@@ -84,6 +85,7 @@ const emptyAppState: AppState = {
   settings: null,
   items: [],
   photos: {},
+  stockHidden: [],
   itinerary: null,
   tripInfo: [],
   tripDocuments: [],
@@ -546,13 +548,13 @@ export default function Home() {
         {listPages.includes(page) && <ListPage pageKey={page} items={data.items} onItems={patchItems} />}
         {page === "explore" && <ExplorePage items={data.items.filter(item => item.page === "explore")} itinerary={data.itinerary} startDate={answers.startDate} openModal={() => setItineraryOpen(true)} reload={load} onItems={patchItems} />}
         {page === "tripInfo" && <TripInfoPage tripInfo={data.tripInfo} tripDocuments={data.tripDocuments} reload={load} answers={answers} settings={data.settings} email={data.user.email} />}
-        {page === "gallery" && <Gallery photos={data.photos} openViewer={setViewer} reload={load} />}
+        {page === "gallery" && <Gallery photos={data.photos} stockHidden={data.stockHidden} openViewer={setViewer} reload={load} />}
         {page === "settings" && <SettingsPage settings={data.settings} saveSettings={saveSettings} reload={load} tab={settingsTab} onTab={setSettingsTab} guideReadAt={data.stars?.flags.guideReadAt ?? null} onGuideRead={markGuideRead} />}
         {page === "organizer" && data.user.owner && <OrganizerPage userId={data.user.id} />}
       </main>
 
       {itineraryOpen && <ItineraryModal items={data.items.filter(item => item.page === "explore")} itinerary={data.itinerary} answers={answers} hasTripData={Boolean(data.itinerary?.saved_plan) || data.tripInfo.length > 0} onClose={() => setItineraryOpen(false)} reload={load} />}
-      {viewer && <PhotoViewer spot={viewer} photos={data.photos} onClose={() => setViewer(null)} onDeleted={load} />}
+      {viewer && <PhotoViewer spot={viewer} photos={data.photos} stockHidden={data.stockHidden} onClose={() => setViewer(null)} onDeleted={load} />}
       {themeOpen && <ThemeModal theme={theme} fx={fx} onTheme={chooseTheme} onFx={toggleFx} onClose={() => setThemeOpen(false)} />}
       {notificationsOpen && <NotificationsModal items={data.notifications} done={tourDone} onChange={list => setData(current => ({ ...current, notifications: list }))} onClose={() => setNotificationsOpen(false)} onAction={action => {
         setNotificationsOpen(false);
@@ -579,6 +581,7 @@ function normalizeAppState(next: Partial<AppState>): AppState {
     settings: next.settings || null,
     items: Array.isArray(next.items) ? next.items : [],
     photos: next.photos && typeof next.photos === "object" ? next.photos : {},
+    stockHidden: Array.isArray(next.stockHidden) ? next.stockHidden.filter((id: unknown): id is string => typeof id === "string") : [],
     notifications: Array.isArray(next.notifications) ? next.notifications : [],
     links: { whatsapp: typeof next.links?.whatsapp === "string" ? next.links.whatsapp : "" },
     itinerary: next.itinerary || null,
@@ -1296,7 +1299,7 @@ function FormModal({ title, eyebrow, onClose, children }: { title: string; eyebr
   );
 }
 
-function Gallery({ photos, openViewer, reload }: { photos: AppState["photos"]; openViewer: (spot: string) => void; reload: () => Promise<void> }) {
+function Gallery({ photos, stockHidden, openViewer, reload }: { photos: AppState["photos"]; stockHidden: string[]; openViewer: (spot: string) => void; reload: () => Promise<void> }) {
   const [addOpen, setAddOpen] = useState(false);
   const [prepared, setPrepared] = useState<PreparedPhoto | null>(null);
   const [preparing, setPreparing] = useState(false);
@@ -1338,7 +1341,7 @@ function Gallery({ photos, openViewer, reload }: { photos: AppState["photos"]; o
   return (
     <section className="page active">
       <header className="page-header page-header-row"><div><p className="eyebrow">Photo route</p><h1>Six stops, six photos</h1></div><button className="btn primary" onClick={() => setAddOpen(true)}>+ Photo</button></header>
-      <p className="muted">One photo per stop, {count} of {photoSpots.length} filled. Tap a stop to see its photo full size or delete it. Adding a photo to a filled stop replaces the old one.</p>
+      <p className="muted">One photo per stop, {count} of {photoSpots.length} filled with your own. Stops start with a stock photo of the place; add yours to replace it. Tap a stop to see its photo full size or delete it.</p>
       {addOpen && (
         <FormModal eyebrow="Photo route" title="Add a photo" onClose={closeAdd}>
           <form className="document-form in-modal" onSubmit={upload}>
@@ -1358,7 +1361,7 @@ function Gallery({ photos, openViewer, reload }: { photos: AppState["photos"]; o
           </form>
         </FormModal>
       )}
-      <PhotoRoute photos={photos} openViewer={openViewer} />
+      <PhotoRoute photos={photos} stockHidden={stockHidden} openViewer={openViewer} />
     </section>
   );
 }
@@ -1366,7 +1369,7 @@ function Gallery({ photos, openViewer, reload }: { photos: AppState["photos"]; o
 // The stops alternate left and right and a dotted path zig-zags between them: down the inner side of each
 // card, then diagonally across the gap to the next. The path is an SVG drawn from the cards' measured
 // positions, so it follows whatever height the cards end up with on any screen.
-function PhotoRoute({ photos, openViewer }: { photos: AppState["photos"]; openViewer: (spot: string) => void }) {
+function PhotoRoute({ photos, stockHidden, openViewer }: { photos: AppState["photos"]; stockHidden: string[]; openViewer: (spot: string) => void }) {
   const ref = useRef<HTMLDivElement>(null);
   const [geometry, setGeometry] = useState<{ width: number; height: number; points: string; markers: [number, number][] }>({ width: 0, height: 0, points: "", markers: [] });
   useEffect(() => {
@@ -1400,21 +1403,42 @@ function PhotoRoute({ photos, openViewer }: { photos: AppState["photos"]; openVi
         {geometry.points && <polyline points={geometry.points} />}
         {geometry.markers.map(([x, y], index) => <circle key={index} cx={x} cy={y} r={7} className={photos[photoSpots[index][0]] ? "filled" : ""} />)}
       </svg>
-      {photoSpots.map(([id, title, hint]) => (
-        <button key={id} className="photo-stop" onClick={() => openViewer(id)}>
-          <span className="photo-frame">{photos[id] ? <img src={photos[id].imageUrl} alt={title} /> : title}</span>
-          <span><strong>{title}</strong><small>{photos[id]?.caption || hint}</small></span>
-        </button>
-      ))}
+      {photoSpots.map(([id, title, hint]) => {
+        const stock = !photos[id] && !stockHidden.includes(id) ? stockPhotos[id] : null;
+        return (
+          <button key={id} className="photo-stop" onClick={() => openViewer(id)}>
+            <span className={`photo-frame ${stock ? "stock" : ""}`}>
+              {photos[id] ? <img src={photos[id].imageUrl} alt={title} /> : stock ? <><img src={stock.src} alt={`${title} (stock photo)`} loading="lazy" /><i className="stock-tag">Stock</i></> : title}
+            </span>
+            <span><strong>{title}</strong><small>{photos[id]?.caption || (stock ? `${hint} · add yours to replace this` : hint)}</small></span>
+          </button>
+        );
+      })}
     </div>
   );
 }
 
-function PhotoViewer({ spot, photos, onClose, onDeleted }: { spot: string; photos: AppState["photos"]; onClose: () => void; onDeleted: () => Promise<void> }) {
+function PhotoViewer({ spot, photos, stockHidden, onClose, onDeleted }: { spot: string; photos: AppState["photos"]; stockHidden: string[]; onClose: () => void; onDeleted: () => Promise<void> }) {
   const meta = photoSpots.find(([id]) => id === spot);
   const photo = photos[spot];
+  const stock = !photo && !stockHidden.includes(spot) ? stockPhotos[spot] : null;
   const [confirming, setConfirming] = useState(false);
+  const [confirmStock, setConfirmStock] = useState(false);
   const [busy, setBusy] = useState(false);
+  // Deleting a stock photo is remembered on the account, so the stop stays empty until the person adds their own.
+  async function removeStock() {
+    setBusy(true);
+    try {
+      await api("/api/photos/stock", { method: "POST", body: JSON.stringify({ spot, hidden: true }) });
+      await onDeleted();
+      notify.success("Stock photo deleted");
+      onClose();
+    } catch (err) {
+      notify.error(err, "Could not delete that stock photo");
+      setBusy(false);
+      setConfirmStock(false);
+    }
+  }
   async function remove() {
     if (!photo) return;
     setBusy(true);
@@ -1434,7 +1458,13 @@ function PhotoViewer({ spot, photos, onClose, onDeleted }: { spot: string; photo
         <button className="modal-x" onClick={onClose}>×</button>
         <h2>{meta?.[1] || "Photo"}</h2>
         <p className="muted">{photo?.caption || meta?.[2]}</p>
-        <div className="viewer-media">{photo ? <img src={photo.imageUrl} alt={meta?.[1]} /> : meta?.[1]}</div>
+        <div className="viewer-media">{photo ? <img src={photo.imageUrl} alt={meta?.[1]} /> : stock ? <img src={stock.src} alt={`${meta?.[1]} (stock photo)`} /> : meta?.[1]}</div>
+        {stock && (
+          <>
+            <p className="muted stock-credit">Stock photo{stock.author ? <> by {stock.author}</> : null}{stock.license ? <>, {stock.license}</> : null}{stock.sourceUrl ? <>, via <a href={stock.sourceUrl} target="_blank" rel="noreferrer">Wikimedia Commons</a></> : null}. Add your own with &ldquo;+ Photo&rdquo; and it takes this one&apos;s place.</p>
+            <div className="button-row"><button type="button" className="btn danger" onClick={() => setConfirmStock(true)}>Delete stock photo</button></div>
+          </>
+        )}
         {photo && !confirming && <div className="button-row"><button type="button" className="btn danger" onClick={() => setConfirming(true)}>Delete photo</button></div>}
         {photo && confirming && (
           <div className="button-row viewer-confirm">
@@ -1443,8 +1473,19 @@ function PhotoViewer({ spot, photos, onClose, onDeleted }: { spot: string; photo
             <button type="button" className="btn" disabled={busy} onClick={() => setConfirming(false)}>Keep it</button>
           </div>
         )}
-        {!photo && <p className="muted">No photo here yet. Use “+ Photo” on the route to add one.</p>}
+        {!photo && !stock && <p className="muted">No photo here yet. Use “+ Photo” on the route to add one.</p>}
       </section>
+      {confirmStock && (
+        <div className="modal-backdrop" onClick={event => { event.stopPropagation(); if (!busy) setConfirmStock(false); }}>
+          <section className="modal confirm-modal" role="dialog" aria-modal="true" aria-labelledby="stock-confirm-title" onClick={event => event.stopPropagation()}>
+            <button type="button" className="modal-x" onClick={() => setConfirmStock(false)} aria-label="Close" disabled={busy}>×</button>
+            <p className="eyebrow">Photo route</p>
+            <h2 id="stock-confirm-title">Delete the stock photo?</h2>
+            <p>Once it&apos;s deleted, this stock photo is gone for good. The {meta?.[1] || "stop"} stop stays empty until you add a photo of your own.</p>
+            <div className="button-row"><button type="button" className="btn" disabled={busy} onClick={() => setConfirmStock(false)}>Keep it</button><button type="button" className="btn danger" disabled={busy} onClick={removeStock}>{busy ? "Deleting..." : "Delete for good"}</button></div>
+          </section>
+        </div>
+      )}
     </div>
   );
 }

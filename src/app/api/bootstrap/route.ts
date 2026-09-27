@@ -1,4 +1,5 @@
 import { after } from "next/server";
+import { parseHiddenStock } from "@/lib/photo-spots";
 import { runHealthCheck } from "@/lib/health";
 import { ensureWelcomed } from "@/lib/welcome";
 import { getUser } from "@/lib/auth";
@@ -34,7 +35,7 @@ export const GET = withTraffic("bootstrap", async (_request, ctx) => {
   await ensureWelcomed(user.id, false).catch(() => {});
   const sql = getSql();
   const [settings, items, photos, itinerary, tripInfo, tripDocuments, notifications] = await Promise.all([
-    sql`SELECT user_id, profile_name, trip_name, home_address, home_place_id, training_location, training_place_id, theme, planning_mode, planning_answers, chime_muted, calendar_guest, updated_at FROM settings WHERE user_id = ${user.id}`,
+    sql`SELECT user_id, profile_name, trip_name, home_address, home_place_id, training_location, training_place_id, theme, planning_mode, planning_answers, chime_muted, calendar_guest, hidden_stock_spots, updated_at FROM settings WHERE user_id = ${user.id}`,
     sql`SELECT * FROM list_items WHERE user_id = ${user.id} ORDER BY checked ASC, position ASC, created_at ASC`,
     sql`
       SELECT p.id, p.spot, p.caption
@@ -60,6 +61,8 @@ export const GET = withTraffic("bootstrap", async (_request, ctx) => {
     stars: starState.stars,
     leaderboard: starState.leaderboard,
     items: items.map((item: any) => ({ ...item, title: decryptText(item.title) })),
+    // Stock photos the person deleted from the route; the client hides those and shows the empty frame instead.
+    stockHidden: parseHiddenStock(settings[0]?.hidden_stock_spots),
     photos: Object.fromEntries(photos.map((photo: any) => [photo.spot, {
       id: photo.id,
       caption: decryptText(photo.caption),

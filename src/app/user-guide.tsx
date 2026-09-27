@@ -68,7 +68,7 @@ export function UserGuide({ readAt = null, onRead }: { readAt?: string | null; o
       <ul>
         <li>Six stops around the Bay Area, each with room for one photo: Golden Gate Overlook, Ferry Building, North Beach, Mission District, Half Moon Bay, and a favorite surprise.</li>
         <li>&ldquo;+ Photo&rdquo; adds a photo to a stop. Large photos are shrunk before they are saved. Adding a photo to a filled stop replaces the old one.</li>
-        <li>Tap a stop to see its photo full size or to delete it.</li>
+        <li>Every stop starts with a stock photo of the place, marked &ldquo;Stock.&rdquo; Adding your own photo replaces it. Tap a stop to see its photo full size or to delete it; deleting a stock photo removes it for good, so the app asks first.</li>
       </ul>
       <h3>Settings</h3>
       <ul>
@@ -133,7 +133,7 @@ export function UserGuide({ readAt = null, onRead }: { readAt?: string | null; o
         <li>The theme picker moved into its own window from the account menu.</li>
         <li>Every page has its own web address.</li>
         <li>Every save now confirms it worked or says why it did not.</li>
-        <li>Photo Route: photos can be deleted, large photos are shrunk before saving, each stop holds one photo, and the route zig-zags between stops.</li>
+        <li>Photo Route: photos can be deleted, large photos are shrunk before saving, each stop holds one photo, and the route zig-zags between stops. Stops now start with a stock photo until you add your own.</li>
         <li>Login: a Welcome step for first-time visitors, a clearer &ldquo;Create an account&rdquo; button, and your email remembered for a year on devices you have used.</li>
         <li>Automatic sign-out after an hour of inactivity, with a two-minute warning.</li>
         <li>The loading screen plays A, B, C as three rising notes, with a mute switch in Settings.</li>
