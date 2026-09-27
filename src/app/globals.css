@@ -368,9 +368,12 @@ a { color:var(--accent-dark); font-weight:800; }
 /* Phones: the sidebar becomes a slim top bar (brand + avatar) and the primary nav a bottom rail that scrolls
    sideways, so the page content starts at the top of the screen instead of under a stack of buttons. */
 @media (max-width: 900px) {
-  .app-shell { grid-template-columns:1fr; }
+  /* Two explicit rows: the top bar takes its own height and the content gets the rest. Without this the
+     shell's min-height:100vh is shared between two auto rows, so a short page grows the top bar. */
+  .app-shell { grid-template-columns:1fr; grid-template-rows:auto minmax(0, 1fr); align-content:start; }
   .app-shell:has(.sidebar.collapsed) { grid-template-columns:1fr; }
-  /* backdrop-filter would make the sidebar the containing block for the fixed rail below, so the bar goes opaque here. */
+  /* backdrop-filter would make the sidebar the containing block for the fixed rail below, so the bar goes opaque here.
+     (Digital Nirvana's more specific sidebar rule re-adds a blur; its phone override sits next to that rule.) */
   .sidebar, .sidebar.collapsed { position:sticky; top:0; z-index:15; height:auto; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 14px; border-right:0; border-bottom:1px solid var(--line); background:var(--panel); backdrop-filter:none; }
   .sidebar .brand, .sidebar.collapsed .brand { flex:1; min-width:0; flex-direction:row; gap:12px; padding:0; }
   .sidebar-toggle { display:none; }
@@ -386,6 +389,11 @@ a { color:var(--accent-dark); font-weight:800; }
   .nav-label { flex:none; text-align:center; white-space:nowrap; overflow-wrap:normal; }
   .nav-count, .sidebar.collapsed .nav-count { position:absolute; top:4px; right:6px; min-width:18px; padding:0 5px; font-size:10px; line-height:16px; }
   .content { padding:14px 14px calc(88px + env(safe-area-inset-bottom)); }
+  /* Page titles keep whole words; when the title and its action button can't share the width the button wraps below. */
+  .page-header-row { flex-wrap:wrap; align-items:start; }
+  .page-header-row > div { flex:1 1 230px; }
+  .page-header-row h1 { overflow-wrap:normal; }
+  .page-header-row > .btn, .page-header-row > .action-menu { margin-bottom:0; }
   .settings-grid, .trip-form, .document-form, .choice-grid, .wizard-grid { grid-template-columns:1fr; }
   .choice-card, .wizard-card { padding:20px; }
   .wizard-page { padding:16px; }
@@ -491,7 +499,7 @@ a { color:var(--accent-dark); font-weight:800; }
 
 /* panels: glow border + inner glow; big cards get diagonal corner accents, leaf cards get cut corners */
 :root[data-theme="nirvana"] :is(.callout, .settings-grid, .trip-form, .booking-section, .documents-panel, .login-card, .modal, .viewer, .choice-card, .wizard-card) {
-  position:relative; background:var(--panel); border:1px solid var(--cyan-dim); box-shadow:inset 0 0 28px rgba(0,229,255,.1); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px);
+  position:relative; background:var(--panel); border:1px solid var(--cyan-dim); box-shadow:inset 0 0 28px rgba(0,229,255,.1); backdrop-filter:blur(6px);
 }
 :root[data-theme="nirvana"] :is(.trip-form.compact, .booking-section, .documents-panel, .settings-grid) { border-color:var(--cyan-line); box-shadow:inset 0 0 18px rgba(0,229,255,.06); }
 :root[data-theme="nirvana"] :is(.callout, .login-card) { clip-path:var(--cut); }
@@ -499,7 +507,7 @@ a { color:var(--accent-dark); font-weight:800; }
 :root[data-theme="nirvana"] :is(.wizard-card, .choice-card, .modal, .viewer)::after { content:""; position:absolute; width:22px; height:2px; background:var(--cyan); box-shadow:0 0 10px var(--cyan); pointer-events:none; }
 :root[data-theme="nirvana"] :is(.wizard-card, .choice-card, .modal, .viewer)::before { top:10px; left:6px; transform:rotate(-45deg); transform-origin:left; }
 :root[data-theme="nirvana"] :is(.wizard-card, .choice-card, .modal, .viewer)::after { bottom:10px; right:6px; transform:rotate(-45deg); transform-origin:right; }
-:root[data-theme="nirvana"] .modal-backdrop { background:rgba(2,4,9,.78); backdrop-filter:blur(3px); -webkit-backdrop-filter:blur(3px); }
+:root[data-theme="nirvana"] .modal-backdrop { background:rgba(2,4,9,.78); backdrop-filter:blur(3px); }
 :root[data-theme="nirvana"] .modal-x { border:1px solid var(--cyan-line); background:none; color:var(--cyan); }
 :root[data-theme="nirvana"] .modal-x:hover { color:var(--orange); border-color:var(--orange); }
 
@@ -519,7 +527,7 @@ a { color:var(--accent-dark); font-weight:800; }
 :root[data-theme="nirvana"] :is(.booking-card span, .document-row span, .wizard-list li span) { color:var(--muted); }
 
 /* chips */
-:root[data-theme="nirvana"] :is(.checklist-hero, .check-card, .check-empty) { position:relative; background:var(--panel); border:1px solid var(--cyan-line); box-shadow:inset 0 0 18px rgba(0,229,255,.06); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px); }
+:root[data-theme="nirvana"] :is(.checklist-hero, .check-card, .check-empty) { position:relative; background:var(--panel); border:1px solid var(--cyan-line); box-shadow:inset 0 0 18px rgba(0,229,255,.06); backdrop-filter:blur(6px); }
 :root[data-theme="nirvana"] .checklist-hero { border-color:var(--cyan-dim); box-shadow:inset 0 0 28px rgba(0,229,255,.1); clip-path:var(--cut); }
 :root[data-theme="nirvana"] .check-card { clip-path:var(--cut-xs); }
 :root[data-theme="nirvana"] .check-card:hover { border-color:var(--cyan); }
@@ -538,7 +546,7 @@ a { color:var(--accent-dark); font-weight:800; }
 :root[data-theme="nirvana"] .delete-item { font-size:.76rem; font-weight:400; letter-spacing:.14em; text-transform:uppercase; }
 :root[data-theme="nirvana"] .check-empty { border-style:dashed; }
 :root[data-theme="nirvana"] .check-empty.all-done { border-color:var(--cyan-dim); color:var(--cyan); }
-:root[data-theme="nirvana"] :is(.plan-summary, .plan-day, .plan-notes, .plan-prose) { position:relative; background:var(--panel); border:1px solid var(--cyan-line); box-shadow:inset 0 0 18px rgba(0,229,255,.06); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px); }
+:root[data-theme="nirvana"] :is(.plan-summary, .plan-day, .plan-notes, .plan-prose) { position:relative; background:var(--panel); border:1px solid var(--cyan-line); box-shadow:inset 0 0 18px rgba(0,229,255,.06); backdrop-filter:blur(6px); }
 :root[data-theme="nirvana"] .plan-summary { border-color:var(--cyan-dim); clip-path:var(--cut); }
 :root[data-theme="nirvana"] .plan-day .day-list li { background:rgba(2,8,14,.7); }
 :root[data-theme="nirvana"] .plan-meta { font-weight:400; letter-spacing:.16em; color:var(--cyan-dim); }
@@ -553,7 +561,11 @@ a { color:var(--accent-dark); font-weight:800; }
 :root[data-theme="nirvana"] .chip-add input { min-height:38px; padding:7px 14px; clip-path:var(--cut-xs); }
 
 /* sidebar + profile menu */
-:root[data-theme="nirvana"] .sidebar { background:rgba(2,6,12,.86); border-right:1px solid var(--cyan-line); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); }
+:root[data-theme="nirvana"] .sidebar { background:rgba(2,6,12,.86); border-right:1px solid var(--cyan-line); backdrop-filter:blur(8px); }
+@media (max-width: 900px) {
+  /* Phones: no blur (it would trap the fixed bottom rail inside the top bar) and the side border becomes a bottom one. */
+  :root[data-theme="nirvana"] .sidebar { background:rgba(2,6,12,.96); border-right:0; border-bottom-color:var(--cyan-line); backdrop-filter:none; }
+}
 :root[data-theme="nirvana"] .brand-divider { background:var(--cyan-line); }
 :root[data-theme="nirvana"] .brand strong { display:block; font-family:var(--display); font-size:.74rem; letter-spacing:.12em; text-transform:uppercase; }
 :root[data-theme="nirvana"] .brand div span { font-size:.84rem; margin-top:3px; }
@@ -577,7 +589,7 @@ a { color:var(--accent-dark); font-weight:800; }
 :root[data-theme="nirvana"] .profile-button { background:rgba(0,229,255,.04); border:0; box-shadow:inset 0 0 0 1px var(--cyan-line); }
 :root[data-theme="nirvana"] .profile-button:hover { box-shadow:inset 0 0 0 1px var(--cyan); }
 :root[data-theme="nirvana"] .avatar { font-family:var(--display); color:var(--cyan); background:none; border:1px solid var(--cyan-dim); box-shadow:inset 0 0 10px rgba(0,229,255,.25); }
-:root[data-theme="nirvana"] :is(.profile-popover, .action-menu-list, .suggestions) { padding:6px; background:rgba(2,7,13,.96); border:1px solid var(--cyan-dim); box-shadow:0 0 22px rgba(0,229,255,.18); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px); }
+:root[data-theme="nirvana"] :is(.profile-popover, .action-menu-list, .suggestions) { padding:6px; background:rgba(2,7,13,.96); border:1px solid var(--cyan-dim); box-shadow:0 0 22px rgba(0,229,255,.18); backdrop-filter:blur(6px); }
 :root[data-theme="nirvana"] :is(.profile-popover, .action-menu-list, .suggestions) button { border:0; background:none; color:var(--ink); font-size:.95rem; font-weight:400; letter-spacing:.06em; }
 :root[data-theme="nirvana"] :is(.profile-popover, .action-menu-list, .suggestions) button:is(:hover, :focus-visible) { background:rgba(0,229,255,.09); color:var(--cyan); }
 :root[data-theme="nirvana"] :is(.profile-popover .sign-out, .action-menu-list button.danger) { color:var(--red); }
@@ -729,7 +741,7 @@ a { color:var(--accent-dark); font-weight:800; }
   .trip-stat { padding:4px 12px; }
 }
 
-:root[data-theme="nirvana"] :is(.hero-card, .trip-bar, .day-list li) { position:relative; background:var(--panel); border:1px solid var(--cyan-line); box-shadow:inset 0 0 18px rgba(0,229,255,.06); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px); }
+:root[data-theme="nirvana"] :is(.hero-card, .trip-bar, .day-list li) { position:relative; background:var(--panel); border:1px solid var(--cyan-line); box-shadow:inset 0 0 18px rgba(0,229,255,.06); backdrop-filter:blur(6px); }
 :root[data-theme="nirvana"] .hero-card { border-color:var(--cyan-dim); box-shadow:inset 0 0 28px rgba(0,229,255,.1); clip-path:var(--cut); }
 :root[data-theme="nirvana"] .hero-card h1 { font-size:clamp(1.3rem, 2.4vw, 2rem); letter-spacing:.1em; overflow-wrap:normal; }
 :root[data-theme="nirvana"] .hero-next { border-left-color:var(--cyan-line); }
@@ -759,7 +771,7 @@ a { color:var(--accent-dark); font-weight:800; }
 :root[data-theme="nirvana"] .card-actions { border-top-color:var(--cyan-faint); }
 :root[data-theme="nirvana"] .day-list li.training { border-left-color:rgba(234,251,255,.75); }
 :root[data-theme="nirvana"] .day-list li.training .day-time { color:var(--ink); }
-:root[data-theme="nirvana"] .schedule { position:relative; background:var(--panel); border:1px solid var(--cyan-line); box-shadow:inset 0 0 18px rgba(0,229,255,.06); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px); }
+:root[data-theme="nirvana"] .schedule { position:relative; background:var(--panel); border:1px solid var(--cyan-line); box-shadow:inset 0 0 18px rgba(0,229,255,.06); backdrop-filter:blur(6px); }
 :root[data-theme="nirvana"] .schedule .day-list li { background:rgba(2,8,14,.7); }
 :root[data-theme="nirvana"] :is(.day-time, .day-list em) { font-weight:400; font-size:.76rem; letter-spacing:.14em; text-transform:uppercase; color:var(--cyan-dim); }
 .login-help { margin:14px 0 0; font-size:14px; }
