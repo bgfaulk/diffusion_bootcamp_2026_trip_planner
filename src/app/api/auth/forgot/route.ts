@@ -15,7 +15,7 @@ export const POST = withAudit("auth.forgot", async (request, ctx) => {
     ctx.user = null;
     if (process.env.NODE_ENV === "production" && !mailConfigured()) fail("Email reset isn't set up yet. Ask the trip organizer for a reset link.", 503);
     enforceLimit(`forgot:ip:${clientIp(request)}`, 10, 15 * 60 * 1000);
-    enforceLimit(`forgot:email:${email}`, 3, 15 * 60 * 1000);
+    enforceLimit(`mail:email:${email}`, 3, 15 * 60 * 1000); // shared with the sign-up link route
     await ensureSchema();
     const rows = await getSql()`SELECT password_hash, suspended_at FROM users WHERE email = ${email}`;
     if (!rows.length) ctx.detail = "no account";

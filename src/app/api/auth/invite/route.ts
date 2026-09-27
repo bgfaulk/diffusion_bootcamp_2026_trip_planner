@@ -18,10 +18,12 @@ export const POST = withAudit("auth.invite", async (request, ctx) => {
     if (honeypotTripped(body)) return jsonError("Could not send a sign-up link", 400);
     const email = ctx.target = validateEmail(body.email);
     ctx.user = null;
+    // Limits first, so the invite code can't be guessed without a throttle. The per-email bucket is shared with
+    // "Forgot your password?", so one address gets at most three of these emails per window between the two.
+    enforceLimit(`invite:ip:${clientIp(request)}`, 10, 15 * 60 * 1000);
+    enforceLimit(`mail:email:${email}`, 3, 15 * 60 * 1000);
     requireInviteCode(body.inviteCode);
     if (process.env.NODE_ENV === "production" && !mailConfigured()) fail("Sign-up email isn't set up yet. Ask the trip organizer for help.", 503);
-    enforceLimit(`invite:ip:${clientIp(request)}`, 10, 15 * 60 * 1000);
-    enforceLimit(`invite:email:${email}`, 3, 15 * 60 * 1000);
     await ensureSchema();
     const rows = await getSql()`SELECT password_hash, suspended_at FROM users WHERE email = ${email}`;
     if (!rows.length) {
