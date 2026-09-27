@@ -5,7 +5,7 @@ import { useState } from "react";
 import { CUSTOM_BONUS, CUSTOM_LIMIT, FIXED, MIN_ITEMS_FOR_UNLOCK, PAGE_CAP, PRIZE_NOTE } from "@/lib/stars-rules";
 
 export const APP_URL = "https://diffusion-bootcamp-2026-trip-planne.vercel.app";
-export const GUIDE_UPDATED = "September 28, 2026";
+export const GUIDE_UPDATED = "September 27, 2026";
 
 // `readAt` and `onRead` drive the "I've read the guide" box at the bottom, which is worth stars (see the Stars
 // section below). The first tick is the one that counts; the box stays ticked afterwards.
