@@ -132,6 +132,8 @@ h2 { font-size: 24px; }
 .abc-logo.small .abc-feathers { gap:3px; }
 .abc-logo.small .abc-feathers i { width:9px; height:3px; }
 .abc-logo.small .abc-word { justify-self:stretch; justify-content:space-between; font-size:8.5px; letter-spacing:0; text-indent:0; }
+/* The sidebar mark lives inside .brand, whose subtitle rule (.brand div span) would otherwise recolor and resize these letters. */
+.abc-logo .abc-word span { display:inline; color:inherit; font-size:inherit; margin:0; }
 .abc-logo.small .abc-letters.flash + .abc-word { animation:none; transform:scale(1.04); }
 .primary-nav { display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: 8px; }
 .profile-button, .profile-popover button {
@@ -331,7 +333,7 @@ a { color:var(--accent-dark); font-weight:800; }
 .abc-logo .abc-letters.flash .abc-letter { color:var(--glow); text-shadow:0 0 22px var(--glow), 0 0 60px var(--glow); }
 .abc-logo .abc-feathers { gap:8px; }
 .abc-logo .abc-feathers i { width:clamp(18px, 4vw, 30px); height:6px; background:color-mix(in srgb, var(--ink) 9%, transparent); }
-.abc-logo .abc-word { justify-self:stretch; justify-content:space-between; font-size:clamp(11px, 2.2vw, 15px); letter-spacing:0; text-indent:0; color:color-mix(in srgb, var(--ink) 12%, transparent); }
+.abc-logo .abc-word { justify-self:stretch; justify-content:space-between; font-size:clamp(11px, 2.2vw, 15px); letter-spacing:0; text-indent:0; color:color-mix(in srgb, var(--ink) 9%, transparent); }
 .abc-logo .abc-letters.flash + .abc-word span { color:var(--f); text-shadow:0 0 14px var(--f), 0 0 40px var(--f); }
 .honeypot { position:absolute; left:-10000px; width:1px; height:1px; overflow:hidden; }
 .visually-hidden { position:absolute; width:1px; height:1px; margin:-1px; padding:0; border:0; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
@@ -758,6 +760,7 @@ a { color:var(--accent-dark); font-weight:800; }
 :root[data-theme="nirvana"] .brand-divider { background:var(--cyan-line); }
 :root[data-theme="nirvana"] .brand strong { display:block; font-family:var(--display); font-size:.74rem; letter-spacing:.12em; text-transform:uppercase; }
 :root[data-theme="nirvana"] .brand div span { font-size:.84rem; margin-top:3px; }
+:root[data-theme="nirvana"] .brand .abc-logo .abc-word span { font-size:inherit; margin-top:0; }
 :root[data-theme="nirvana"] .primary-nav { gap:4px; }
 :root[data-theme="nirvana"] .sidebar-toggle { border-radius:0; border-color:var(--cyan-line); background:rgba(2,7,13,.9); color:var(--cyan-dim); }
 :root[data-theme="nirvana"] .sidebar-toggle:hover { color:var(--orange); border-color:var(--orange); }
