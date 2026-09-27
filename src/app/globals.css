@@ -235,6 +235,14 @@ a { color:var(--accent-dark); font-weight:800; }
 .login-actions p { margin:4px 0 -4px; font-weight:750; }
 .notice { padding:10px 12px; border-radius:8px; background:var(--soft); color:var(--ink); font-weight:650; }
 .idle-count { font-variant-numeric:tabular-nums; }
+/* Settings > User Guide */
+.guide { display:grid; gap:10px; max-width:780px; line-height:1.5; }
+.guide h2 { margin:12px 0 0; font-size:22px; }
+.guide h2:first-child { margin-top:0; }
+.guide h3 { margin:8px 0 0; font-size:17px; }
+.guide p { margin:0; }
+.guide ul { margin:0; padding-left:22px; display:grid; gap:6px; }
+.guide a { color:var(--accent-dark); font-weight:700; overflow-wrap:anywhere; }
 /* Save feedback: bottom-center messages from notify.success / notify.error (toast.tsx). */
 .toasts { position:fixed; left:50%; bottom:calc(20px + env(safe-area-inset-bottom)); z-index:300; display:grid; gap:8px; width:min(440px, calc(100vw - 32px)); transform:translateX(-50%); pointer-events:none; }
 .toast { display:flex; align-items:center; gap:10px; padding:11px 10px 11px 14px; border-radius:10px; background:var(--ink); color:var(--panel); box-shadow:var(--shadow); font-weight:700; pointer-events:auto; animation:toastIn .2s ease; }

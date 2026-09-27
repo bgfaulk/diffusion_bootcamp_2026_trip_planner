@@ -15,6 +15,7 @@ import { OrganizerPage } from "./organizer";
 import { useWeather, WeatherPanel } from "./weather";
 import { IdleWarning, useIdleTimeout } from "./idle-timeout";
 import { notify } from "./toast";
+import { UserGuide } from "./user-guide";
 import { photoSpots } from "@/lib/photo-spots";
 import { formatBytes, MAX_PHOTO_EDGE, preparePhoto, type PreparedPhoto } from "@/lib/image";
 import { applyFx, applyTheme, storedFx, storedTheme, THEMES, themeLabels, type Theme } from "@/lib/theme";
@@ -1202,7 +1203,7 @@ function PhotoViewer({ spot, photos, onClose, onDeleted }: { spot: string; photo
 }
 
 function SettingsPage({ settings, saveSettings, reload }: { settings: Settings; saveSettings: (form: HTMLFormElement) => Promise<void>; reload: () => Promise<void> }) {
-  const [tab, setTab] = useState<"profile" | "details" | "account">("profile");
+  const [tab, setTab] = useState<"profile" | "details" | "account" | "guide">("profile");
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteText, setDeleteText] = useState("");
   async function deleteAccount() {
@@ -1211,7 +1212,7 @@ function SettingsPage({ settings, saveSettings, reload }: { settings: Settings; 
     await api("/api/account", { method: "DELETE" });
     window.location.reload();
   }
-  return <section className="page active"><header className="page-header"><p className="eyebrow">Profile</p><h1>Settings</h1></header><Tabs label="Settings sections" active={tab} onChange={setTab} tabs={[{ key: "profile", label: "Profile" }, { key: "details", label: "Trip details" }, { key: "account", label: "Account" }]} />{tab === "profile" && <TabPanel id="profile"><SettingsForm settings={settings} onSubmit={saveSettings} /></TabPanel>}{tab === "details" && <TabPanel id="details"><TripDetailsPanel settings={settings} reload={reload} /></TabPanel>}{tab === "account" && <TabPanel id="account"><div className="danger-panel"><h2>Delete account data</h2><p className="muted">Remove this account and all saved trip planner data from the database.</p><button className="btn danger" onClick={() => setDeleteOpen(true)}>Delete my account data</button></div></TabPanel>}{deleteOpen && <div className="modal-backdrop"><section className="modal confirm-modal"><button className="modal-x" onClick={() => setDeleteOpen(false)}>×</button><p className="eyebrow">Danger zone</p><h2>Delete account data?</h2><p>This removes the account, checklists, trip information, PDFs, photos, and itinerary from the database. Type DELETE to confirm.</p><label>Confirmation<input value={deleteText} onChange={event => setDeleteText(event.target.value)} placeholder="DELETE" /></label><div className="button-row"><button className="btn" onClick={() => setDeleteOpen(false)}>Cancel</button><button className="btn danger" disabled={deleteText !== "DELETE"} onClick={deleteAccount}>Delete permanently</button></div></section></div>}</section>;
+  return <section className="page active"><header className="page-header"><p className="eyebrow">Profile</p><h1>Settings</h1></header><Tabs label="Settings sections" active={tab} onChange={setTab} tabs={[{ key: "profile", label: "Profile" }, { key: "details", label: "Trip details" }, { key: "account", label: "Account" }, { key: "guide", label: "User Guide" }]} />{tab === "profile" && <TabPanel id="profile"><SettingsForm settings={settings} onSubmit={saveSettings} /></TabPanel>}{tab === "details" && <TabPanel id="details"><TripDetailsPanel settings={settings} reload={reload} /></TabPanel>}{tab === "guide" && <TabPanel id="guide"><UserGuide /></TabPanel>}{tab === "account" && <TabPanel id="account"><div className="danger-panel"><h2>Delete account data</h2><p className="muted">Remove this account and all saved trip planner data from the database.</p><button className="btn danger" onClick={() => setDeleteOpen(true)}>Delete my account data</button></div></TabPanel>}{deleteOpen && <div className="modal-backdrop"><section className="modal confirm-modal"><button className="modal-x" onClick={() => setDeleteOpen(false)}>×</button><p className="eyebrow">Danger zone</p><h2>Delete account data?</h2><p>This removes the account, checklists, trip information, PDFs, photos, and itinerary from the database. Type DELETE to confirm.</p><label>Confirmation<input value={deleteText} onChange={event => setDeleteText(event.target.value)} placeholder="DELETE" /></label><div className="button-row"><button className="btn" onClick={() => setDeleteOpen(false)}>Cancel</button><button className="btn danger" disabled={deleteText !== "DELETE"} onClick={deleteAccount}>Delete permanently</button></div></section></div>}</section>;
 }
 
 function SettingsForm({ settings, onSubmit }: { settings: Settings; onSubmit: (form: HTMLFormElement) => Promise<void> }) {
