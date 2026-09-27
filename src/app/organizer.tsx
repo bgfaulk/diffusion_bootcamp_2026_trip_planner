@@ -68,6 +68,38 @@ function useAdmin<T>(path: string | null, { tick, onLoading }: Shared) {
   return { data, error, loading, reload: load };
 }
 
+/* ---------- sortable tables ---------- */
+
+type SortDir = 1 | -1;
+type SortState = { key: string; dir: SortDir };
+type Cell = string | number | null | undefined;
+
+// Click a header to sort by it; click again to flip. Numbers and dates start descending (biggest or newest
+// first), text starts ascending. Empty cells always sink to the bottom whichever way the column points.
+function useSort<T>(rows: T[], initial: SortState, cell: (row: T, key: string) => Cell) {
+  const [sort, setSort] = useState<SortState>(initial);
+  const sorted = useMemo(() => [...rows].sort((a, b) => {
+    const x = cell(a, sort.key), y = cell(b, sort.key);
+    const xEmpty = x === null || x === undefined || x === "", yEmpty = y === null || y === undefined || y === "";
+    if (xEmpty || yEmpty) return xEmpty === yEmpty ? 0 : xEmpty ? 1 : -1;
+    const result = typeof x === "number" && typeof y === "number" ? x - y : String(x).localeCompare(String(y), "en", { sensitivity: "base", numeric: true });
+    return result * sort.dir;
+  }), [rows, sort, cell]);
+  const toggle = (key: string, numeric: boolean) => setSort(current => current.key === key ? { key, dir: (current.dir * -1) as SortDir } : { key, dir: numeric ? -1 : 1 });
+  return { sorted, sort, toggle };
+}
+
+function Th({ label, sortKey, sort, onSort, numeric = false }: { label: string; sortKey: string; sort: SortState; onSort: (key: string, numeric: boolean) => void; numeric?: boolean }) {
+  const active = sort.key === sortKey;
+  return (
+    <th className={numeric ? "num sort-th" : "sort-th"} aria-sort={active ? (sort.dir === 1 ? "ascending" : "descending") : "none"}>
+      <button type="button" onClick={() => onSort(sortKey, numeric)} className={active ? "on" : ""}>{label}<span aria-hidden="true">{active ? (sort.dir === 1 ? "▲" : "▼") : "▵"}</span></button>
+    </th>
+  );
+}
+
+const dateCell = (iso: string | null | undefined) => (iso ? new Date(iso).getTime() : null);
+
 /* ---------- Overview ---------- */
 
 type Overview = {
@@ -80,6 +112,8 @@ type Overview = {
 
 function OverviewTab(shared: Shared) {
   const { data, error, loading } = useAdmin<Overview>(`/api/admin/overview?minutes=${shared.minutes}`, shared);
+  const tables = useSort(data?.database.tables ?? noTables, { key: "bytes", dir: -1 }, tableCell);
+  const routes = useSort(data?.routes ?? noRoutes, { key: "calls", dir: -1 }, routeCell);
   if (error && !data) return <p className="error">{error}</p>;
   if (!data) return <p className="muted">Loading...</p>;
   const t = data.totals;
@@ -107,9 +141,9 @@ function OverviewTab(shared: Shared) {
       <div className="two-up">
         <Panel title="Tables" note="On-disk size including indexes, and exact row counts.">
           <div className="table-scroll"><table className="fact-table data-table">
-            <thead><tr><th>Table</th><th className="num">Rows</th><th className="num">Size</th><th>Share</th></tr></thead>
+            <thead><tr><Th label="Table" sortKey="name" sort={tables.sort} onSort={tables.toggle} /><Th label="Rows" sortKey="rows" numeric sort={tables.sort} onSort={tables.toggle} /><Th label="Size" sortKey="bytes" numeric sort={tables.sort} onSort={tables.toggle} /><th>Share</th></tr></thead>
             <tbody>
-              {data.database.tables.map(table => (
+              {tables.sorted.map(table => (
                 <tr key={table.name}><td><code>{table.name}</code></td><td className="num">{table.rows.toLocaleString("en-US")}</td><td className="num">{fmtBytes(table.bytes)}</td><td><span className="share-bar"><i style={{ width: `${tableTotal ? Math.max(2, (table.bytes / tableTotal) * 100) : 0}%` }} /></span></td></tr>
               ))}
             </tbody>
@@ -118,9 +152,9 @@ function OverviewTab(shared: Shared) {
         <Panel title="Routes" note="Busiest endpoints in the window.">
           {data.routes.length ? (
             <div className="table-scroll"><table className="fact-table data-table">
-              <thead><tr><th>Route</th><th className="num">Calls</th><th className="num">Errors</th><th className="num">Avg</th><th className="num">p95</th><th className="num">Max</th></tr></thead>
+              <thead><tr><Th label="Route" sortKey="route" sort={routes.sort} onSort={routes.toggle} /><Th label="Calls" sortKey="calls" numeric sort={routes.sort} onSort={routes.toggle} /><Th label="Errors" sortKey="errors" numeric sort={routes.sort} onSort={routes.toggle} /><Th label="Avg" sortKey="avg_ms" numeric sort={routes.sort} onSort={routes.toggle} /><Th label="p95" sortKey="p95_ms" numeric sort={routes.sort} onSort={routes.toggle} /><Th label="Max" sortKey="max_ms" numeric sort={routes.sort} onSort={routes.toggle} /></tr></thead>
               <tbody>
-                {data.routes.map(route => (
+                {routes.sorted.map(route => (
                   <tr key={`${route.method} ${route.route}`}><td><code>{route.method} {route.route}</code></td><td className="num">{route.calls}</td><td className={route.errors ? "num bad" : "num"}>{route.errors}</td><td className="num">{route.avg_ms} ms</td><td className="num">{route.p95_ms} ms</td><td className="num">{route.max_ms} ms</td></tr>
                 ))}
               </tbody>
@@ -131,6 +165,11 @@ function OverviewTab(shared: Shared) {
     </div>
   );
 }
+
+const noTables: Overview["database"]["tables"] = [];
+const noRoutes: Overview["routes"] = [];
+const tableCell = (row: Overview["database"]["tables"][number], key: string) => (row as unknown as Record<string, Cell>)[key];
+const routeCell = (row: Overview["routes"][number], key: string) => (key === "route" ? `${row.route} ${row.method}` : (row as unknown as Record<string, Cell>)[key]);
 
 function Stat({ label, value, note, tone }: { label: string; value: string; note?: string; tone?: "warn" | "bad" }) {
   return <div className={`stat-tile ${tone || ""}`}><span className="eyebrow">{label}</span><strong>{value}</strong>{note && <span className="muted">{note}</span>}</div>;
@@ -241,6 +280,7 @@ type Account = { id: string; email: string; name: string; owner: boolean; create
 
 function UsersTab({ userId, ...shared }: Shared & { userId: string }) {
   const { data, error, loading, reload } = useAdmin<{ users: Account[] }>("/api/admin/users", shared);
+  const accounts = useSort(data?.users ?? noAccounts, { key: "createdAt", dir: 1 }, accountCell);
   const [pending, setPending] = useState<null | { account: Account; action: "suspend" | "delete" | "revoke" }>(null);
   const [confirmText, setConfirmText] = useState("");
   const [link, setLink] = useState<null | { email: string; url: string; expiresAt: string }>(null);
@@ -279,9 +319,9 @@ function UsersTab({ userId, ...shared }: Shared & { userId: string }) {
       )}
       <div className="org-panel table-scroll">
         <table className="fact-table data-table accounts">
-          <thead><tr><th>Account</th><th>Status</th><th>Last sign-in</th><th>Last seen</th><th className="num">Data</th><th className="num">Sessions</th><th>Actions</th></tr></thead>
+          <thead><tr><Th label="Account" sortKey="email" sort={accounts.sort} onSort={accounts.toggle} /><Th label="Status" sortKey="status" sort={accounts.sort} onSort={accounts.toggle} /><Th label="Last sign-in" sortKey="lastSignin" numeric sort={accounts.sort} onSort={accounts.toggle} /><Th label="Last seen" sortKey="lastSeen" numeric sort={accounts.sort} onSort={accounts.toggle} /><Th label="Data" sortKey="storedBytes" numeric sort={accounts.sort} onSort={accounts.toggle} /><Th label="Sessions" sortKey="sessions" numeric sort={accounts.sort} onSort={accounts.toggle} /><th>Actions</th></tr></thead>
           <tbody>
-            {data.users.map(account => {
+            {accounts.sorted.map(account => {
               const self = account.id === userId;
               return (
                 <tr key={account.id} className={account.suspendedAt ? "suspended" : ""}>
@@ -342,6 +382,16 @@ function UsersTab({ userId, ...shared }: Shared & { userId: string }) {
   );
 }
 
+const noAccounts: Account[] = [];
+function accountCell(row: Account, key: string): Cell {
+  switch (key) {
+    case "email": return row.name ? `${row.name} ${row.email}` : row.email;
+    case "status": return row.suspendedAt ? "suspended" : "active";
+    case "createdAt": case "lastSignin": case "lastSeen": return dateCell(row[key]);
+    default: return (row as unknown as Record<string, Cell>)[key];
+  }
+}
+
 /* ---------- Activity ---------- */
 
 type LogRow = { id: string; at: string; event: string; method: string | null; route: string | null; status: number | null; ms: number | null; email: string | null; target: string | null; ip: string | null; user_agent: string | null; detail: string | null };
@@ -353,6 +403,7 @@ function ActivityTab(shared: Shared) {
   const [limit, setLimit] = useState(200);
   const path = `/api/admin/log?minutes=${shared.minutes}&limit=${limit}${event ? `&event=${encodeURIComponent(event)}` : ""}${applied ? `&q=${encodeURIComponent(applied)}` : ""}`;
   const { data, error, loading } = useAdmin<{ rows: LogRow[]; events: string[] }>(path, shared);
+  const log = useSort(data?.rows ?? noRows, { key: "at", dir: -1 }, logCell);
   function search(formEvent: FormEvent<HTMLFormElement>) { formEvent.preventDefault(); setApplied(q.trim()); }
   return (
     <div className={loading ? "stack reloading" : "stack"}>
@@ -366,9 +417,9 @@ function ActivityTab(shared: Shared) {
       {!data ? <p className="muted">Loading...</p> : !data.rows.length ? <p className="check-empty">Nothing recorded for these filters.</p> : (
         <div className="org-panel table-scroll">
           <table className="fact-table data-table log">
-            <thead><tr><th>Time</th><th>Event</th><th>Account</th><th className="num">Status</th><th className="num">ms</th><th>IP</th><th>Detail</th></tr></thead>
+            <thead><tr><Th label="Time" sortKey="at" numeric sort={log.sort} onSort={log.toggle} /><Th label="Event" sortKey="event" sort={log.sort} onSort={log.toggle} /><Th label="Account" sortKey="email" sort={log.sort} onSort={log.toggle} /><Th label="Status" sortKey="status" numeric sort={log.sort} onSort={log.toggle} /><Th label="ms" sortKey="ms" numeric sort={log.sort} onSort={log.toggle} /><Th label="IP" sortKey="ip" sort={log.sort} onSort={log.toggle} /><Th label="Detail" sortKey="detail" sort={log.sort} onSort={log.toggle} /></tr></thead>
             <tbody>
-              {data.rows.map(row => (
+              {log.sorted.map(row => (
                 <tr key={row.id} className={row.status && row.status >= 500 ? "bad" : row.status && row.status >= 400 ? "warn" : ""} title={row.user_agent || undefined}>
                   <td className="when">{fmtWhen(row.at, true)}</td>
                   <td><code>{row.event}</code><span className="muted">{row.method} {row.route}</span></td>
@@ -386,6 +437,13 @@ function ActivityTab(shared: Shared) {
       )}
     </div>
   );
+}
+
+const noRows: LogRow[] = [];
+function logCell(row: LogRow, key: string): Cell {
+  if (key === "at") return dateCell(row.at);
+  if (key === "detail") return [row.target, row.detail].filter(Boolean).join(" · ");
+  return (row as unknown as Record<string, Cell>)[key];
 }
 
 /* ---------- helpers ---------- */
