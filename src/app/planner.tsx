@@ -14,6 +14,7 @@ import { PageIcon } from "./page-icons";
 import { OrganizerPage } from "./organizer";
 import { useWeather, WeatherPanel } from "./weather";
 import { IdleWarning, useIdleTimeout } from "./idle-timeout";
+import { notify } from "./toast";
 import { photoSpots } from "@/lib/photo-spots";
 import { applyFx, applyTheme, storedFx, storedTheme, THEMES, themeLabels, type Theme } from "@/lib/theme";
 import { buildTripModel, countdown, dayKey, daysBetween, fmtDay, fmtMinutes, fmtShort, keyToDate, parseItinerary, parseWhen, type DayEvent, type ParsedPlan, type TimedBooking, type TripModel } from "@/lib/trip-time";
@@ -82,6 +83,26 @@ function rememberSession(on: boolean) { try { if (on) localStorage.setItem("trip
 
 const enterMessages = ["Loading your trip", "Checking your bookings", "Lining up your days", "Almost there"];
 
+// One URL per page. The page state stays the source of truth for rendering; the URL follows it, and a fresh
+// load or back/forward sets the state from the path. Unknown paths show the Overview.
+const pagePaths: Record<string, string> = {
+  overview: "/",
+  prechecks: "/pre-checks",
+  packing: "/packing",
+  departure: "/departure-day",
+  explore: "/explore",
+  tripInfo: "/trip-information",
+  gallery: "/photo-route",
+  return: "/return-day",
+  settings: "/settings",
+  organizer: "/organizer"
+};
+function pathForPage(page: string) { return pagePaths[page] || "/"; }
+function pageFromPath(path: string) {
+  const clean = path.replace(/\/+$/, "") || "/";
+  return Object.keys(pagePaths).find(key => pagePaths[key] === clean) || "overview";
+}
+
 const pageLabels: Record<string, string> = {
   overview: "Overview",
   prechecks: "Pre-checks",
@@ -98,7 +119,17 @@ const listPages = ["prechecks", "packing", "departure", "return"];
 
 export default function Home() {
   const [data, setData] = useState<AppState>(emptyAppState);
-  const [page, setPage] = useState("overview");
+  const [page, setPageState] = useState("overview");
+  function setPage(next: string) {
+    setPageState(next);
+    if (pathForPage(next) !== location.pathname) history.pushState({ page: next }, "", pathForPage(next));
+  }
+  useEffect(() => {
+    setPageState(pageFromPath(location.pathname));
+    const onPop = () => setPageState(pageFromPath(location.pathname));
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
   const [profileOpen, setProfileOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
   // Sidebar collapse is a per-device preference. On phones the sidebar is a top bar plus a bottom rail,
@@ -253,15 +284,24 @@ export default function Home() {
 
   async function saveSettings(form: HTMLFormElement, extras: Record<string, unknown> = {}) {
     const payload = { ...Object.fromEntries(new FormData(form).entries()), ...extras };
-    await api("/api/settings", { method: "POST", body: JSON.stringify(payload) });
-    await load();
+    try {
+      await api("/api/settings", { method: "POST", body: JSON.stringify(payload) });
+      await load();
+      notify.success("Settings saved");
+    } catch (err) {
+      notify.error(err, "Could not save settings");
+    }
   }
 
   async function chooseTheme(next: Theme) {
     if (next === theme) return;
     applyTheme(next); setThemeState(next);
-    await api("/api/settings", { method: "POST", body: JSON.stringify({ ...settingPayload(data.settings), theme: next }) });
-    await load();
+    try {
+      await api("/api/settings", { method: "POST", body: JSON.stringify({ ...settingPayload(data.settings), theme: next }) });
+      await load();
+    } catch (err) {
+      notify.error(err, "Theme changed here, but it could not be saved to your account");
+    }
   }
 
   function toggleFx() {
@@ -608,9 +648,13 @@ function AddItemForm({ pageKey, onItems, placeholder = "Add an item" }: { pageKe
     const form = event.currentTarget;
     const title = String(new FormData(form).get("title") || "").trim();
     if (!title) return;
-    const { item } = await api("/api/items", { method: "POST", body: JSON.stringify({ page: pageKey, title }) });
-    form.reset();
-    onItems(items => [...items, item]);
+    try {
+      const { item } = await api("/api/items", { method: "POST", body: JSON.stringify({ page: pageKey, title }) });
+      form.reset();
+      onItems(items => [...items, item]);
+    } catch (err) {
+      notify.error(err, "Couldn't add that item");
+    }
   }
   return <form className="item-form" onSubmit={add}><input name="title" placeholder={placeholder} maxLength={180} aria-label={placeholder} /><button className="btn primary">Add</button></form>;
 }
@@ -648,13 +692,18 @@ function ChecklistItem({ item, onItems }: { item: Item; onItems: ItemsPatch }) {
     onItems(items => [...items.filter(other => other.id !== item.id), { ...item, checked }]);
     try {
       await api("/api/items", { method: "PATCH", body: JSON.stringify({ id: item.id, checked }) });
-    } catch {
+    } catch (err) {
       onItems(items => items.map(other => (other.id === item.id ? { ...other, checked: !checked } : other)));
+      notify.error(err, "Couldn't save that check");
     }
   }
   async function remove() {
-    await api("/api/items", { method: "DELETE", body: JSON.stringify({ id: item.id }) });
-    onItems(items => items.filter(other => other.id !== item.id));
+    try {
+      await api("/api/items", { method: "DELETE", body: JSON.stringify({ id: item.id }) });
+      onItems(items => items.filter(other => other.id !== item.id));
+    } catch (err) {
+      notify.error(err, "Couldn't delete that item");
+    }
   }
   return (
     <li className={item.checked ? "check-card done" : "check-card"}>
@@ -779,6 +828,7 @@ function ItineraryModal({ items, itinerary, answers, hasTripData, onClose, reloa
       await api("/api/itinerary", { method: "POST", body: JSON.stringify({ instructions, response, savedPlan: response }) });
       await reload();
       onClose();
+      notify.success("Itinerary saved");
     } catch (err) { setError(err instanceof Error ? err.message : "Could not save the itinerary"); } finally { setBusy(false); }
   }
   async function importFile() {
@@ -788,6 +838,7 @@ function ItineraryModal({ items, itinerary, answers, hasTripData, onClose, reloa
       await api("/api/plan-import", { method: "POST", body: JSON.stringify({ response: file }) });
       await reload();
       onClose();
+      notify.success("Trip plan imported");
     } catch (err) { setError(err instanceof Error ? err.message : "Couldn't read that file"); } finally { setBusy(false); }
   }
 
@@ -848,18 +899,28 @@ function TripInfoPage({ tripInfo, tripDocuments, reload }: { tripInfo: TripInfo[
   async function uploadPdf(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
-    await api("/api/trip-documents", { method: "POST", body: new FormData(form) });
-    form.reset();
-    await reload();
-    setPdfOpen(false);
+    try {
+      await api("/api/trip-documents", { method: "POST", body: new FormData(form) });
+      form.reset();
+      await reload();
+      setPdfOpen(false);
+      notify.success("PDF saved");
+    } catch (err) {
+      notify.error(err, "Could not save that PDF");
+    }
   }
 
   async function confirmDelete() {
     if (!pendingDelete) return;
     const { kind, id } = pendingDelete;
-    await api(kind === "booking" ? "/api/trip-info" : "/api/trip-documents", { method: "DELETE", body: JSON.stringify({ id }) });
-    setPendingDelete(null);
-    await reload();
+    try {
+      await api(kind === "booking" ? "/api/trip-info" : "/api/trip-documents", { method: "DELETE", body: JSON.stringify({ id }) });
+      setPendingDelete(null);
+      await reload();
+      notify.success(kind === "booking" ? "Booking removed" : "PDF removed");
+    } catch (err) {
+      notify.error(err, "Could not remove that");
+    }
   }
 
   return (
@@ -991,10 +1052,15 @@ function Gallery({ photos, openViewer, reload }: { photos: AppState["photos"]; o
   async function upload(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
-    await api("/api/photos", { method: "POST", body: new FormData(form) });
-    form.reset();
-    await reload();
-    setAddOpen(false);
+    try {
+      await api("/api/photos", { method: "POST", body: new FormData(form) });
+      form.reset();
+      await reload();
+      setAddOpen(false);
+      notify.success("Photo saved");
+    } catch (err) {
+      notify.error(err, "Could not save that photo");
+    }
   }
   return (
     <section className="page active">
@@ -1037,9 +1103,11 @@ function SettingsPage({ settings, saveSettings, reload }: { settings: Settings; 
 
 function SettingsForm({ settings, onSubmit }: { settings: Settings; onSubmit: (form: HTMLFormElement) => Promise<void> }) {
   const [chimeMuted, setChimeMuted] = useState(Boolean(settings?.chime_muted));
+  const [busy, setBusy] = useState(false);
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    await onSubmit(event.currentTarget);
+    setBusy(true);
+    try { await onSubmit(event.currentTarget); } finally { setBusy(false); }
   }
   return (
     <form className="settings-grid" onSubmit={submit}>
@@ -1055,7 +1123,7 @@ function SettingsForm({ settings, onSubmit }: { settings: Settings; onSubmit: (f
       </label>
       {/* Always posted as "true"/"false" so a save from this form sets the flag either way. */}
       <input type="hidden" name="chimeMuted" value={String(chimeMuted)} />
-      <button className="btn primary">Save settings</button>
+      <button className="btn primary" disabled={busy}>{busy ? "Saving..." : "Save settings"}</button>
     </form>
   );
 }
@@ -1089,9 +1157,15 @@ function TripDetailsPanel({ settings, reload }: { settings: Settings; reload: ()
     // Merge onto the latest saved answers so wizard progress (step, completed) isn't overwritten.
     const latest = parseAnswers(settings?.planning_answers);
     const { step, completed, dismissed, response, emailAccess, bookingHints, ...details } = answers;
-    await api("/api/planning", { method: "POST", body: JSON.stringify({ answers: { ...latest, ...details } }) });
-    await reload();
-    setStatus("Saved");
+    try {
+      await api("/api/planning", { method: "POST", body: JSON.stringify({ answers: { ...latest, ...details } }) });
+      await reload();
+      setStatus("Saved");
+      notify.success("Trip details saved");
+    } catch (err) {
+      setStatus("");
+      notify.error(err, "Could not save trip details");
+    }
   }
   return (
     <form className="settings-grid trip-details" onSubmit={save}>

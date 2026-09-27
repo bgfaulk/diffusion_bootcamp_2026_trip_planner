@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/lib/client";
+import { notify } from "./toast";
 import { PlaceInput } from "./place-input";
 import { BookingForm, categoryTitle } from "./trip-bookings";
 import { JsonFileInput } from "./json-file-input";
@@ -440,7 +441,7 @@ export function SetupWizard({ mode, initial, settings, bookings, places, reload,
   }
 
   function save(next: WizardAnswers) {
-    return api("/api/planning", { method: "POST", body: JSON.stringify({ answers: next }) }).catch(() => {});
+    return api("/api/planning", { method: "POST", body: JSON.stringify({ answers: next }) }).catch(err => notify.error(err, "Couldn't save your progress"));
   }
 
   // Autosave while typing so answers (and the current step) survive moving between steps,
@@ -789,19 +790,6 @@ export function AbcLoader({ done, failed, onFinish, onFailed, messages = loaderM
     if (!ready) { primeChime(); setReady(chimeReady()); return; } // unlock, keep it on
     setSoundPreference(false);
   }
-  // Browsers block audio until the page gets a tap or key press, so a cold load with a remembered session
-  // starts the loader silent. When the first tap lands during the loader, unlock audio and restart the letters
-  // from the top so a full A-B-C plays with sound instead of whatever notes were left in the cycle.
-  useEffect(() => {
-    if (!sound || ready) return;
-    function unlock() {
-      primeChime();
-      // resume() settles asynchronously; check just after.
-      setTimeout(() => { if (chimeReady()) { setReady(true); setBeat(0); } }, 60);
-    }
-    document.addEventListener("pointerdown", unlock);
-    return () => document.removeEventListener("pointerdown", unlock);
-  }, [sound, ready]);
   useEffect(() => {
     // Space bar flips sound on/off (a key press also counts as the gesture that unlocks audio).
     function onKey(event: KeyboardEvent) {
@@ -814,7 +802,7 @@ export function AbcLoader({ done, failed, onFinish, onFailed, messages = loaderM
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
-  const soundLabel = !sound ? "Sound off" : ready ? "Sound on" : "Tap anywhere for sound";
+  const soundLabel = !sound ? "Sound off" : ready ? "Sound on" : "Sound on · tap to allow";
 
   return (
     <main className="abc-stage" role="status" aria-live="polite">
