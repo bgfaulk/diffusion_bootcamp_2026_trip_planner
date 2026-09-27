@@ -258,7 +258,7 @@ a { color:var(--accent-dark); font-weight:800; }
 .email-chip span { overflow:hidden; text-overflow:ellipsis; }
 
 .login-card h1 { font-size:clamp(26px, 3.6vw, 36px); line-height:1.12; }
-.login-brand { display:grid; justify-items:center; gap:4px; margin-top:6px; padding-top:18px; border-top:1px solid var(--line); text-align:center; }
+.login-brand { margin-top:4px; padding-top:14px; border-top:1px solid var(--line); text-align:center; }
 .login-brand .eyebrow { margin:0; }
 .abc-logo { display:grid; justify-items:center; gap:10px; padding:6px 0 2px; }
 .abc-logo .abc-letters { gap:clamp(10px, 3vw, 24px); }
