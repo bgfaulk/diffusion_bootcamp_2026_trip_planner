@@ -12,7 +12,10 @@ trip data, or group links. Runtime data belongs in Neon and Vercel environment v
 ## What it does
 
 **Getting in**
-- Email and password sign-in. New accounts need the organizer's invite code (`SIGNUP_CODE`).
+- Email and password sign-in. Creating an account takes the organizer's invite code (`SIGNUP_CODE`) and
+  emails the address a one-time, 24-hour link that finishes sign-up by choosing a password, so an account can
+  only be made by whoever reads that inbox. An address that already has an account gets a "you're already
+  signed up" email with a reset link instead, and the form answers the same way either time.
 - "Forgot your password?" emails a one-time, 24-hour reset link. The organizer can also mint or email one
   from the Organizer page.
 - After an hour of inactivity a warning shows, and two minutes later the person is signed out.
@@ -68,11 +71,12 @@ trip data, or group links. Runtime data belongs in Neon and Vercel environment v
 
 ## Email
 
-All mail goes out through the organizer's Gmail account using an app password. There are exactly four
+All mail goes out through the organizer's Gmail account using an app password. There are exactly five
 senders, and none of them loop or retry:
 
 | Trigger | Recipient | Cap |
 | --- | --- | --- |
+| Create an account (sign-up link, or "already signed up") | the attendee | 3 per email and 10 per IP every 15 minutes |
 | Forgot password | the attendee | 3 per email and 10 per IP every 15 minutes |
 | Organizer emails a reset link | the attendee | manual only |
 | Report Bug / feedback (also stored in `reports`) | the organizer | 10 per account and 20 per IP per hour |

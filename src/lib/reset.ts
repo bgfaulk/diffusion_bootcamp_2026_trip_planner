@@ -1,19 +1,33 @@
 import crypto from "node:crypto";
 import { sessionSecret } from "./crypto";
 
-// Password reset links. The organizer (OWNER_EMAIL) creates one for an attendee from Settings and sends
-// it however they like; there is no email provider. A link is a signed {email, exp} payload. The current
-// password hash is folded into the signature (not the payload), so the link stops working the moment
-// the password changes: each link is single-use without a table to track it.
+// Signed links that stand in for a password. Two kinds share one shape, a signed {email, exp} payload:
+//
+// - Reset links ("reset"): "Forgot your password?" emails one, and the organizer can mint one from the
+//   Organizer page. The current password hash is folded into the signature (not the payload), so the link
+//   stops working the moment the password changes: single-use without a table to track it.
+// - Sign-up links ("signup"): creating an account emails one to the address given, so an account can only
+//   be made by whoever reads that inbox. It verifies against a fixed marker instead of a hash and is refused
+//   once the account exists, so it too works once.
 const TTL_MS = 24 * 60 * 60 * 1000;
+const signupMarker = "new-account";
 
-function sign(payload: string, passwordHash: string) {
-  return crypto.createHmac("sha256", sessionSecret()).update(`reset:${payload}:${passwordHash}`).digest("base64url");
+function sign(kind: "reset" | "signup", payload: string, secretPart: string) {
+  return crypto.createHmac("sha256", sessionSecret()).update(`${kind}:${payload}:${secretPart}`).digest("base64url");
+}
+
+function createToken(kind: "reset" | "signup", email: string, secretPart: string) {
+  const exp = Date.now() + TTL_MS;
+  const payload = Buffer.from(JSON.stringify({ email, exp })).toString("base64url");
+  return { token: `${payload}.${sign(kind, payload, secretPart)}`, expiresAt: new Date(exp).toISOString() };
 }
 
 export function createResetToken(email: string, passwordHash: string) {
-  const payload = Buffer.from(JSON.stringify({ email, exp: Date.now() + TTL_MS })).toString("base64url");
-  return { token: `${payload}.${sign(payload, passwordHash)}`, expiresAt: new Date(Date.now() + TTL_MS).toISOString() };
+  return createToken("reset", email, passwordHash);
+}
+
+export function createSignupToken(email: string) {
+  return createToken("signup", email, signupMarker);
 }
 
 // The email inside a token, before anything is verified (used to look the account up and prefill the form).
@@ -27,10 +41,10 @@ export function resetTokenEmail(token: unknown): string | null {
   }
 }
 
-export function verifyResetToken(token: string, email: string, passwordHash: string) {
+function verifyToken(kind: "reset" | "signup", token: string, email: string, secretPart: string) {
   const [payload, signature] = token.split(".");
   if (!payload || !signature) return false;
-  const expected = sign(payload, passwordHash);
+  const expected = sign(kind, payload, secretPart);
   if (expected.length !== signature.length || !crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(signature))) return false;
   try {
     const parsed = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
@@ -38,6 +52,14 @@ export function verifyResetToken(token: string, email: string, passwordHash: str
   } catch {
     return false;
   }
+}
+
+export function verifyResetToken(token: string, email: string, passwordHash: string) {
+  return verifyToken("reset", token, email, passwordHash);
+}
+
+export function verifySignupToken(token: string, email: string) {
+  return verifyToken("signup", token, email, signupMarker);
 }
 
 // OWNER_EMAIL is one address or a comma-separated list. Every listed account gets the Organizer page; the

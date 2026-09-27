@@ -5,7 +5,7 @@ import { sessionSecret as secret } from "./crypto";
 import { ensureSchema, getSql, seedStarterItems } from "./db";
 import { notifyOwner } from "./health";
 import { ensureWelcomed } from "./welcome";
-import { isOwner, resetTokenEmail, verifyResetToken } from "./reset";
+import { isOwner, resetTokenEmail, verifyResetToken, verifySignupToken } from "./reset";
 import { AppError, asString, validateEmail, validatePassword } from "./validation";
 
 const cookieName = "trip_session";
@@ -28,9 +28,12 @@ function hashToken(token: string) {
   return crypto.createHmac("sha256", secret()).update(token).digest("hex");
 }
 
-export type AuthIntent = "signin" | "create" | "reset";
+// signin: email + password. reset: a signed reset link + new password. activate: a signed sign-up link + first
+// password, which is the only way an account gets created (see /api/auth/invite for how the link is sent).
+export type AuthIntent = "signin" | "activate" | "reset";
 
 const badLink = "This reset link is invalid or has expired. Ask the trip organizer for a new one.";
+const badWelcome = "This sign-up link is invalid or has expired. Start again from \"Create an account\" to get a fresh one.";
 const mismatch = "Email or password did not match";
 // Salt for the PBKDF2 run a sign-in does when no account exists, so a missing email costs the same time as
 // a wrong password and neither the message nor the timing says which one it was.
@@ -39,7 +42,7 @@ const dummySalt = "00000000000000000000000000000000";
 // New accounts need the invite code the organizer shares with attendees (SIGNUP_CODE). Without it, creation
 // is refused in production and allowed in development so a fresh checkout still works.
 let signupWarned = false;
-function requireInviteCode(codeValue: unknown) {
+export function requireInviteCode(codeValue: unknown) {
   const expected = process.env.SIGNUP_CODE?.trim() || "";
   if (!expected) {
     if (process.env.NODE_ENV === "production") throw new AppError("Account creation is not set up yet", 503);
@@ -51,24 +54,22 @@ function requireInviteCode(codeValue: unknown) {
   if (given.length !== wanted.length || !crypto.timingSafeEqual(given, wanted)) throw new AppError("That invite code is not right", 403);
 }
 
-// A reset never trusts the email in the request body: the account comes from the signed link, and the
-// link only verifies against the account's current password hash, so it works exactly once.
-export async function createOrLogin(emailValue: unknown, passwordValue: unknown, intent: AuthIntent, resetToken?: unknown, inviteCode?: unknown) {
+// Neither a reset nor an activation trusts the email in the request body: the account comes from the signed
+// link. A reset link only verifies against the account's current password hash, and a sign-up link is
+// refused once the account exists, so each works exactly once.
+export async function createOrLogin(emailValue: unknown, passwordValue: unknown, intent: AuthIntent, link?: unknown) {
   await ensureSchema();
   const sql = getSql();
-  const email = intent === "reset" ? resetTokenEmail(resetToken) ?? "" : validateEmail(emailValue);
-  if (intent === "reset" && !email) throw new AppError(badLink, 401);
+  const fromLink = intent === "reset" || intent === "activate";
+  const email = fromLink ? resetTokenEmail(link) ?? "" : validateEmail(emailValue);
+  if (fromLink && !email) throw new AppError(intent === "reset" ? badLink : badWelcome, 401);
   const password = validatePassword(passwordValue, intent !== "signin");
-  if (intent === "create") requireInviteCode(inviteCode);
   const users = await sql`SELECT * FROM users WHERE email = ${email}`;
   let userId: string;
-  if (intent === "create" && users.length) throw new AppError("An account already exists for this email. Sign in instead.");
-  if (intent === "reset" && !users.length) throw new AppError(badLink, 401);
-  if (intent === "signin" && !users.length) {
-    await hashPassword(password, dummySalt);
-    throw new AppError(mismatch, 401);
-  }
-  if (!users.length) {
+  if (intent === "activate") {
+    if (!verifySignupToken(String(link), email)) throw new AppError(badWelcome, 401);
+    // Only the person holding a valid link for this address gets told the account already exists.
+    if (users.length) throw new AppError("This account is already set up. Sign in instead, or use \"Forgot your password?\".", 409);
     const { salt, hash } = await hashPassword(password);
     const inserted = await sql`INSERT INTO users (email, password_hash, password_salt) VALUES (${email}, ${hash}, ${salt}) RETURNING id`;
     userId = String(inserted[0].id);
@@ -79,16 +80,24 @@ export async function createOrLogin(emailValue: unknown, passwordValue: unknown,
       await notifyOwner("signup", `New attendee: ${email}`, `${email} created an account.`, { rows: [["Email", email], ["Joined", `${joined} Pacific`]], advice: ["The Accounts tab on the Organizer page lists everyone and can send a password reset link if they get stuck."] }).catch(() => {});
     }
   } else {
+    if (!users.length) {
+      if (intent === "reset") throw new AppError(badLink, 401);
+      await hashPassword(password, dummySalt);
+      throw new AppError(mismatch, 401);
+    }
     const user = users[0] as { id: string; password_hash: string; password_salt: string; suspended_at: string | null };
+    // Prove the password or link first, so "suspended" is only ever said to someone who could have signed in.
+    if (intent === "reset") {
+      if (!verifyResetToken(String(link), email, user.password_hash)) throw new AppError(badLink, 401);
+    } else if (!(await verifyPassword(password, user.password_salt, user.password_hash))) {
+      throw new AppError(mismatch, 401);
+    }
     if (user.suspended_at) throw new AppError("This account is suspended. Contact the trip organizer.", 403);
     if (intent === "reset") {
-      if (!verifyResetToken(String(resetToken), email, user.password_hash)) throw new AppError(badLink, 401);
       const { salt, hash } = await hashPassword(password);
       await sql`UPDATE users SET password_hash = ${hash}, password_salt = ${salt}, updated_at = now() WHERE id = ${user.id}`;
       // Whoever held the old password loses every session they had.
       await sql`DELETE FROM sessions WHERE user_id = ${user.id}`;
-    } else if (!(await verifyPassword(password, user.password_salt, user.password_hash))) {
-      throw new AppError(mismatch, 401);
     }
     userId = user.id;
   }

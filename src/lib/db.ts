@@ -77,9 +77,7 @@ export async function ensureSchema() {
     sql`ALTER TABLE settings ADD COLUMN IF NOT EXISTS planning_answers TEXT`,
     sql`ALTER TABLE settings ADD COLUMN IF NOT EXISTS chime_muted BOOLEAN NOT NULL DEFAULT false`,
     sql`ALTER TABLE settings ADD COLUMN IF NOT EXISTS calendar_guest TEXT`,
-    sql`ALTER TABLE settings ADD COLUMN IF NOT EXISTS hidden_stock_spots TEXT`,
-    sql`ALTER TABLE trip_info ADD COLUMN IF NOT EXISTS from_airport TEXT`, // flights: three-letter codes for the Overview's route and miles
-    sql`ALTER TABLE trip_info ADD COLUMN IF NOT EXISTS to_airport TEXT`, // JSON list of photo-route spot ids whose stock photo this person deleted
+    sql`ALTER TABLE settings ADD COLUMN IF NOT EXISTS hidden_stock_spots TEXT`, // JSON list of photo-route spot ids whose stock photo this person deleted
     sql`
       CREATE TABLE IF NOT EXISTS notifications (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -107,7 +105,6 @@ export async function ensureSchema() {
     sql`CREATE TABLE IF NOT EXISTS health_alert_state (key TEXT PRIMARY KEY, last_alert_at TIMESTAMPTZ NOT NULL)`,
     sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS suspended_at TIMESTAMPTZ`,
     sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS welcomed_at TIMESTAMPTZ`,
-    sql`ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'activity'`,
     sql`CREATE TABLE IF NOT EXISTS weather_cache (key TEXT PRIMARY KEY, data TEXT NOT NULL, fetched_at TIMESTAMPTZ NOT NULL DEFAULT now())`,
     sql`
       CREATE TABLE IF NOT EXISTS list_items (
@@ -195,6 +192,9 @@ export async function ensureSchema() {
         updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
       )
     `,
+    // Flights: three-letter codes for the Overview's route and miles.
+    sql`ALTER TABLE trip_info ADD COLUMN IF NOT EXISTS from_airport TEXT`,
+    sql`ALTER TABLE trip_info ADD COLUMN IF NOT EXISTS to_airport TEXT`,
     sql`
       CREATE TABLE IF NOT EXISTS trip_documents (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -226,6 +226,7 @@ export async function ensureSchema() {
         detail TEXT
       )
     `,
+    sql`ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'activity'`,
     sql`CREATE INDEX IF NOT EXISTS audit_log_at_idx ON audit_log (at DESC)`,
     sql`CREATE INDEX IF NOT EXISTS audit_log_user_idx ON audit_log (user_id, at DESC)`
   ]);

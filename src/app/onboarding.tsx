@@ -10,7 +10,9 @@ import { passwordChecks } from "@/lib/validation";
 import { chimeEnabled, chimeReady, playChimeNote, primeChime, saveChimeEnabled } from "@/lib/chime";
 import { buildWizardPrompt, extractJson, interestOptions, normalizePlan, sampleResponse, trainingAddress, trainingDetail, type EmailAccess, type WizardAnswers } from "@/lib/plan";
 
-type AuthStep = "welcome" | "signin" | "create" | "reset" | "forgot";
+// create: email + invite code, which emails a sign-up link. activate: that link's landing, where the password
+// is chosen and the account is made. reset: a reset link's landing. forgot: asks for a reset link.
+type AuthStep = "welcome" | "signin" | "create" | "activate" | "reset" | "forgot";
 // Set once an account has been created or signed into on this device. Until then the login page leads with
 // "Create an account" and doesn't show a password field at all.
 const knownCookie = "trip_known";
@@ -28,14 +30,15 @@ function rememberedEmail() {
   return match ? decodeURIComponent(match[1]) : "";
 }
 
-// A reset link is /?reset=<token>; the token's first part is base64url JSON with the email in it. The server
-// verifies the signature; the browser only reads the email to prefill the form.
-function resetLinkFromUrl(): { token: string; email: string } | null {
+// A reset link is /?reset=<token> and a sign-up link is /?welcome=<token>; the token's first part is base64url
+// JSON with the email in it. The server verifies the signature; the browser only reads the email to show it.
+function linkFromUrl(): { step: "reset" | "activate"; token: string; email: string } | null {
   try {
-    const token = new URLSearchParams(location.search).get("reset");
+    const params = new URLSearchParams(location.search);
+    const [step, token] = params.get("welcome") ? ["activate", params.get("welcome")] as const : ["reset", params.get("reset")] as const;
     if (!token) return null;
     const payload = JSON.parse(atob(token.split(".")[0].replace(/-/g, "+").replace(/_/g, "/")));
-    return typeof payload?.email === "string" ? { token, email: payload.email } : null;
+    return typeof payload?.email === "string" ? { step, token, email: payload.email } : null;
   } catch {
     return null;
   }
@@ -57,23 +60,25 @@ export function LoginScreen({ onSignedIn, notice = "" }: { onSignedIn: () => Pro
   const [website, setWebsite] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [resetToken, setResetToken] = useState("");
+  const [linkToken, setLinkToken] = useState("");
   const [sentTo, setSentTo] = useState("");
 
   useEffect(() => {
-    const link = resetLinkFromUrl();
-    if (link) { setEmail(link.email); setResetToken(link.token); setStep("reset"); return; }
+    const link = linkFromUrl();
+    if (link) { setEmail(link.email); setLinkToken(link.token); setStep(link.step); return; }
     setEmail(current => current || rememberedEmail());
     if (!knownDevice()) setStep("welcome");
   }, []);
 
-  const newPassword = step === "create" || step === "reset";
+  const newPassword = step === "activate" || step === "reset";
+  const emailOnly = step === "forgot" || step === "create";
+  const fromLink = step === "activate" || step === "reset";
   const checks = passwordChecks(password);
   const rulesMet = checks.every(check => check.ok);
-  const confirmOk = step !== "create" || (confirm !== "" && confirm === password);
-  const fieldsOk = email.trim() !== "" && (step === "forgot" || (password !== "" && (!newPassword || rulesMet) && confirmOk));
-  // Sign in and Forgot keep their button live whenever not busy, so Enter always submits: password managers can fill the
-  // fields without React hearing about it, which would otherwise leave the button disabled and swallow the key.
+  const confirmOk = step !== "activate" || (confirm !== "" && confirm === password);
+  const fieldsOk = email.trim() !== "" && (emailOnly || (password !== "" && (!newPassword || rulesMet) && confirmOk));
+  // Sign in, Forgot and Create keep their button live whenever not busy, so Enter always submits: password managers can
+  // fill the fields without React hearing about it, which would otherwise leave the button disabled and swallow the key.
   const buttonDisabled = busy || (newPassword && !fieldsOk);
 
   function goTo(next: AuthStep) {
@@ -95,16 +100,19 @@ export function LoginScreen({ onSignedIn, notice = "" }: { onSignedIn: () => Pro
     const typedPassword = newPassword ? password : ((fields.namedItem("current-password") as HTMLInputElement | null)?.value || password);
     if (typedEmail !== email) setEmail(typedEmail);
     if (typedPassword !== password) setPassword(typedPassword);
-    const ready = typedEmail !== "" && (step === "forgot" || (typedPassword !== "" && (!newPassword || rulesMet) && confirmOk));
-    if (!ready) { setError(step === "forgot" ? "Enter your email" : "Enter your email and password"); return; }
+    const typedCode = (fields.namedItem("inviteCode") as HTMLInputElement | null)?.value?.trim() || inviteCode.trim();
+    const ready = typedEmail !== "" && (step === "forgot" || (step === "create" ? typedCode !== "" : typedPassword !== "" && (!newPassword || rulesMet) && confirmOk));
+    if (!ready) { setError(step === "forgot" ? "Enter your email" : step === "create" ? "Enter your email and the invite code" : "Enter your email and password"); return; }
     setError("");
     setBusy(true);
-    if (step === "forgot") {
+    if (emailOnly) {
+      // Both answer the same way whether or not the address has an account; the email says which it was.
       try {
-        await api("/api/auth/forgot", { method: "POST", body: JSON.stringify({ email: typedEmail, website }) });
+        if (step === "forgot") await api("/api/auth/forgot", { method: "POST", body: JSON.stringify({ email: typedEmail, website }) });
+        else await api("/api/auth/invite", { method: "POST", body: JSON.stringify({ email: typedEmail, inviteCode: typedCode, website }) });
         setSentTo(typedEmail);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Could not send a reset link");
+        setError(err instanceof Error ? err.message : step === "forgot" ? "Could not send a reset link" : "Could not send a sign-up link");
       } finally {
         setBusy(false);
       }
@@ -112,10 +120,10 @@ export function LoginScreen({ onSignedIn, notice = "" }: { onSignedIn: () => Pro
     }
     primeChime(); // inside the submit gesture, so the loader's chime is allowed to play
     try {
-      await api("/api/auth", { method: "POST", body: JSON.stringify({ email: typedEmail, password: typedPassword, intent: step, website, token: resetToken, inviteCode }) });
+      await api("/api/auth", { method: "POST", body: JSON.stringify({ email: typedEmail, password: typedPassword, intent: step, website, token: linkToken }) });
       rememberEmail(typedEmail);
       rememberKnown();
-      if (step === "reset") history.replaceState(null, "", location.pathname);
+      if (fromLink) history.replaceState(null, "", location.pathname);
       await onSignedIn();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not sign in");
@@ -123,7 +131,7 @@ export function LoginScreen({ onSignedIn, notice = "" }: { onSignedIn: () => Pro
     }
   }
 
-  const heading = { welcome: "Welcome", signin: "Sign in", create: "Create your account", reset: "Set a new password", forgot: "Reset your password" }[step];
+  const heading = { welcome: "Welcome", signin: "Sign in", create: "Create your account", activate: "Choose your password", reset: "Set a new password", forgot: "Reset your password" }[step];
 
   return (
     <main className="login-page">
@@ -135,7 +143,7 @@ export function LoginScreen({ onSignedIn, notice = "" }: { onSignedIn: () => Pro
         <label className="honeypot" aria-hidden="true">Website<input tabIndex={-1} autoComplete="off" value={website} onChange={event => setWebsite(event.target.value)} /></label>
         {step === "welcome" ? (
           <div className="stack">
-            <p className="muted">Planning the ABC Fitness Diffusion Bootcamp trip starts with an account. You&apos;ll need the invite code from the trip organizer.</p>
+            <p className="muted">Planning the ABC Fitness Diffusion Bootcamp trip starts with an account. You&apos;ll need the invite code from the trip organizer, and we&apos;ll email you a link to finish.</p>
             <label>Email<input id="username" name="username" type="email" maxLength={254} autoFocus autoComplete="username" value={email} onChange={event => setEmail(event.target.value)} /></label>
             <button type="button" className="btn primary" onClick={() => goTo("create")}>Create an account</button>
             <button type="button" className="btn" onClick={() => goTo("signin")}>I already have an account</button>
@@ -144,6 +152,10 @@ export function LoginScreen({ onSignedIn, notice = "" }: { onSignedIn: () => Pro
           <div className="stack">
             <p className="muted">If <strong>{sentTo}</strong> has an account, a reset link is on its way. It works once and expires in 24 hours. Check spam if it doesn&apos;t show up in a minute.</p>
           </div>
+        ) : step === "create" && sentTo ? (
+          <div className="stack">
+            <p className="muted">Check <strong>{sentTo}</strong> for an email from the Trip Planner. Its button brings you back here to choose a password; the link works once and expires in 24 hours. Check spam if it doesn&apos;t show up in a minute.</p>
+          </div>
         ) : (
         <form onSubmit={submit} className="stack" key={step}>
           {step === "forgot" ? (
@@ -151,33 +163,37 @@ export function LoginScreen({ onSignedIn, notice = "" }: { onSignedIn: () => Pro
               <p className="muted">Enter the email you signed up with and we&apos;ll send you a link to set a new password.</p>
               <label>Email<input id="username" name="username" type="email" required maxLength={254} autoFocus autoComplete="username" value={email} onChange={event => setEmail(event.target.value)} /></label>
             </>
-          ) : step === "reset" ? (
+          ) : step === "create" ? (
             <>
-              {/* The account comes from the reset link. Repeat its email as the username so password managers pair
-                  the new password with it. Kept in the layout (not display:none) because some managers skip hidden fields. */}
+              <p className="muted">Enter your email and the invite code from the trip organizer. We&apos;ll email you a link to choose your password.</p>
+              <label>Email<input id="username" name="username" type="email" required maxLength={254} autoFocus autoComplete="username" value={email} onChange={event => setEmail(event.target.value)} /></label>
+              <label>Invite code<input id="invite-code" name="inviteCode" maxLength={200} required autoComplete="off" autoCapitalize="off" spellCheck={false} value={inviteCode} onChange={event => setInviteCode(event.target.value)} /></label>
+            </>
+          ) : fromLink ? (
+            <>
+              {/* The account comes from the link. Repeat its email as the username so password managers pair the new
+                  password with it. Kept in the layout (not display:none) because some managers skip hidden fields. */}
               <input className="visually-hidden" id="username" name="username" type="email" autoComplete="username" value={email} readOnly tabIndex={-1} aria-hidden="true" />
               <div className="email-chip"><span>{email}</span></div>
             </>
           ) : (
             <label>Email<input id="username" name="username" type="email" required maxLength={254} autoFocus autoComplete="username" value={email} onChange={event => setEmail(event.target.value)} /></label>
           )}
-          {step !== "forgot" && <PasswordField id={step === "signin" ? "current-password" : "new-password"} label={step === "reset" ? "New password" : "Password"} value={password} onChange={setPassword} autoFocus={step === "reset"} autoComplete={step === "signin" ? "current-password" : "new-password"} />}
+          {!emailOnly && <PasswordField id={step === "signin" ? "current-password" : "new-password"} label={step === "reset" ? "New password" : "Password"} value={password} onChange={setPassword} autoFocus={fromLink} autoComplete={step === "signin" ? "current-password" : "new-password"} />}
           {newPassword && (
             <ul className="password-rules" aria-live="polite">
               {checks.map(check => <li key={check.label} className={check.ok ? "ok" : ""}><RuleIcon ok={check.ok} />{check.label}</li>)}
               {rulesMet && <li className="ok all-set"><RuleIcon ok />Password looks good</li>}
             </ul>
           )}
-          {step === "create" && (
+          {step === "activate" && (
             <>
               <PasswordField id="confirm-password" label="Confirm password" value={confirm} onChange={setConfirm} autoComplete="new-password" />
               {confirm !== "" && <p className={`match-note ${confirmOk ? "ok" : ""}`}><RuleIcon ok={confirmOk} />{confirmOk ? "Passwords match" : "Passwords don't match yet"}</p>}
-              <label>Invite code<input id="invite-code" name="inviteCode" maxLength={200} autoComplete="off" autoCapitalize="off" spellCheck={false} value={inviteCode} onChange={event => setInviteCode(event.target.value)} /></label>
-              <p className="muted">The trip organizer shares the invite code with attendees.</p>
             </>
           )}
           {error && <p className="error">{error}</p>}
-          <button className="btn primary" disabled={buttonDisabled}>{busy ? "One moment..." : { signin: "Sign in", create: "Create account", reset: "Update password", forgot: "Email me a reset link" }[step]}</button>
+          <button className="btn primary" disabled={buttonDisabled}>{busy ? "One moment..." : { signin: "Sign in", create: "Email me a sign-up link", activate: "Create account", reset: "Update password", forgot: "Email me a reset link" }[step]}</button>
         </form>
         )}
         {step === "signin" && (
@@ -194,8 +210,11 @@ export function LoginScreen({ onSignedIn, notice = "" }: { onSignedIn: () => Pro
           </div>
         )}
         {step === "forgot" && <button type="button" className="link-button" onClick={() => goTo("signin")}>Back to sign in</button>}
-        {step === "reset" && <button className="link-button" onClick={() => { setResetToken(""); history.replaceState(null, "", location.pathname); goTo("signin"); }}>Back to sign in</button>}
-        <footer className="login-brand"><p className="eyebrow">ABC Fitness Diffusion Bootcamp Trip Planner</p></footer>
+        {fromLink && <button className="link-button" onClick={() => { setLinkToken(""); history.replaceState(null, "", location.pathname); goTo("signin"); }}>Back to sign in</button>}
+        <footer className="login-brand">
+          <p className="eyebrow">ABC Fitness Diffusion Bootcamp Trip Planner</p>
+          <p className="masthead">Created by Brian Faulk</p>
+        </footer>
       </section>
     </main>
   );
