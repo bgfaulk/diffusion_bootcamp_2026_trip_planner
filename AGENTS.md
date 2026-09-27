@@ -27,8 +27,8 @@ conventions that are easy to break.
   changes: new optional fields, new routes, tolerant parsing of old request shapes. If a shape must change,
   make the route return a clear 4xx for the old shape rather than silently doing the wrong thing. Every
   `/api` response carries `X-App-Build` (set in `next.config.ts`) and `src/lib/client.ts` compares it with
-  the bundle's own build: the first mismatch shows a "Reload" toast, and any failure from a newer build
-  tells the person to reload instead of showing the raw error.
+  the bundle's own build: the first mismatch shows a "Reload" toast, a stale tab reloads itself when it comes back from the background
+  with nothing typed, and any failure from a newer build tells the person to reload instead of showing the raw error.
 - Schema changes go in `ensureSchema()` in `src/lib/db.ts` as idempotent `CREATE TABLE IF NOT EXISTS` or
   `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` statements. Add new tables to `appTables` in `src/lib/admin.ts`
   so the size chart sees them, and to `pruneAuditLog` if they need retention.
