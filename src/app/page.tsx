@@ -163,7 +163,7 @@ export default function Home() {
       if (next?.user) { rememberSession(true); setEnterDone(true); setEntering(true); }
       else { rememberSession(false); setEntering(false); }
     }).catch(() => { rememberSession(false); setEntering(false); }).finally(() => setLoaded(true));
-    // Any early click (e.g. "Continue" on the email step) unlocks audio for the loader's chime.
+    // Any early click (e.g. into the email field) unlocks audio for the loader's chime.
     const prime = () => primeChime();
     document.addEventListener("pointerdown", prime, { once: true });
     return () => document.removeEventListener("pointerdown", prime);

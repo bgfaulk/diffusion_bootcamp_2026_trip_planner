@@ -2,7 +2,7 @@
 
 A Vercel-ready trip planner for short-lived training trips and San Francisco itinerary planning.
 
-- Two-step email/password login with first-login account creation
+- Email/password login; new accounts need the organizer's invite code
 - Setup wizard: answer a few questions, hand ChatGPT one prompt, upload the trip-plan.json it returns
 - Overview with the day's bookings, itinerary stops, and the bootcamp agenda
 - Checklists, bookings, PDFs, photo route, and a structured itinerary view
@@ -35,6 +35,7 @@ Set:
 - `OWNER_EMAIL` to the organizer's sign-in email. That account gets an Organizer tab in Settings for creating
   password reset links; there is no email sending, so the organizer sends the link to the attendee by hand.
   Links last 24 hours and work once.
+- `SIGNUP_CODE` to an invite code the organizer shares with attendees; it gates new accounts (creation is refused in production without it).
 
 Run:
 
