@@ -1,13 +1,14 @@
 import { requireUser } from "@/lib/auth";
+import { withAudit } from "@/lib/audit";
 import { encryptText } from "@/lib/crypto";
 import { getSql } from "@/lib/db";
 import { isTheme } from "@/lib/theme";
 import { errorResponse, fail } from "@/lib/validation";
 
 // Saves the AI/manual choice and the wizard's in-progress answers without touching the rest of settings.
-export async function POST(request: Request) {
+export const POST = withAudit("planning.save", async (request, ctx) => {
   try {
-    const user = await requireUser();
+    const user = ctx.user = await requireUser();
     const body = await request.json();
     const mode = body.mode === "ai" || body.mode === "manual" ? body.mode : null;
     // Only used when this call creates the settings row: a new account keeps the theme it signed up under.
@@ -30,4 +31,4 @@ export async function POST(request: Request) {
   } catch (error) {
     return errorResponse(error, "Could not save planning choice");
   }
-}
+});

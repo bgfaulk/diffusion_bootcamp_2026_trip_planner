@@ -1,4 +1,5 @@
 import { requireUser } from "@/lib/auth";
+import { withAudit } from "@/lib/audit";
 import { decryptRow, encryptText } from "@/lib/crypto";
 import { getSql } from "@/lib/db";
 import { asString, errorResponse, fail, requireString } from "@/lib/validation";
@@ -23,11 +24,12 @@ function readTripInfo(body: any) {
   };
 }
 
-export async function POST(request: Request) {
+export const POST = withAudit("bookings.add", async (request, ctx) => {
   try {
-    const user = await requireUser();
+    const user = ctx.user = await requireUser();
     const body = await request.json();
     const item = readTripInfo(body);
+    ctx.detail = item.category;
     const rows = await getSql()`
       INSERT INTO trip_info (user_id, category, title, provider, confirmation_number, start_at, end_at, address, phone, notes)
       VALUES (${user.id}, ${item.category}, ${item.title}, ${item.provider}, ${item.confirmationNumber}, ${item.startAt}, ${item.endAt}, ${item.address}, ${item.phone}, ${item.notes})
@@ -37,13 +39,13 @@ export async function POST(request: Request) {
   } catch (error) {
     return errorResponse(error, "Could not add trip information");
   }
-}
+});
 
-export async function PATCH(request: Request) {
+export const PATCH = withAudit("bookings.update", async (request, ctx) => {
   try {
-    const user = await requireUser();
+    const user = ctx.user = await requireUser();
     const body = await request.json();
-    const id = requireString(body.id, "Booking id", 80);
+    const id = ctx.target = requireString(body.id, "Booking id", 80);
     const item = readTripInfo(body);
     const rows = await getSql()`
       UPDATE trip_info
@@ -65,16 +67,16 @@ export async function PATCH(request: Request) {
   } catch (error) {
     return errorResponse(error, "Could not update trip information");
   }
-}
+});
 
-export async function DELETE(request: Request) {
+export const DELETE = withAudit("bookings.delete", async (request, ctx) => {
   try {
-    const user = await requireUser();
+    const user = ctx.user = await requireUser();
     const body = await request.json();
-    const id = requireString(body.id, "Booking id", 80);
+    const id = ctx.target = requireString(body.id, "Booking id", 80);
     await getSql()`DELETE FROM trip_info WHERE id = ${id} AND user_id = ${user.id}`;
     return Response.json({ ok: true });
   } catch (error) {
     return errorResponse(error, "Could not delete trip information");
   }
-}
+});

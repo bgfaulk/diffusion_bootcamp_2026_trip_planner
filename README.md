@@ -32,9 +32,12 @@ Set:
 - `GOOGLE_MAPS_API_KEY` from Google Cloud
 - `SESSION_SECRET` to a long random string (required in production; it also derives the encryption key, so never rotate it without re-encrypting)
 - `WEATHER_API_KEY` from weatherapi.com (optional; the weather panel hides without it)
-- `OWNER_EMAIL` to the organizer's sign-in email. That account gets an Organizer tab in Settings for creating
-  password reset links; there is no email sending, so the organizer sends the link to the attendee by hand.
-  Links last 24 hours and work once.
+- `OWNER_EMAIL` to the organizer's sign-in email. That account gets the Organizer page: request volume,
+  latency and errors per route, database and table sizes with a growth chart, every registered account with
+  suspend / sign-out-everywhere / delete / reset-link actions, and an activity log (who, IP, route, status,
+  timing, error text) over a Grafana-style time window. There is no email sending, so the organizer sends
+  reset links by hand; links last 24 hours and work once. Every API request is written to `audit_log`
+  (kept for 400 days).
 - `SIGNUP_CODE` to an invite code the organizer shares with attendees; it gates new accounts (creation is refused in production without it).
 
 Run:

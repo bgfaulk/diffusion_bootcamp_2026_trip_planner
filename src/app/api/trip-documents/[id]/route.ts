@@ -1,13 +1,14 @@
 import { requireUser } from "@/lib/auth";
+import { withAudit } from "@/lib/audit";
 import { decryptText } from "@/lib/crypto";
 import { getSql } from "@/lib/db";
 import { errorResponse, fail, requireString } from "@/lib/validation";
 
-export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
+export const GET = withAudit<{ params: Promise<{ id: string }> }>("documents.view", async (request, ctx, context) => {
   try {
-    const user = await requireUser();
+    const user = ctx.user = await requireUser();
     const { id: rawId } = await context.params;
-    const id = requireString(rawId, "Document id", 80);
+    const id = ctx.target = requireString(rawId, "Document id", 80);
     const rows = await getSql()`
       SELECT file_name, content_type, file_base64
       FROM trip_documents
@@ -30,4 +31,4 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
   } catch (error) {
     return errorResponse(error, "Could not open PDF");
   }
-}
+});

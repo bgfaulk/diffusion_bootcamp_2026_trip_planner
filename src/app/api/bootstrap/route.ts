@@ -1,4 +1,5 @@
 import { getUser } from "@/lib/auth";
+import { withAudit } from "@/lib/audit";
 import { decryptRow, decryptText } from "@/lib/crypto";
 import { ensureSchema, getSql, hasDatabaseUrl } from "@/lib/db";
 
@@ -14,10 +15,10 @@ function emptyBootstrap() {
   });
 }
 
-export async function GET() {
+export const GET = withAudit("bootstrap", async (_request, ctx) => {
   if (!hasDatabaseUrl()) return emptyBootstrap();
   await ensureSchema();
-  const user = await getUser();
+  const user = ctx.user = await getUser();
   if (!user) return emptyBootstrap();
   const sql = getSql();
   const [settings, items, photos, itinerary, tripInfo, tripDocuments] = await Promise.all([
@@ -51,4 +52,4 @@ export async function GET() {
       downloadUrl: `/api/trip-documents/${document.id}?download=1`
     }))
   });
-}
+});

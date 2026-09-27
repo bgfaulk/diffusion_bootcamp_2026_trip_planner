@@ -1,4 +1,5 @@
 import { requireUser } from "@/lib/auth";
+import { withAudit } from "@/lib/audit";
 import { encryptText } from "@/lib/crypto";
 import { getSql } from "@/lib/db";
 import { extractJson, normalizePlan } from "@/lib/plan";
@@ -6,9 +7,9 @@ import { asString, errorResponse } from "@/lib/validation";
 
 // Takes ChatGPT's pasted JSON from the setup wizard and builds out the whole trip in one transaction.
 // Anything ChatGPT returned replaces what was there; sections it left empty are kept.
-export async function POST(request: Request) {
+export const POST = withAudit("plan.import", async (request, ctx) => {
   try {
-    const user = await requireUser();
+    const user = ctx.user = await requireUser();
     const body = await request.json();
     const raw = asString(body.response, 40000);
     const plan = normalizePlan(extractJson(raw));
@@ -49,6 +50,7 @@ export async function POST(request: Request) {
       `);
     }
 
+    ctx.detail = `${plan.records.length} records · ${Object.values(plan.lists).reduce((sum, items) => sum + items.length, 0)} list items · itinerary ${plan.itineraryText ? "yes" : "no"}`;
     await sql.transaction(queries);
     return Response.json({
       ok: true,
@@ -61,4 +63,4 @@ export async function POST(request: Request) {
   } catch (error) {
     return errorResponse(error, "Could not build your trip");
   }
-}
+});

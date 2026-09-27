@@ -7,7 +7,8 @@ const paths: Record<string, React.ReactNode> = {
   explore: <><circle cx="12" cy="12" r="9" /><path d="M15.5 8.5l-2 5-5 2 2-5z" /></>,
   tripInfo: <><path d="M6 3h8l4 4v14H6z" /><path d="M14 3v4h4M9 12h6M9 16h6" /></>,
   gallery: <><path d="M4 8h3.5l1.8-3h5.4l1.8 3H20v11H4z" /><circle cx="12" cy="13" r="3.5" /></>,
-  return: <path d="M2 20h20M3 8.6l15.9 4.5a2 2 0 0 0 1.1-3.8l-4.3-1.2-4.6-5.3-2.3-.6 1.7 4.9-3.9-1.1-1.3-2.4-1.9-.5z" />
+  return: <path d="M2 20h20M3 8.6l15.9 4.5a2 2 0 0 0 1.1-3.8l-4.3-1.2-4.6-5.3-2.3-.6 1.7 4.9-3.9-1.1-1.3-2.4-1.9-.5z" />,
+  organizer: <><path d="M4 20V10M10 20V4M16 20v-7M22 20H2" /></>
 };
 
 export function PageIcon({ page }: { page: string }) {

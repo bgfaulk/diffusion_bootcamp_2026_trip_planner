@@ -1,4 +1,5 @@
 import { requireUser } from "@/lib/auth";
+import { withAudit } from "@/lib/audit";
 import { asString, errorResponse, fail } from "@/lib/validation";
 
 function googleReferer(request: Request) {
@@ -12,9 +13,9 @@ function googleReferer(request: Request) {
   return host ? `https://${host}/` : "http://localhost:3000/";
 }
 
-export async function POST(request: Request) {
+export const POST = withAudit("places.search", async (request, ctx) => {
   try {
-    await requireUser();
+    ctx.user = await requireUser();
     const key = process.env.GOOGLE_MAPS_API_KEY?.trim();
     if (!key) return Response.json({ suggestions: [] });
     const body = await request.json();
@@ -44,4 +45,4 @@ export async function POST(request: Request) {
   } catch (error) {
     return errorResponse(error, "Could not search addresses");
   }
-}
+});

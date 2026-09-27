@@ -11,6 +11,7 @@ import { JsonFileInput } from "./json-file-input";
 import { BookingForm, bookingCategories, categoryTitle } from "./trip-bookings";
 import { NirvanaBackdrop } from "./nirvana-backdrop";
 import { PageIcon } from "./page-icons";
+import { OrganizerPage } from "./organizer";
 import { useWeather, WeatherPanel } from "./weather";
 import { photoSpots } from "@/lib/photo-spots";
 import { applyFx, applyTheme, storedFx, storedTheme, THEMES, themeLabels, type Theme } from "@/lib/theme";
@@ -83,7 +84,8 @@ const pageLabels: Record<string, string> = {
   explore: "Explore San Francisco",
   tripInfo: "Trip Information",
   gallery: "Photo Route",
-  return: "Return Day"
+  return: "Return Day",
+  organizer: "Organizer"
 };
 
 const listPages = ["prechecks", "packing", "departure", "return"];
@@ -313,7 +315,7 @@ export default function Home() {
           </button>
         </div>
         <nav className="primary-nav" aria-label="Pages">
-          {["overview", "prechecks", "packing", "departure", "explore", "tripInfo", "gallery", "return"].map(key => (
+          {["overview", "prechecks", "packing", "departure", "explore", "tripInfo", "gallery", "return", ...(data.user.owner ? ["organizer"] : [])].map(key => (
             <button key={key} className={page === key ? "active" : ""} onClick={() => setPage(key)} title={collapsed ? pageLabels[key] : undefined} aria-label={collapsed ? pageLabels[key] : undefined} aria-current={page === key ? "page" : undefined}>
               <PageIcon page={key} />
               {!collapsed && <span className="nav-label">{pageLabels[key]}</span>}
@@ -357,7 +359,8 @@ export default function Home() {
         {page === "explore" && <ExplorePage items={data.items.filter(item => item.page === "explore")} itinerary={data.itinerary} startDate={answers.startDate} openModal={() => setItineraryOpen(true)} reload={load} onItems={patchItems} />}
         {page === "tripInfo" && <TripInfoPage tripInfo={data.tripInfo} tripDocuments={data.tripDocuments} reload={load} />}
         {page === "gallery" && <Gallery photos={data.photos} openViewer={setViewer} reload={load} />}
-        {page === "settings" && <SettingsPage settings={data.settings} owner={Boolean(data.user.owner)} saveSettings={saveSettings} reload={load} />}
+        {page === "settings" && <SettingsPage settings={data.settings} saveSettings={saveSettings} reload={load} />}
+        {page === "organizer" && data.user.owner && <OrganizerPage userId={data.user.id} />}
       </main>
 
       {itineraryOpen && <ItineraryModal items={data.items.filter(item => item.page === "explore")} itinerary={data.itinerary} answers={answers} hasTripData={Boolean(data.itinerary?.saved_plan) || data.tripInfo.length > 0} onClose={() => setItineraryOpen(false)} reload={load} />}
@@ -986,8 +989,8 @@ function PhotoViewer({ spot, photos, onClose }: { spot: string; photos: AppState
   return <div className="modal-backdrop" onClick={onClose}><section className="viewer" onClick={event => event.stopPropagation()}><button className="modal-x" onClick={onClose}>×</button><h2>{meta?.[1] || "Photo"}</h2><p className="muted">{photo?.caption || meta?.[2]}</p><div className="viewer-media">{photo ? <img src={photo.imageUrl} alt={meta?.[1]} /> : meta?.[1]}</div></section></div>;
 }
 
-function SettingsPage({ settings, owner, saveSettings, reload }: { settings: Settings; owner: boolean; saveSettings: (form: HTMLFormElement) => Promise<void>; reload: () => Promise<void> }) {
-  const [tab, setTab] = useState<"profile" | "details" | "account" | "organizer">("profile");
+function SettingsPage({ settings, saveSettings, reload }: { settings: Settings; saveSettings: (form: HTMLFormElement) => Promise<void>; reload: () => Promise<void> }) {
+  const [tab, setTab] = useState<"profile" | "details" | "account">("profile");
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteText, setDeleteText] = useState("");
   async function deleteAccount() {
@@ -996,44 +999,7 @@ function SettingsPage({ settings, owner, saveSettings, reload }: { settings: Set
     await api("/api/account", { method: "DELETE" });
     window.location.reload();
   }
-  return <section className="page active"><header className="page-header"><p className="eyebrow">Profile</p><h1>Settings</h1></header><Tabs label="Settings sections" active={tab} onChange={setTab} tabs={[{ key: "profile", label: "Profile" }, { key: "details", label: "Trip details" }, { key: "account", label: "Account" }, ...(owner ? [{ key: "organizer" as const, label: "Organizer" }] : [])]} />{tab === "profile" && <TabPanel id="profile"><SettingsForm settings={settings} onSubmit={saveSettings} /></TabPanel>}{tab === "details" && <TabPanel id="details"><TripDetailsPanel settings={settings} reload={reload} /></TabPanel>}{tab === "organizer" && owner && <TabPanel id="organizer"><ResetLinkPanel /></TabPanel>}{tab === "account" && <TabPanel id="account"><div className="danger-panel"><h2>Delete account data</h2><p className="muted">Remove this account and all saved trip planner data from the database.</p><button className="btn danger" onClick={() => setDeleteOpen(true)}>Delete my account data</button></div></TabPanel>}{deleteOpen && <div className="modal-backdrop"><section className="modal confirm-modal"><button className="modal-x" onClick={() => setDeleteOpen(false)}>×</button><p className="eyebrow">Danger zone</p><h2>Delete account data?</h2><p>This removes the account, checklists, trip information, PDFs, photos, and itinerary from the database. Type DELETE to confirm.</p><label>Confirmation<input value={deleteText} onChange={event => setDeleteText(event.target.value)} placeholder="DELETE" /></label><div className="button-row"><button className="btn" onClick={() => setDeleteOpen(false)}>Cancel</button><button className="btn danger" disabled={deleteText !== "DELETE"} onClick={deleteAccount}>Delete permanently</button></div></section></div>}</section>;
-}
-
-// Organizer only (OWNER_EMAIL): mint a password reset link for an attendee and send it to them by hand.
-function ResetLinkPanel() {
-  const [email, setEmail] = useState("");
-  const [link, setLink] = useState<null | { url: string; email: string; expiresAt: string }>(null);
-  const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [copied, setCopied] = useState(false);
-  async function create(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setError(""); setBusy(true); setCopied(false);
-    try {
-      const result = await api("/api/reset-link", { method: "POST", body: JSON.stringify({ email }) });
-      setLink({ url: `${location.origin}/?reset=${result.token}`, email: email.trim().toLowerCase(), expiresAt: result.expiresAt });
-    } catch (err) { setError(err instanceof Error ? err.message : "Could not create a reset link"); } finally { setBusy(false); }
-  }
-  async function copy() {
-    if (!link) return;
-    try { await navigator.clipboard.writeText(link.url); setCopied(true); } catch { setError("Couldn't copy automatically. Select the link and copy it."); }
-  }
-  return (
-    <div className="settings-grid organizer-panel">
-      <div className="wide"><h2>Password reset links</h2><p className="muted">There is no email sending. Create a link for the attendee who is locked out and send it to them yourself (text, chat, or email). Each link lasts 24 hours and works once.</p></div>
-      <form className="item-form wide" onSubmit={create}>
-        <input type="email" value={email} onChange={event => setEmail(event.target.value)} placeholder="attendee@example.com" required maxLength={254} aria-label="Attendee email" />
-        <button className="btn primary" disabled={busy}>{busy ? "Creating..." : "Create reset link"}</button>
-      </form>
-      {error && <p className="error wide">{error}</p>}
-      {link && (
-        <div className="wide stack">
-          <label>Reset link for {link.email}<input value={link.url} readOnly onFocus={event => event.target.select()} /></label>
-          <div className="button-row"><button type="button" className="btn" onClick={copy}>{copied ? "Copied" : "Copy link"}</button><span className="muted">Expires {new Date(link.expiresAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}.</span></div>
-        </div>
-      )}
-    </div>
-  );
+  return <section className="page active"><header className="page-header"><p className="eyebrow">Profile</p><h1>Settings</h1></header><Tabs label="Settings sections" active={tab} onChange={setTab} tabs={[{ key: "profile", label: "Profile" }, { key: "details", label: "Trip details" }, { key: "account", label: "Account" }]} />{tab === "profile" && <TabPanel id="profile"><SettingsForm settings={settings} onSubmit={saveSettings} /></TabPanel>}{tab === "details" && <TabPanel id="details"><TripDetailsPanel settings={settings} reload={reload} /></TabPanel>}{tab === "account" && <TabPanel id="account"><div className="danger-panel"><h2>Delete account data</h2><p className="muted">Remove this account and all saved trip planner data from the database.</p><button className="btn danger" onClick={() => setDeleteOpen(true)}>Delete my account data</button></div></TabPanel>}{deleteOpen && <div className="modal-backdrop"><section className="modal confirm-modal"><button className="modal-x" onClick={() => setDeleteOpen(false)}>×</button><p className="eyebrow">Danger zone</p><h2>Delete account data?</h2><p>This removes the account, checklists, trip information, PDFs, photos, and itinerary from the database. Type DELETE to confirm.</p><label>Confirmation<input value={deleteText} onChange={event => setDeleteText(event.target.value)} placeholder="DELETE" /></label><div className="button-row"><button className="btn" onClick={() => setDeleteOpen(false)}>Cancel</button><button className="btn danger" disabled={deleteText !== "DELETE"} onClick={deleteAccount}>Delete permanently</button></div></section></div>}</section>;
 }
 
 function SettingsForm({ settings, onSubmit }: { settings: Settings; onSubmit: (form: HTMLFormElement) => Promise<void> }) {

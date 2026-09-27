@@ -1,11 +1,12 @@
 import { requireUser } from "@/lib/auth";
+import { withAudit } from "@/lib/audit";
 import { decryptText, encryptText } from "@/lib/crypto";
 import { getSql, pageKeys } from "@/lib/db";
 import { asString, errorResponse, fail, requireString } from "@/lib/validation";
 
-export async function POST(request: Request) {
+export const POST = withAudit("items.add", async (request, ctx) => {
   try {
-    const user = await requireUser();
+    const user = ctx.user = await requireUser();
     const body = await request.json();
     const page = asString(body.page, 40);
     if (!pageKeys.has(page as any)) fail("Invalid page");
@@ -21,14 +22,15 @@ export async function POST(request: Request) {
   } catch (error) {
     return errorResponse(error, "Could not add item");
   }
-}
+});
 
-export async function PATCH(request: Request) {
+export const PATCH = withAudit("items.toggle", async (request, ctx) => {
   try {
-    const user = await requireUser();
+    const user = ctx.user = await requireUser();
     const body = await request.json();
     const id = requireString(body.id, "Item id", 80);
     const checked = Boolean(body.checked);
+    ctx.target = id; ctx.detail = checked ? "checked" : "unchecked";
     const sql = getSql();
     const rows = await sql`SELECT page FROM list_items WHERE id = ${id} AND user_id = ${user.id}`;
     if (!rows.length) fail("Item not found", 404);
@@ -38,16 +40,17 @@ export async function PATCH(request: Request) {
   } catch (error) {
     return errorResponse(error, "Could not update item");
   }
-}
+});
 
-export async function DELETE(request: Request) {
+export const DELETE = withAudit("items.delete", async (request, ctx) => {
   try {
-    const user = await requireUser();
+    const user = ctx.user = await requireUser();
     const body = await request.json();
     const id = requireString(body.id, "Item id", 80);
+    ctx.target = id;
     await getSql()`DELETE FROM list_items WHERE id = ${id} AND user_id = ${user.id}`;
     return Response.json({ ok: true });
   } catch (error) {
     return errorResponse(error, "Could not delete item");
   }
-}
+});

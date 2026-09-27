@@ -75,6 +75,7 @@ export async function ensureSchema() {
     `,
     sql`ALTER TABLE settings ADD COLUMN IF NOT EXISTS planning_mode TEXT`,
     sql`ALTER TABLE settings ADD COLUMN IF NOT EXISTS planning_answers TEXT`,
+    sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS suspended_at TIMESTAMPTZ`,
     sql`
       CREATE TABLE IF NOT EXISTS list_items (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -136,7 +137,27 @@ export async function ensureSchema() {
       )
     `,
     // The bookings-only ChatGPT import is gone; its table only ever held draft prompt text.
-    sql`DROP TABLE IF EXISTS trip_import`
+    sql`DROP TABLE IF EXISTS trip_import`,
+    // One row per API request (see src/lib/audit.ts). No FK on user_id: rows outlive deleted accounts.
+    sql`
+      CREATE TABLE IF NOT EXISTS audit_log (
+        id BIGSERIAL PRIMARY KEY,
+        at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        event TEXT NOT NULL,
+        method TEXT,
+        route TEXT,
+        status INTEGER,
+        ms INTEGER,
+        user_id UUID,
+        email TEXT,
+        target TEXT,
+        ip TEXT,
+        user_agent TEXT,
+        detail TEXT
+      )
+    `,
+    sql`CREATE INDEX IF NOT EXISTS audit_log_at_idx ON audit_log (at DESC)`,
+    sql`CREATE INDEX IF NOT EXISTS audit_log_user_idx ON audit_log (user_id, at DESC)`
   ]);
   schemaReady = true;
 }

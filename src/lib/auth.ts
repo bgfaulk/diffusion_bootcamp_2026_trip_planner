@@ -72,7 +72,8 @@ export async function createOrLogin(emailValue: unknown, passwordValue: unknown,
     userId = String(inserted[0].id);
     await seedStarterItems(userId);
   } else {
-    const user = users[0] as { id: string; password_hash: string; password_salt: string };
+    const user = users[0] as { id: string; password_hash: string; password_salt: string; suspended_at: string | null };
+    if (user.suspended_at) throw new AppError("This account is suspended. Contact the trip organizer.", 403);
     if (intent === "reset") {
       if (!verifyResetToken(String(resetToken), email, user.password_hash)) throw new AppError(badLink, 401);
       const { salt, hash } = await hashPassword(password);
@@ -111,7 +112,7 @@ export async function getUser() {
     SELECT users.id, users.email
     FROM sessions
     JOIN users ON users.id = sessions.user_id
-    WHERE sessions.token_hash = ${tokenHash} AND sessions.expires_at > now()
+    WHERE sessions.token_hash = ${tokenHash} AND sessions.expires_at > now() AND users.suspended_at IS NULL
   `;
   return rows[0] ? { id: String(rows[0].id), email: String(rows[0].email), owner: isOwner(String(rows[0].email)) } : null;
 }

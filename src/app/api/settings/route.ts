@@ -1,12 +1,13 @@
 import { requireUser } from "@/lib/auth";
+import { withAudit } from "@/lib/audit";
 import { encryptText } from "@/lib/crypto";
 import { getSql } from "@/lib/db";
 import { isTheme } from "@/lib/theme";
 import { asString, errorResponse } from "@/lib/validation";
 
-export async function POST(request: Request) {
+export const POST = withAudit("settings.save", async (request, ctx) => {
   try {
-    const user = await requireUser();
+    const user = ctx.user = await requireUser();
     const body = await request.json();
     const theme = isTheme(body.theme) ? body.theme : "light";
     const profileName = encryptText(asString(body.profileName, 80));
@@ -44,4 +45,4 @@ export async function POST(request: Request) {
   } catch (error) {
     return errorResponse(error, "Could not save settings");
   }
-}
+});

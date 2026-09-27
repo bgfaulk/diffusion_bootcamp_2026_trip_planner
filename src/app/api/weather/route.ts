@@ -1,4 +1,5 @@
 import { requireUser } from "@/lib/auth";
+import { withAudit } from "@/lib/audit";
 import { errorResponse, fail } from "@/lib/validation";
 
 // Proxies weatherapi.com so the key stays on the server. Responses are cached per location for 30 minutes
@@ -12,12 +13,13 @@ const DAYS = 3;
 
 function secure(url: string) { return url.startsWith("//") ? `https:${url}` : url; }
 
-export async function GET(request: Request) {
+export const GET = withAudit("weather", async (request, ctx) => {
   try {
-    await requireUser();
+    ctx.user = await requireUser();
     const key = process.env.WEATHER_API_KEY?.trim();
     if (!key) return Response.json({ configured: false });
     const q = (new URL(request.url).searchParams.get("q") || "San Francisco, CA").trim().slice(0, 120);
+    ctx.target = q;
     const hit = cache.get(q);
     if (hit && Date.now() - hit.at < TTL) return Response.json(hit.data);
     const upstream = await fetch(`https://api.weatherapi.com/v1/forecast.json?key=${encodeURIComponent(key)}&q=${encodeURIComponent(q)}&days=${DAYS}&aqi=no&alerts=no`, { cache: "no-store" });
@@ -50,4 +52,4 @@ export async function GET(request: Request) {
   } catch (error) {
     return errorResponse(error, "Could not load the weather");
   }
-}
+});
