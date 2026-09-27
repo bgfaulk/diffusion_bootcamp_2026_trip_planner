@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { formatWindowLong, MAX_WINDOW_MINUTES, QUICK_RANGES, REFRESH_INTERVALS, stepWindow, WINDOW_UNITS, windowMinutes, windowParts, zoomOutWindow, type WindowUnit } from "@/lib/time-window";
+import { formatWindow, formatWindowLong, MAX_WINDOW_MINUTES, QUICK_RANGES, REFRESH_INTERVALS, stepWindow, WINDOW_UNITS, windowMinutes, windowParts, zoomOutWindow, type WindowUnit } from "@/lib/time-window";
 
 // The trailing-window pill from revari-crm's Settings > Operations page: step wider, the picker (quick ranges
 // plus a custom value and unit), step narrower, zoom out. Every window here follows the clock.
@@ -25,7 +25,7 @@ export function TimeWindowPill({ minutes, onChange, disabled = false, maxMinutes
     <div className="window-pill" ref={root}>
       <button type="button" className="pill-icon" title="Wider window (look further back)" aria-label="Wider window" disabled={disabled || atMax} onClick={() => apply(stepWindow(minutes, 1))}><Icon d="M11 17l-5-5 5-5M18 17l-5-5 5-5" /></button>
       <button type="button" className="pill-main" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(value => !value)}>
-        <Icon d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 7v5l3 2" />{formatWindowLong(minutes)}<Icon d="M6 9l6 6 6-6" small />
+        <Icon d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 7v5l3 2" /><span className="pill-label">{formatWindowLong(minutes)}</span><span className="pill-label-short" aria-hidden="true">Last {formatWindow(minutes)}</span><Icon d="M6 9l6 6 6-6" small />
       </button>
       <button type="button" className="pill-icon" title="Narrower window" aria-label="Narrower window" disabled={disabled || atMin} onClick={() => apply(stepWindow(minutes, -1))}><Icon d="M13 17l5-5-5-5M6 17l5-5-5-5" /></button>
       <button type="button" className="pill-icon" title="Zoom out (double the window)" aria-label="Zoom out" disabled={disabled || atMax} onClick={() => apply(zoomOutWindow(minutes))}><Icon d="M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.3-4.3M8 11h6" /></button>
@@ -56,7 +56,7 @@ export function RefreshControl({ refreshing, onRefresh, seconds, onSeconds, upda
   const label = REFRESH_INTERVALS.find(interval => interval.seconds === seconds)?.label ?? "Off";
   return (
     <div className="window-pill" ref={root} title={updatedAt ? `Updated ${updatedAt.toLocaleTimeString("en-US")}` : undefined}>
-      <button type="button" className="pill-main" disabled={refreshing} onClick={onRefresh}><Icon d="M21 12a9 9 0 1 1-2.6-6.4M21 3v6h-6" spin={refreshing} />{refreshing ? "Refreshing..." : "Refresh"}</button>
+      <button type="button" className="pill-main" aria-label={refreshing ? "Refreshing" : "Refresh"} title="Refresh" disabled={refreshing} onClick={onRefresh}><Icon d="M21 12a9 9 0 1 1-2.6-6.4M21 3v6h-6" spin={refreshing} /><span className="pill-label">{refreshing ? "Refreshing..." : "Refresh"}</span></button>
       <button type="button" className="pill-main pill-interval" aria-haspopup="menu" aria-expanded={open} aria-label="Auto-refresh interval" onClick={() => setOpen(value => !value)}>{label}<Icon d="M6 9l6 6 6-6" small /></button>
       {open && (
         <div className="pill-menu narrow" role="menu" aria-label="Auto-refresh interval">

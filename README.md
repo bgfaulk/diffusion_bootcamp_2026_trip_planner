@@ -54,7 +54,7 @@ trip data, or group links. Runtime data belongs in Neon and Vercel environment v
 - Every save, add, or delete shows a toast with the result.
 - Phones get a top bar and a bottom page rail instead of the sidebar.
 
-**Organizer page** (`OWNER_EMAIL` account only)
+**Organizer page** (`OWNER_EMAIL` accounts only)
 - Overview: requests, errors, latency (p95), database size and growth per table, and application health
   with a "Check now" button, over a selectable time window with optional auto-refresh.
 - Accounts: every registered account with status, last sign-in, last seen, stored data, session count,
@@ -107,9 +107,9 @@ Set in `.env.local` (and in Vercel for production and preview):
 - `DIFFUSION_DATABASE_URL` (or `DIFFUSION_DATABASE_DATABASE_URL` / `DATABASE_URL`) from Neon.
 - `SESSION_SECRET`: a long random string. Required in production. It also derives the encryption key, so
   never rotate it without re-encrypting.
-- `OWNER_EMAIL`: the organizer's sign-in email. Only this account sees the Organizer page and receives
-  alerts and bug reports.
-- `GMAIL_APP_PASSWORD`: an app password for `OWNER_EMAIL` (a Gmail account). Google Account > Security >
+- `OWNER_EMAIL`: the organizer's sign-in email, or a comma-separated list of emails. Every listed account
+  sees the Organizer page; the first one is the organizer proper and receives alerts and bug reports.
+- `GMAIL_APP_PASSWORD`: an app password for the first `OWNER_EMAIL` (a Gmail account). Google Account > Security >
   2-Step Verification > App passwords. Without it, production reports mail as unavailable and the organizer
   copies reset links from the Organizer page instead.
 - `SIGNUP_CODE`: the invite code shared with attendees. Account creation is refused in production without it.

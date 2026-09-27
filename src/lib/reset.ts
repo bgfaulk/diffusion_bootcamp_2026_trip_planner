@@ -40,7 +40,17 @@ export function verifyResetToken(token: string, email: string, passwordHash: str
   }
 }
 
+// OWNER_EMAIL is one address or a comma-separated list. Every listed account gets the Organizer page; the
+// first one is the organizer proper: it sends mail, receives alerts and bug reports, and gets in-app notices.
+export function ownerEmails(): string[] {
+  return (process.env.OWNER_EMAIL ?? "").split(/[,\s]+/).map(value => value.trim()).filter(Boolean);
+}
+
+export function primaryOwnerEmail(): string | null {
+  return ownerEmails()[0] ?? null;
+}
+
 export function isOwner(email: string) {
-  const owner = process.env.OWNER_EMAIL?.trim().toLowerCase();
-  return Boolean(owner) && owner === email.toLowerCase();
+  const wanted = email.trim().toLowerCase();
+  return Boolean(wanted) && ownerEmails().some(owner => owner.toLowerCase() === wanted);
 }

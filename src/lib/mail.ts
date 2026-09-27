@@ -1,15 +1,16 @@
 import nodemailer from "nodemailer";
+import { primaryOwnerEmail } from "./reset";
 
-// Outbound mail through the organizer's Gmail account: OWNER_EMAIL plus a Google "app password"
+// Outbound mail through the organizer's Gmail account: the first OWNER_EMAIL plus a Google "app password"
 // (GMAIL_APP_PASSWORD). Nothing else to set up. Without the password, production reports mail as
 // unavailable and development prints the message to the server log so the flow can still be exercised.
 
 export function mailConfigured() {
-  return Boolean(process.env.OWNER_EMAIL?.trim() && process.env.GMAIL_APP_PASSWORD?.trim());
+  return Boolean(primaryOwnerEmail() && process.env.GMAIL_APP_PASSWORD?.trim());
 }
 
 export async function sendMail(to: string, subject: string, text: string, html: string): Promise<"sent" | "logged" | "unavailable"> {
-  const user = process.env.OWNER_EMAIL?.trim();
+  const user = primaryOwnerEmail();
   const pass = process.env.GMAIL_APP_PASSWORD?.trim().replace(/\s+/g, ""); // Google shows app passwords with spaces
   if (!user || !pass) {
     if (process.env.NODE_ENV === "production") return "unavailable";

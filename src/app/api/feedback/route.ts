@@ -3,6 +3,7 @@ import { withAudit } from "@/lib/audit";
 import { encryptText } from "@/lib/crypto";
 import { getSql } from "@/lib/db";
 import { mailConfigured, sendMail } from "@/lib/mail";
+import { primaryOwnerEmail } from "@/lib/reset";
 import { clientIp, enforceLimit } from "@/lib/rate-limit";
 import { asString, errorResponse, requireString } from "@/lib/validation";
 
@@ -27,7 +28,7 @@ export const POST = withAudit("feedback.send", async (request, ctx) => {
     `;
     const id = String(stored[0].id);
     ctx.target = id;
-    const owner = process.env.OWNER_EMAIL?.trim();
+    const owner = primaryOwnerEmail();
     if (!owner || !mailConfigured()) {
       ctx.detail = `${kind} · stored, mail not configured`;
       return Response.json({ ok: true, id });

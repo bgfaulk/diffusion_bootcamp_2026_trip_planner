@@ -1,6 +1,7 @@
 import { encryptText } from "./crypto";
 import { getSql } from "./db";
 import { mailConfigured, sendMail } from "./mail";
+import { primaryOwnerEmail } from "./reset";
 import { pruneAuditLog } from "./admin";
 
 // Application health for the organizer. A check reads the last hour of the audit log and the database size,
@@ -33,7 +34,7 @@ export function formatBytes(bytes: number) {
 }
 
 export async function ownerUserId(): Promise<string | null> {
-  const owner = process.env.OWNER_EMAIL?.trim().toLowerCase();
+  const owner = primaryOwnerEmail()?.toLowerCase();
   if (!owner) return null;
   const rows = await getSql()`SELECT id FROM users WHERE lower(email) = ${owner} LIMIT 1`;
   return rows[0] ? String(rows[0].id) : null;
@@ -118,7 +119,7 @@ export async function runHealthCheck(trigger: "cron" | "owner" | "manual", optio
     if (!options.demo && state[0] && Date.now() - new Date(state[0].last_alert_at).getTime() < HEALTH.repeatHours * 3_600_000) continue;
     await notifyOwner("health", alert.title, alert.body, { rows: alert.rows, advice: alert.advice });
     await sql`INSERT INTO health_alert_state (key, last_alert_at) VALUES (${alert.key}, now()) ON CONFLICT (key) DO UPDATE SET last_alert_at = now()`;
-    const owner = process.env.OWNER_EMAIL?.trim();
+    const owner = primaryOwnerEmail();
     if (owner && (mailConfigured() || process.env.NODE_ENV !== "production")) {
       const lines = alert.rows.map(([label, value]) => `${label}: ${value}`).join("\n");
       const text = `${alert.body}\n\n${lines}\n\nWhat to do:\n${alert.advice.map(line => `- ${line}`).join("\n")}\n`;
