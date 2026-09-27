@@ -359,7 +359,8 @@ a { color:var(--accent-dark); font-weight:800; }
 .health-rows li.ok em { background:color-mix(in srgb, var(--accent) 16%, transparent); color:var(--accent-dark); }
 .health-rows li.bad em { background:color-mix(in srgb, var(--danger) 16%, transparent); color:var(--danger); }
 .notice-form h2 { margin:0 0 4px; font-size:19px; }
-.profile-email strong { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:14px; } /* long emails truncate instead of wrapping */
+.profile-email strong { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.profile-email small { white-space:nowrap; }
 .settings-grid .wide { grid-column:1 / -1; }
 .trip-details textarea { min-height:100px; }
 .save-status { align-self:center; color:var(--accent-dark); font-weight:800; }

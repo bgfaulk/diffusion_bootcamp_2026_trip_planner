@@ -246,6 +246,7 @@ export default function Home() {
     return () => document.removeEventListener("pointerdown", prime);
   }, []);
 
+  // With no display name the button shows the address as two lines: the part before the @ as the name, the domain under it.
   const displayName = data.settings?.profile_name?.trim() || "";
   const unread = data.notifications.filter(notice => !notice.read_at).length;
   const tripName = data.settings?.trip_name || "San Francisco trip planner";
@@ -413,7 +414,7 @@ export default function Home() {
         <WeatherPanel weather={weather} collapsed={compact} />
         <div className="profile" ref={profileRef}>
           <button className="profile-button" onClick={() => setProfileOpen(open => !open)} title={compact ? (displayName || data.user.email) : undefined} aria-label="Account menu">
-            <span className="avatar">{initials}{unread > 0 && <span className="avatar-badge" aria-label={`${unread} unread notifications`}>{unread > 9 ? "9+" : unread}</span>}</span>{!compact && (displayName ? <span><strong>{displayName}</strong><small>{data.user.email}</small></span> : <span className="profile-email"><strong>{data.user.email}</strong></span>)}{!compact && <span>⌄</span>}
+            <span className="avatar">{initials}{unread > 0 && <span className="avatar-badge" aria-label={`${unread} unread notifications`}>{unread > 9 ? "9+" : unread}</span>}</span>{!compact && (displayName ? <span><strong>{displayName}</strong><small>{data.user.email}</small></span> : <span className="profile-email"><strong>{data.user.email.split("@")[0]}</strong><small>@{data.user.email.split("@").slice(1).join("@")}</small></span>)}{!compact && <span>⌄</span>}
           </button>
           {profileOpen && (
             <div className="profile-popover">
