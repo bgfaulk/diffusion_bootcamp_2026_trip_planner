@@ -52,7 +52,7 @@ export function UserGuide({ readAt = null, onRead }: { readAt?: string | null; o
       </ul>
       <h3>Explore San Francisco</h3>
       <ul>
-        <li><strong>Itinerary</strong> shows your day-by-day plan. &ldquo;Plan with ChatGPT&rdquo; builds a prompt from your places, dates, and interests. Open ChatGPT with it, then paste the answer back or upload the trip-plan.json file. &ldquo;Clear itinerary&rdquo; starts over.</li>
+        <li><strong>Itinerary</strong> shows your day-by-day plan with your bookings slotted in: flights, hotel check-in and check-out, rental pickup and return, and the bootcamp agenda appear on their days automatically and follow the booking when it is added, changed, or removed under Trip Information. Tap one to go there. &ldquo;Plan with ChatGPT&rdquo; builds a prompt from your places, dates, and interests. Open ChatGPT with it, then paste the answer back or upload the trip-plan.json file. &ldquo;Clear itinerary&rdquo; starts over.</li>
         <li>Tap any stop to change its time, place, why it fits, or address, move it to another day, or remove it. &ldquo;+ Add stop&rdquo; on a day adds one. Saved changes show up on the Overview right away.</li>
         <li><strong>Places to visit</strong> is a checklist of spots you want to see. &ldquo;Use my places to visit&rdquo; feeds them into the ChatGPT prompt.</li>
       </ul>
@@ -120,6 +120,7 @@ export function UserGuide({ readAt = null, onRead }: { readAt?: string | null; o
       <h2>What&rsquo;s new</h2>
       <p className="muted">Updated {GUIDE_UPDATED}.</p>
       <ul>
+        <li>The itinerary now takes flights, hotel, rental car, and bootcamp times straight from Trip Information, so adding, changing, or removing a booking updates the right day on its own. Plan stops that only repeated a booking are removed once and replaced by the live booking rows.</li>
         <li>Creating an account now goes through your inbox: enter your email and the invite code, then choose your password from the link we send. If the address already has an account, the email says so and offers a reset link instead.</li>
         <li>Rankings show &ldquo;Unnamed attendee&rdquo; for anyone who has not set a display name yet, instead of part of their email.</li>
         <li>Stars: earn points for finishing checklists, filling in your profile and trip details, reading this guide, and reporting bugs or ideas the organizer acts on. The Overview shows your total, your distance to 100%, and the rankings; checklist pages show the stars waiting to unlock.</li>

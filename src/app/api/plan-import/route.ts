@@ -3,6 +3,7 @@ import { withAudit } from "@/lib/audit";
 import { encryptText } from "@/lib/crypto";
 import { getSql } from "@/lib/db";
 import { extractJson, normalizePlan } from "@/lib/plan";
+import { dayKey, parseItinerary, parseWhen, serializeItinerary, stripBookingStops, timeBookings, trainingDays, type Booking } from "@/lib/trip-time";
 import { asString, errorResponse } from "@/lib/validation";
 
 // Takes ChatGPT's pasted JSON from the setup wizard and builds out the whole trip in one transaction.
@@ -43,9 +44,16 @@ export const POST = withAudit("plan.import", async (request, ctx) => {
     }
 
     if (plan.itineraryText) {
+      // Flights, check-ins, rental times and bootcamp days come from the records; stops that restate them are left out
+      // of the saved plan so they follow the booking rather than lingering in the text.
+      const start = parseWhen(plan.startDate);
+      const bookings = timeBookings(plan.records.map((r, index) => ({ id: String(index), category: r.category as Booking["category"], title: r.title, provider: r.provider, confirmation_number: r.confirmationNumber, start_at: r.startAt, end_at: r.endAt, address: r.address })), start?.y ?? new Date().getFullYear());
+      const trainingKeys = trainingDays(bookings.find(b => b.category === "training"));
+      const stripped = stripBookingStops(parseItinerary(plan.itineraryText, start ? dayKey(start) : null), bookings, trainingKeys);
+      const itineraryText = stripped.removed ? serializeItinerary(stripped.plan) : plan.itineraryText;
       queries.push(sql`
         INSERT INTO itinerary (user_id, instructions, response, saved_plan, updated_at)
-        VALUES (${user.id}, ${encryptText("Built by the ChatGPT setup wizard")}, ${encryptText(raw)}, ${encryptText(plan.itineraryText)}, now())
+        VALUES (${user.id}, ${encryptText("Built by the ChatGPT setup wizard")}, ${encryptText(raw)}, ${encryptText(itineraryText)}, now())
         ON CONFLICT(user_id) DO UPDATE SET instructions = excluded.instructions, response = excluded.response, saved_plan = excluded.saved_plan, updated_at = now()
       `);
     }

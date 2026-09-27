@@ -936,7 +936,9 @@ a { color:var(--accent-dark); font-weight:800; }
 .plan-meta { color:var(--accent-dark); font-size:12px; font-weight:850; text-transform:uppercase; letter-spacing:.06em; }
 .plan-days { display:grid; gap:14px; }
 /* Itinerary stops are buttons that open the editor: the card's grid moves onto the button so the whole card is the target. */
-.plan-day .day-list li.stop { display:block; padding:0; }
+.plan-day .day-list li.stop, .plan-day .day-list li.linked { display:block; padding:0; }
+.plan-day .day-list li.linked em { opacity:1; color:var(--muted); }
+.plan-day .day-list li.linked .stop-open:hover em, .plan-day .day-list li.linked .stop-open:focus-visible em { color:var(--accent-dark); }
 .stop-open { all:unset; box-sizing:border-box; display:grid; grid-template-columns:92px minmax(0,1fr) auto; gap:14px; align-items:start; width:100%; padding:12px 14px; border-radius:inherit; cursor:pointer; color:inherit; }
 .stop-open > div { display:grid; gap:2px; min-width:0; }
 .stop-open > div span { color:var(--muted); }
