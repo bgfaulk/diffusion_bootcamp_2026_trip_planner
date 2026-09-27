@@ -71,6 +71,10 @@ const emptyAppState: AppState = {
 };
 
 // Per-device hint that a session exists, so the loader can start before bootstrap answers.
+// The "finish setup" banner can be hidden per device; the profile menu still offers "Finish setup".
+const bannerKey = "trip-setup-banner";
+function bannerHidden() { try { return localStorage.getItem(bannerKey) === "hidden"; } catch { return false; } }
+
 function sessionHint() { try { return localStorage.getItem("trip-session") === "1"; } catch { return false; } }
 function rememberSession(on: boolean) { try { if (on) localStorage.setItem("trip-session", "1"); else localStorage.removeItem("trip-session"); } catch {} }
 
@@ -99,6 +103,9 @@ export default function Home() {
   // where a collapsed state makes no sense, so `compact` is what the layout actually renders.
   const [collapsed, setCollapsed] = useState(false);
   const [mobile, setMobile] = useState(false);
+  const [hideBanner, setHideBanner] = useState(false);
+  useEffect(() => { setHideBanner(bannerHidden()); }, []);
+  function dismissBanner() { setHideBanner(true); try { localStorage.setItem(bannerKey, "hidden"); } catch {} }
   const compact = collapsed && !mobile;
   useEffect(() => {
     const query = matchMedia("(max-width: 900px)");
@@ -363,10 +370,11 @@ export default function Home() {
       </aside>
 
       <main className="content">
-        {!answers.completed && (
+        {!answers.completed && !hideBanner && (
           <div className="setup-banner" role="status">
             <div><strong>Finish setting up your trip</strong><span>{mode === "ai" ? "ChatGPT hasn't built your itinerary, checklists, or bookings yet." : "Add your dates, bookings, travelers, and interests to get the most out of the planner."}</span></div>
             <button className="btn primary" onClick={resumeSetup}>Finish setup</button>
+            <button type="button" className="banner-x" onClick={dismissBanner} aria-label="Hide this reminder" title="Hide this reminder. Finish setup stays in your account menu.">×</button>
           </div>
         )}
         {page === "overview" && <Overview tripName={tripName} settings={data.settings} answers={answers} itinerary={data.itinerary} tripInfo={data.tripInfo} goTo={setPage} />}
