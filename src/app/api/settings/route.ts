@@ -3,7 +3,7 @@ import { withAudit } from "@/lib/audit";
 import { encryptText } from "@/lib/crypto";
 import { getSql } from "@/lib/db";
 import { isTheme } from "@/lib/theme";
-import { asString, errorResponse } from "@/lib/validation";
+import { asBooleanOrNull, asString, errorResponse } from "@/lib/validation";
 
 export const POST = withAudit("settings.save", async (request, ctx) => {
   try {
@@ -16,16 +16,18 @@ export const POST = withAudit("settings.save", async (request, ctx) => {
     const homePlaceId = encryptText(asString(body.homePlaceId, 160));
     const trainingLocation = encryptText(asString(body.trainingLocation, 240));
     const trainingPlaceId = encryptText(asString(body.trainingPlaceId, 160));
+    // Optional: a save that doesn't mention the chime keeps whatever is stored.
+    const chimeMuted = asBooleanOrNull(body.chimeMuted);
     // Coordinates are never stored (privacy). The legacy *_lat/*_lng columns are nulled on every save so
     // anything written before that decision is scrubbed the next time the row is touched.
     await getSql()`
       INSERT INTO settings (
         user_id, profile_name, trip_name, home_address, home_place_id,
-        training_location, training_place_id, theme, updated_at
+        training_location, training_place_id, theme, chime_muted, updated_at
       )
       VALUES (
         ${user.id}, ${profileName}, ${tripName}, ${homeAddress}, ${homePlaceId},
-        ${trainingLocation}, ${trainingPlaceId}, ${theme}, now()
+        ${trainingLocation}, ${trainingPlaceId}, ${theme}, ${chimeMuted ?? false}, now()
       )
       ON CONFLICT(user_id) DO UPDATE SET
         profile_name = excluded.profile_name,
@@ -39,10 +41,30 @@ export const POST = withAudit("settings.save", async (request, ctx) => {
         training_lat = NULL,
         training_lng = NULL,
         theme = excluded.theme,
+        chime_muted = COALESCE(${chimeMuted}, settings.chime_muted),
         updated_at = now()
     `;
     return Response.json({ ok: true });
   } catch (error) {
     return errorResponse(error, "Could not save settings");
+  }
+});
+
+// Just the loading-screen sound flag, so the loader's own mute button can save it without touching the
+// rest of the row (or creating a bare one for an account that hasn't saved settings yet).
+export const PATCH = withAudit("settings.chime", async (request, ctx) => {
+  try {
+    const user = ctx.user = await requireUser();
+    const body = await request.json();
+    const chimeMuted = asBooleanOrNull(body.chimeMuted);
+    if (chimeMuted === null) return Response.json({ error: "chimeMuted must be true or false" }, { status: 400 });
+    await getSql()`
+      INSERT INTO settings (user_id, chime_muted, updated_at)
+      VALUES (${user.id}, ${chimeMuted}, now())
+      ON CONFLICT(user_id) DO UPDATE SET chime_muted = excluded.chime_muted, updated_at = now()
+    `;
+    return Response.json({ ok: true });
+  } catch (error) {
+    return errorResponse(error, "Could not save the sound setting");
   }
 });

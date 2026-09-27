@@ -4,7 +4,7 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/lib/client";
 import { buildWizardPrompt, extractJson, parseAnswers, trainingAgenda, type WizardAnswers } from "@/lib/plan";
 import { AbcLoader, AbcMark, ActionMenu, DestinationField, InterestFields, LoginScreen, PlanningChoice, SetupWizard, TravelerFields, TripDateFields } from "./onboarding";
-import { primeChime } from "@/lib/chime";
+import { primeChime, setChimeEnabled } from "@/lib/chime";
 import { PlaceInput } from "./place-input";
 import { TabPanel, Tabs } from "./tabs";
 import { JsonFileInput } from "./json-file-input";
@@ -49,6 +49,7 @@ type Settings = {
   theme?: Theme;
   planning_mode?: "ai" | "manual" | null;
   planning_answers?: string;
+  chime_muted?: boolean;
 } | null;
 type AppState = {
   user: null | { id: string; email: string; owner?: boolean };
@@ -113,6 +114,9 @@ export default function Home() {
   function apply(next: Partial<AppState>) {
     setData(normalizeAppState(next));
     if (next.settings?.theme) { applyTheme(next.settings.theme); setThemeState(next.settings.theme); }
+    // The loading-screen sound setting is mirrored onto this device so the next boot loader honors it
+    // before the account data has arrived.
+    if (typeof next.settings?.chime_muted === "boolean") setChimeEnabled(!next.settings.chime_muted);
   }
 
   async function loadState() {
@@ -1003,6 +1007,7 @@ function SettingsPage({ settings, saveSettings, reload }: { settings: Settings; 
 }
 
 function SettingsForm({ settings, onSubmit }: { settings: Settings; onSubmit: (form: HTMLFormElement) => Promise<void> }) {
+  const [chimeMuted, setChimeMuted] = useState(Boolean(settings?.chime_muted));
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     await onSubmit(event.currentTarget);
@@ -1014,6 +1019,13 @@ function SettingsForm({ settings, onSubmit }: { settings: Settings; onSubmit: (f
       <AddressField label={<span>Home address <span className="help" title="Optional. It helps personalize the route map and itinerary context.">?</span></span>} name="home" defaultAddress={settings?.home_address || ""} defaultPlaceId={settings?.home_place_id || ""} />
       <AddressField label="Training location" name="training" defaultAddress={settings?.training_location || ""} defaultPlaceId={settings?.training_place_id || ""} />
       <input type="hidden" name="theme" value={settings?.theme || "light"} />
+      <label className="check-toggle wide">
+        <input type="checkbox" className="visually-hidden" checked={chimeMuted} onChange={event => setChimeMuted(event.target.checked)} />
+        <span className="check-box" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg></span>
+        <span><span className="check-title">Mute the loading screen</span><br /><span className="muted">Turns off the A-B-C chime that plays while your trip loads. The sound button on the loading screen changes this too.</span></span>
+      </label>
+      {/* Always posted as "true"/"false" so a save from this form sets the flag either way. */}
+      <input type="hidden" name="chimeMuted" value={String(chimeMuted)} />
       <button className="btn primary">Save settings</button>
     </form>
   );

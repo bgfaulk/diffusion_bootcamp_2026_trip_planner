@@ -22,7 +22,7 @@ export const GET = withAudit("bootstrap", async (_request, ctx) => {
   if (!user) return emptyBootstrap();
   const sql = getSql();
   const [settings, items, photos, itinerary, tripInfo, tripDocuments] = await Promise.all([
-    sql`SELECT user_id, profile_name, trip_name, home_address, home_place_id, training_location, training_place_id, theme, planning_mode, planning_answers, updated_at FROM settings WHERE user_id = ${user.id}`,
+    sql`SELECT user_id, profile_name, trip_name, home_address, home_place_id, training_location, training_place_id, theme, planning_mode, planning_answers, chime_muted, updated_at FROM settings WHERE user_id = ${user.id}`,
     sql`SELECT * FROM list_items WHERE user_id = ${user.id} ORDER BY checked ASC, position ASC, created_at ASC`,
     sql`
       SELECT p.id, p.spot, p.caption

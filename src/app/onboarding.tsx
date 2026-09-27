@@ -6,7 +6,7 @@ import { PlaceInput } from "./place-input";
 import { BookingForm, categoryTitle } from "./trip-bookings";
 import { JsonFileInput } from "./json-file-input";
 import { passwordChecks } from "@/lib/validation";
-import { chimeEnabled, chimeReady, playChimeNote, primeChime, setChimeEnabled } from "@/lib/chime";
+import { chimeEnabled, chimeReady, playChimeNote, primeChime, saveChimeEnabled } from "@/lib/chime";
 import { buildWizardPrompt, extractJson, interestOptions, normalizePlan, sampleResponse, trainingAddress, trainingDetail, type EmailAccess, type WizardAnswers } from "@/lib/plan";
 
 type AuthStep = "signin" | "create" | "reset" | "forgot";
@@ -735,10 +735,10 @@ export function AbcLoader({ done, failed, onFinish, onFailed, messages = loaderM
     return () => clearTimeout(timer);
   }, [beat]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // The preference (on/off) is saved on every change. "Unlocked" is separate: browsers only let audio
-  // start after a click or key press, so a saved "on" can still be waiting for a tap after a refresh.
+  // The preference (on/off) is saved to the device and the account on every change. "Unlocked" is separate:
+  // browsers only let audio start after a click or key press, so a saved "on" can still be waiting for a tap.
   function setSoundPreference(on: boolean) {
-    setChimeEnabled(on);
+    saveChimeEnabled(on);
     setSound(on);
     if (on) { primeChime(); setReady(chimeReady()); }
   }

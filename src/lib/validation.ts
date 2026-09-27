@@ -17,6 +17,14 @@ export function asString(value: unknown, max = 500) {
   return value.trim().slice(0, max);
 }
 
+// Accepts a real boolean or the "true"/"false" strings a form posts; anything else is null ("not sent").
+export function asBooleanOrNull(value: unknown): boolean | null {
+  if (typeof value === "boolean") return value;
+  if (value === "true") return true;
+  if (value === "false") return false;
+  return null;
+}
+
 export function requireString(value: unknown, name: string, max = 500) {
   const next = asString(value, max);
   if (!next) fail(`${name} is required`);
