@@ -179,7 +179,8 @@ export async function leaderboard(viewerId: string): Promise<LeaderRow[]> {
     if (isOwner(String(row.email))) continue;
     const stars = Number(row.stars);
     if (stars !== last) { rank += 1; last = stars; }
-    const name = decryptText(row.profile_name).trim() || String(row.email).split("@")[0];
+    // No display name yet: a neutral label, never a piece of the email address (everyone sees this list).
+    const name = decryptText(row.profile_name).trim() || "Unnamed attendee";
     out.push({ id: String(row.id), name, stars, rank, me: String(row.id) === viewerId });
   }
   return out;

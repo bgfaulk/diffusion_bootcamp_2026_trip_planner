@@ -334,6 +334,8 @@ a { color:var(--accent-dark); font-weight:800; }
 .login-card h1 { font-size:clamp(26px, 3.6vw, 36px); line-height:1.12; }
 .login-brand { margin-top:4px; padding-top:14px; border-top:1px solid var(--line); text-align:center; }
 .login-brand .eyebrow { margin:0; }
+/* A quiet handwritten credit under the brand line, login page only. */
+.login-brand .masthead { margin:6px 0 0; font-family:var(--font-script), "Segoe Script", "Bradley Hand", cursive; font-size:19px; line-height:1.2; color:var(--muted); opacity:.85; }
 /* One content-sized column, centred, so the word under the letters can stretch to exactly their width. */
 .abc-logo { display:grid; grid-template-columns:max-content; justify-content:center; justify-items:center; gap:10px; padding:6px 0 2px; }
 .abc-logo .abc-letters { gap:clamp(10px, 3vw, 24px); }
@@ -781,6 +783,7 @@ a { color:var(--accent-dark); font-weight:800; }
 :root[data-theme="nirvana"] .sidebar-toggle { border-radius:0; border-color:var(--cyan-line); background:rgba(2,7,13,.9); color:var(--cyan-dim); }
 :root[data-theme="nirvana"] .sidebar-toggle:hover { color:var(--orange); border-color:var(--orange); }
 :root[data-theme="nirvana"] .login-actions, :root[data-theme="nirvana"] .login-brand { border-top-color:var(--cyan-line); }
+:root[data-theme="nirvana"] .login-brand .masthead { color:var(--cyan-dim); opacity:.75; text-shadow:0 0 8px var(--cyan-faint); }
 :root[data-theme="nirvana"] .toast { border-radius:0; background:rgba(2,7,13,.96); color:var(--ink); border:1px solid var(--cyan); box-shadow:0 0 18px rgba(0,229,255,.25); }
 :root[data-theme="nirvana"] .toast.error { border-color:var(--red); color:#fff; }
 :root[data-theme="nirvana"] .toast.info svg { color:var(--cyan); }

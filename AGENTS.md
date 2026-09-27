@@ -9,7 +9,7 @@ conventions that are easy to break.
   Trip data lives in Neon; secrets and links live in Vercel environment variables and `.env.local`.
 - **The database is production.** There is no local database. Any account created while testing shows up
   on the organizer's Accounts tab; delete it via Settings > Account when finished.
-- **Never spam the organizer.** Only four places send email (see the Email section of the README). Keep
+- **Never spam the organizer.** Only five places send email (see the Email section of the README). Keep
   the caps: rate limits on the attendee-triggered ones and the per-kind 24-hour state in
   `health_alert_state` on alerts. New notification kinds are in-app only unless the organizer asks otherwise.
 

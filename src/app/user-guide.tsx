@@ -31,7 +31,7 @@ export function UserGuide({ readAt = null, onRead }: { readAt?: string | null; o
 
       <h2>Getting started</h2>
       <ul>
-        <li><strong>Create an account.</strong> Enter your email, choose a password, and type the invite code from the trip organizer. The first visit on a new device leads with this step.</li>
+        <li><strong>Create an account.</strong> Enter your email and the invite code from the trip organizer, then open the email we send you: its button brings you back to choose a password. The link works once and expires in 24 hours. The first visit on a new device leads with this step.</li>
         <li><strong>Sign in later.</strong> Once a device has signed in, the login page opens on the sign-in form and remembers your email. Use &ldquo;Forgot your password?&rdquo; to get a reset link by email.</li>
         <li><strong>Choose how to plan.</strong> &ldquo;Plan with ChatGPT&rdquo; asks a few questions, hands ChatGPT one prompt, and reads back the trip-plan.json file it produces. &ldquo;Set it up myself&rdquo; walks you through the same details by hand.</li>
         <li><strong>Leave setup whenever you like.</strong> Your answers are saved as you go. A &ldquo;Finish setup&rdquo; banner on the Overview brings you back to where you left off.</li>
@@ -120,6 +120,8 @@ export function UserGuide({ readAt = null, onRead }: { readAt?: string | null; o
       <h2>What&rsquo;s new</h2>
       <p className="muted">Updated {GUIDE_UPDATED}.</p>
       <ul>
+        <li>Creating an account now goes through your inbox: enter your email and the invite code, then choose your password from the link we send. If the address already has an account, the email says so and offers a reset link instead.</li>
+        <li>Rankings show &ldquo;Unnamed attendee&rdquo; for anyone who has not set a display name yet, instead of part of their email.</li>
         <li>Stars: earn points for finishing checklists, filling in your profile and trip details, reading this guide, and reporting bugs or ideas the organizer acts on. The Overview shows your total, your distance to 100%, and the rankings; checklist pages show the stars waiting to unlock.</li>
         <li>Bug reports and feedback are now kept for the organizer, who can mark them fixed or accepted from the Organizer page.</li>
         <li>Add to calendar is back: Trip Information downloads calendar files for the whole trip, one booking, or the training days, and Settings has a calendar guest who gets invited on every event.</li>

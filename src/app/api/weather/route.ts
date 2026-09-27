@@ -7,7 +7,7 @@ import { errorResponse, fail } from "@/lib/validation";
 // per 30 minutes for everyone: the shared copy lives in the weather_cache table (serverless instances don't
 // share memory and don't live long), with a small in-memory layer in front of it for repeat hits on the same
 // instance. Locations are normalized so nearby people share an entry: place names are lower-cased and
-// coordinates rounded to two decimals (about a kilometer). X-Weather-Source says where an answer came from.
+// coordinates rounded to two decimals (about a kilometer).
 const memory = new Map<string, { at: number; data: unknown }>();
 const TTL = 30 * 60 * 1000;
 const MAX_ENTRIES = 200;
@@ -17,8 +17,11 @@ function cacheKey(q: string) {
   if (coords) return `${Number(coords[1]).toFixed(2)},${Number(coords[2]).toFixed(2)}`;
   return q.toLowerCase().replace(/\s+/g, " ").trim();
 }
-function respond(data: unknown, source: "memory" | "shared" | "upstream") {
-  return Response.json(data, { headers: { "X-Weather-Source": source, "Cache-Control": "private, max-age=300" } });
+// Where an answer came from goes into the audit row for the organizer, not into a response header: a header
+// would let any attendee probe whether someone else had just looked up a given place.
+function respond(data: unknown, source: "memory" | "shared" | "upstream", ctx: { detail?: string }) {
+  ctx.detail = source;
+  return Response.json(data, { headers: { "Cache-Control": "private, max-age=300" } });
 }
 // The free tier returns three forecast days; asking for more only makes the response bigger.
 const DAYS = 3;
@@ -41,13 +44,13 @@ export const GET = withQuiet("weather", async (request, ctx) => {
     const key_ = cacheKey(q);
     ctx.target = key_;
     const hit = memory.get(key_);
-    if (hit && Date.now() - hit.at < TTL) return respond(hit.data, "memory");
+    if (hit && Date.now() - hit.at < TTL) return respond(hit.data, "memory", ctx);
     const sql = getSql();
     const shared = await sql`SELECT data, fetched_at FROM weather_cache WHERE key = ${key_}`;
     if (shared[0] && Date.now() - new Date(shared[0].fetched_at).getTime() < TTL) {
       const data = JSON.parse(String(shared[0].data));
       remember(key_, data);
-      return respond(data, "shared");
+      return respond(data, "shared", ctx);
     }
     const upstream = await fetch(`https://api.weatherapi.com/v1/forecast.json?key=${encodeURIComponent(key)}&q=${encodeURIComponent(q)}&days=${DAYS}&aqi=no&alerts=no`, { cache: "no-store" });
     if (!upstream.ok) fail("Weather is unavailable right now", 502);
@@ -75,7 +78,7 @@ export const GET = withQuiet("weather", async (request, ctx) => {
       ON CONFLICT (key) DO UPDATE SET data = excluded.data, fetched_at = now()
     `;
     remember(key_, data);
-    return respond(data, "upstream");
+    return respond(data, "upstream", ctx);
   } catch (error) {
     return errorResponse(error, "Could not load the weather");
   }
