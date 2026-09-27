@@ -56,6 +56,10 @@ const mb = (bytes: number) => `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 function HealthCard() {
   const [state, setState] = useState<{ snapshot: Snapshot | null; thresholds: Thresholds } | null>(null);
   const [busy, setBusy] = useState(false);
+  // Collapsed by default so the Overview isn't dominated by it; the choice is remembered per device.
+  const [open, setOpen] = useState(false);
+  useEffect(() => { try { setOpen(localStorage.getItem("trip-health-open") === "1"); } catch {} }, []);
+  function toggle() { setOpen(current => { const next = !current; try { localStorage.setItem("trip-health-open", next ? "1" : "0"); } catch {} return next; }); }
   const load = useCallback(async () => { try { setState(await api("/api/health/check?peek=1")); } catch {} }, []);
   useEffect(() => { void load(); }, [load]);
   async function check() {
@@ -80,15 +84,29 @@ function HealthCard() {
     ["Database size", mb(s.dbBytes), flag(s.dbBytes > t.sizeWarnBytes)],
     ["Growth in 24 h", s.growthBytes24h == null ? "No history yet" : mb(s.growthBytes24h), flag((s.growthBytes24h ?? 0) > t.growthBytes24h, s.growthBytes24h == null)]
   ] : [];
+  const over = rows.filter(([, , status]) => status === "bad").length;
+  const summary = !s ? ["na", "No check yet"] : over ? ["bad", `${over} over threshold`] : ["ok", "All within thresholds"];
   return (
-    <section className="callout health-card">
-      <div className="page-header-row"><div><h2>Application health</h2><p className="muted">{s ? `Last check ${new Date(s.checkedAt).toLocaleString()} over the previous ${t?.windowMinutes} minutes.` : "No check has run yet."} Alerts repeat at most once a day and arrive in your notifications and email.</p></div><button type="button" className="btn" disabled={busy} onClick={check}>{busy ? "Checking..." : "Check now"}</button></div>
-      {rows.length > 0 && (
-        <ul className="health-rows">
-          {rows.map(([label, value, status]) => <li key={label} className={status}><span>{label}</span><strong>{value}</strong><em>{status === "ok" ? "OK" : status === "bad" ? "Over threshold" : "Not enough data"}</em></li>)}
-        </ul>
+    <section className={`callout health-card ${open ? "open" : ""}`}>
+      <div className="health-head">
+        <button type="button" className="health-toggle" onClick={toggle} aria-expanded={open} aria-controls="health-body">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg>
+          <h2>Application health</h2>
+          <em className={`health-status ${summary[0]}`}>{summary[1]}</em>
+        </button>
+        <button type="button" className="btn" disabled={busy} onClick={check}>{busy ? "Checking..." : "Check now"}</button>
+      </div>
+      {open && (
+        <div id="health-body" className="health-body">
+          <p className="muted">{s ? `Last check ${new Date(s.checkedAt).toLocaleString()} over the previous ${t?.windowMinutes} minutes.` : "No check has run yet."} Alerts repeat at most once a day and arrive in your notifications and email.</p>
+          {rows.length > 0 && (
+            <ul className="health-rows">
+              {rows.map(([label, value, status]) => <li key={label} className={status}><span>{label}</span><strong>{value}</strong><em>{status === "ok" ? "OK" : status === "bad" ? "Over threshold" : "Not enough data"}</em></li>)}
+            </ul>
+          )}
+          {t && <p className="muted">Thresholds: p95 over {t.p95Ms} ms, average over {t.avgMs} ms, or more than {Math.round(t.failureRate * 100)}% server errors (each needs {t.minRequests}+ requests in the window); database over {mb(t.sizeWarnBytes)} (critical at {mb(t.sizeCriticalBytes)}); growth over {mb(t.growthBytes24h)} in 24 hours.</p>}
+        </div>
       )}
-      {t && <p className="muted">Thresholds: p95 over {t.p95Ms} ms, average over {t.avgMs} ms, or more than {Math.round(t.failureRate * 100)}% server errors (each needs {t.minRequests}+ requests in the window); database over {mb(t.sizeWarnBytes)} (critical at {mb(t.sizeCriticalBytes)}); growth over {mb(t.growthBytes24h)} in 24 hours.</p>}
     </section>
   );
 }
