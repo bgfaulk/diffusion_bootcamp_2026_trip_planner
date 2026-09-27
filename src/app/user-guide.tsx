@@ -42,7 +42,7 @@ export function UserGuide({ readAt = null, onRead }: { readAt?: string | null; o
       <ul>
         <li>Shows your trip name, your dates, and what is next: the closest booking or itinerary stop.</li>
         <li>Lists today&rsquo;s schedule. Earlier items sit under &ldquo;Earlier today,&rdquo; and finished ones under &ldquo;Done.&rdquo;</li>
-        <li>&ldquo;Edit itinerary&rdquo; opens the same planning tools as the Explore page.</li>
+        <li>&ldquo;Edit itinerary&rdquo; opens the Explore page, where any stop can be changed.</li>
       </ul>
       <h3>Pre-checks, Packing, Departure Day, and Return Day</h3>
       <ul>
@@ -53,11 +53,13 @@ export function UserGuide({ readAt = null, onRead }: { readAt?: string | null; o
       <h3>Explore San Francisco</h3>
       <ul>
         <li><strong>Itinerary</strong> shows your day-by-day plan. &ldquo;Plan with ChatGPT&rdquo; builds a prompt from your places, dates, and interests. Open ChatGPT with it, then paste the answer back or upload the trip-plan.json file. &ldquo;Clear itinerary&rdquo; starts over.</li>
+        <li>Tap any stop to change its time, place, why it fits, or address, move it to another day, or remove it. &ldquo;+ Add stop&rdquo; on a day adds one. Saved changes show up on the Overview right away.</li>
         <li><strong>Places to visit</strong> is a checklist of spots you want to see. &ldquo;Use my places to visit&rdquo; feeds them into the ChatGPT prompt.</li>
       </ul>
       <h3>Trip Information</h3>
       <ul>
         <li>Your bookings, grouped as Flights, Hotel, Rental Car, Training, Insurance, and Other, each with dates, times, confirmation details, and notes.</li>
+        <li>Adding one from a tab keeps that type. Provider suggests common airlines, hotel chains, and rental companies but takes any name; the start and end fields are date and time pickers; phone numbers are tidied as you type.</li>
         <li>&ldquo;+ PDF&rdquo; stores insurance or protection documents so they are on hand during the trip.</li>
         <li>Bookings and PDFs can be deleted from their cards. Deleting asks you to confirm first.</li>
         <li><strong>Add to calendar.</strong> The menu at the top downloads a calendar file (.ics) with the whole trip: an all-day block for your dates, every booking with a readable start, and the training days with the daily agenda. Each booking card has its own &ldquo;Add to calendar&rdquo; button, and the Training tab can add just the training days. Open the file and Apple Calendar, Google Calendar, or Outlook adds the events. If you set a calendar guest in Settings, every event invites them too.</li>
@@ -66,7 +68,7 @@ export function UserGuide({ readAt = null, onRead }: { readAt?: string | null; o
       <ul>
         <li>Six stops around the Bay Area, each with room for one photo: Golden Gate Overlook, Ferry Building, North Beach, Mission District, Half Moon Bay, and a favorite surprise.</li>
         <li>&ldquo;+ Photo&rdquo; adds a photo to a stop. Large photos are shrunk before they are saved. Adding a photo to a filled stop replaces the old one.</li>
-        <li>Tap a stop to see its photo full size or to delete it.</li>
+        <li>Every stop starts with a stock photo of the place, marked &ldquo;Stock.&rdquo; Adding your own photo replaces it. Tap a stop to see its photo full size or to delete it; deleting a stock photo removes it for good, so the app asks first.</li>
       </ul>
       <h3>Settings</h3>
       <ul>
@@ -131,7 +133,7 @@ export function UserGuide({ readAt = null, onRead }: { readAt?: string | null; o
         <li>The theme picker moved into its own window from the account menu.</li>
         <li>Every page has its own web address.</li>
         <li>Every save now confirms it worked or says why it did not.</li>
-        <li>Photo Route: photos can be deleted, large photos are shrunk before saving, each stop holds one photo, and the route zig-zags between stops.</li>
+        <li>Photo Route: photos can be deleted, large photos are shrunk before saving, each stop holds one photo, and the route zig-zags between stops. Stops now start with a stock photo until you add your own.</li>
         <li>Login: a Welcome step for first-time visitors, a clearer &ldquo;Create an account&rdquo; button, and your email remembered for a year on devices you have used.</li>
         <li>Automatic sign-out after an hour of inactivity, with a two-minute warning.</li>
         <li>The loading screen plays A, B, C as three rising notes, with a mute switch in Settings.</li>

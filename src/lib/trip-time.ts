@@ -121,6 +121,42 @@ export function parseItinerary(text: string | null | undefined, startKey: number
   return plan;
 }
 
+/** Longest saved plan the itinerary API accepts (it slices longer text, so the client checks first). */
+export const MAX_ITINERARY_CHARS = 12000;
+
+/** The inverse of parseItinerary: the same "Day N - ..." headers and "- time | place | why | address" bullets, so a stop
+ *  edited in the app round-trips through the parser. Intro lines and practical notes come back as plain lines and bullets. */
+export function serializeItinerary(plan: ParsedPlan): string {
+  const clean = (value: string) => value.replace(/\|/g, "/").replace(/\s+/g, " ").trim();
+  const out: string[] = plan.intro.map(clean).filter(Boolean);
+  for (const day of plan.days) {
+    if (out.length) out.push("");
+    out.push(clean(day.label) || `Day ${day.index}`);
+    for (const stop of day.stops) {
+      const parts = [stop.place, stop.why, stop.address].map(clean);
+      while (parts.length > 1 && !parts[parts.length - 1]) parts.pop();
+      out.push(`- ${stop.time && timeMinutes(stop.time) !== null ? `${clean(stop.time)} | ` : ""}${parts.join(" | ")}`);
+    }
+  }
+  if (plan.notes.length) { out.push("", "Practical notes:"); for (const note of plan.notes) out.push(`- ${clean(note)}`); }
+  return out.join("\n");
+}
+
+/** A copy of the plan with one stop replaced, moved to another day, added (stopIndex null), or removed (stop null).
+ *  A timed stop lands before the first later-timed stop of its day; an untimed one goes to the end. */
+export function withStop(plan: ParsedPlan, from: { day: number; stop: number | null }, to: number, stop: Stop | null): ParsedPlan {
+  const days = plan.days.map(day => ({ ...day, stops: [...day.stops] }));
+  if (from.stop !== null) days[from.day]?.stops.splice(from.stop, 1);
+  if (stop) {
+    const target = days[to] ?? days[from.day];
+    const next = { ...stop, minutes: stop.time ? timeMinutes(stop.time) : null };
+    let at = target.stops.length;
+    if (next.minutes !== null) { const later = target.stops.findIndex(other => other.minutes !== null && other.minutes > next.minutes!); if (later >= 0) at = later; }
+    target.stops.splice(at, 0, next);
+  }
+  return { ...plan, days };
+}
+
 /* ---------- airports, for "miles flown" ---------- */
 
 const AIRPORTS: Record<string, [number, number]> = {

@@ -20,11 +20,11 @@ import { Help } from "./help";
 import { ExtraItemsNote, ProgressBlock, StarCells, StarsProvider, useStars, useStarsRefresh, type StarsPayload } from "./stars";
 import { PRIZE_NOTE, starRules, type LeaderRow, type StarState } from "@/lib/stars-rules";
 import { WhatsAppModal } from "./whatsapp-modal";
-import { photoSpots } from "@/lib/photo-spots";
+import { photoSpots, stockPhotos } from "@/lib/photo-spots";
 import { bookingEvent, buildIcs, downloadIcs, slug, trainingEvents, tripWindowEvent, type CalendarEvent } from "@/lib/calendar";
 import { formatBytes, MAX_PHOTO_EDGE, preparePhoto, type PreparedPhoto } from "@/lib/image";
 import { applyFx, applyTheme, storedFx, storedTheme, THEMES, themeLabels, type Theme } from "@/lib/theme";
-import { buildTripModel, countdown, dayKey, daysBetween, fmtDay, fmtMinutes, fmtShort, keyToDate, parseItinerary, parseWhen, type DayEvent, type ParsedPlan, type TimedBooking, type TripModel } from "@/lib/trip-time";
+import { buildTripModel, countdown, dayKey, daysBetween, fmtDay, fmtMinutes, fmtShort, keyToDate, MAX_ITINERARY_CHARS, parseItinerary, parseWhen, serializeItinerary, timeMinutes, withStop, type DayEvent, type ParsedPlan, type Stop, type TimedBooking, type TripModel } from "@/lib/trip-time";
 
 type Item = { id: string; page: string; title: string; checked: boolean; position: number; source?: string };
 type TripInfo = {
@@ -66,6 +66,7 @@ type AppState = {
   settings: Settings;
   items: Item[];
   photos: Record<string, { id: string; caption: string; imageUrl: string }>;
+  stockHidden: string[]; // photo-route stops whose stock photo this person deleted
   itinerary: null | { instructions?: string; response?: string; saved_plan?: string };
   tripInfo: TripInfo[];
   tripDocuments: TripDocument[];
@@ -84,6 +85,7 @@ const emptyAppState: AppState = {
   settings: null,
   items: [],
   photos: {},
+  stockHidden: [],
   itinerary: null,
   tripInfo: [],
   tripDocuments: [],
@@ -546,13 +548,13 @@ export default function Home() {
         {listPages.includes(page) && <ListPage pageKey={page} items={data.items} onItems={patchItems} />}
         {page === "explore" && <ExplorePage items={data.items.filter(item => item.page === "explore")} itinerary={data.itinerary} startDate={answers.startDate} openModal={() => setItineraryOpen(true)} reload={load} onItems={patchItems} />}
         {page === "tripInfo" && <TripInfoPage tripInfo={data.tripInfo} tripDocuments={data.tripDocuments} reload={load} answers={answers} settings={data.settings} email={data.user.email} />}
-        {page === "gallery" && <Gallery photos={data.photos} openViewer={setViewer} reload={load} />}
+        {page === "gallery" && <Gallery photos={data.photos} stockHidden={data.stockHidden} openViewer={setViewer} reload={load} />}
         {page === "settings" && <SettingsPage settings={data.settings} saveSettings={saveSettings} reload={load} tab={settingsTab} onTab={setSettingsTab} guideReadAt={data.stars?.flags.guideReadAt ?? null} onGuideRead={markGuideRead} />}
         {page === "organizer" && data.user.owner && <OrganizerPage userId={data.user.id} />}
       </main>
 
       {itineraryOpen && <ItineraryModal items={data.items.filter(item => item.page === "explore")} itinerary={data.itinerary} answers={answers} hasTripData={Boolean(data.itinerary?.saved_plan) || data.tripInfo.length > 0} onClose={() => setItineraryOpen(false)} reload={load} />}
-      {viewer && <PhotoViewer spot={viewer} photos={data.photos} onClose={() => setViewer(null)} onDeleted={load} />}
+      {viewer && <PhotoViewer spot={viewer} photos={data.photos} stockHidden={data.stockHidden} onClose={() => setViewer(null)} onDeleted={load} />}
       {themeOpen && <ThemeModal theme={theme} fx={fx} onTheme={chooseTheme} onFx={toggleFx} onClose={() => setThemeOpen(false)} />}
       {notificationsOpen && <NotificationsModal items={data.notifications} done={tourDone} onChange={list => setData(current => ({ ...current, notifications: list }))} onClose={() => setNotificationsOpen(false)} onAction={action => {
         setNotificationsOpen(false);
@@ -579,6 +581,7 @@ function normalizeAppState(next: Partial<AppState>): AppState {
     settings: next.settings || null,
     items: Array.isArray(next.items) ? next.items : [],
     photos: next.photos && typeof next.photos === "object" ? next.photos : {},
+    stockHidden: Array.isArray(next.stockHidden) ? next.stockHidden.filter((id: unknown): id is string => typeof id === "string") : [],
     notifications: Array.isArray(next.notifications) ? next.notifications : [],
     links: { whatsapp: typeof next.links?.whatsapp === "string" ? next.links.whatsapp : "" },
     itinerary: next.itinerary || null,
@@ -823,8 +826,9 @@ function ChecklistItem({ item, onItems }: { item: Item; onItems: ItemsPatch }) {
   const { refreshStars } = useStars();
   async function toggle() {
     const checked = !item.checked;
-    // Flip it right away and move it to the end of its new group, which is where the server puts it too.
-    onItems(items => [...items.filter(other => other.id !== item.id), { ...item, checked }]);
+    // Flip it in place. The list groups open and done items itself, and each group keeps position order, so an
+    // unchecked item lands back where it used to be (the server leaves position alone as well).
+    onItems(items => items.map(other => (other.id === item.id ? { ...other, checked } : other)));
     try {
       await api("/api/items", { method: "PATCH", body: JSON.stringify({ id: item.id, checked }) });
       notify.success(checked ? "Checked off" : "Unchecked");
@@ -859,6 +863,9 @@ function ChecklistItem({ item, onItems }: { item: Item; onItems: ItemsPatch }) {
 function ExplorePage({ items, itinerary, startDate, openModal, reload, onItems }: { items: Item[]; itinerary: AppState["itinerary"]; startDate: string; openModal: () => void; reload: () => Promise<void>; onItems: ItemsPatch }) {
   const [tab, setTab] = useState<"itinerary" | "places">("itinerary");
   const [confirmClear, setConfirmClear] = useState(false);
+  // Which stop the editor is open on: a day and a stop index, or a day alone to add a stop to it.
+  const [editing, setEditing] = useState<{ day: number; stop: number | null } | null>(null);
+  useEscape(confirmClear, () => setConfirmClear(false));
   const saved = itinerary?.saved_plan || "";
   const start = parseWhen(startDate);
   const plan = useMemo(() => parseItinerary(saved, start ? dayKey(start) : null), [saved, start?.y, start?.m, start?.d]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -866,6 +873,16 @@ function ExplorePage({ items, itinerary, startDate, openModal, reload, onItems }
   async function clear() {
     await api("/api/itinerary/clear", { method: "POST", body: JSON.stringify({}) });
     setConfirmClear(false);
+    await reload();
+  }
+  // Edits rewrite the saved plan text in the same format ChatGPT's answer was saved in, so the parser reads it back.
+  async function savePlan(next: ParsedPlan, done: string) {
+    const text = serializeItinerary(next);
+    // The API slices longer plans rather than rejecting them, which would drop the last stops without a word.
+    if (text.length > MAX_ITINERARY_CHARS) throw new Error("This itinerary is as long as it can be. Shorten a note or remove a stop before adding more.");
+    await api("/api/itinerary", { method: "POST", body: JSON.stringify({ instructions: itinerary?.instructions || "", response: itinerary?.response || "", savedPlan: text }) });
+    setEditing(null);
+    notify.success(done);
     await reload();
   }
   return (
@@ -883,7 +900,7 @@ function ExplorePage({ items, itinerary, startDate, openModal, reload, onItems }
       ]} />
       {tab === "itinerary" && (
         <TabPanel id="itinerary">
-          {saved ? <ItineraryView plan={plan} raw={saved} /> : (
+          {saved ? <ItineraryView plan={plan} raw={saved} onEdit={(day, stop) => setEditing({ day, stop })} /> : (
             <div className="callout">
               <h2>No itinerary yet</h2>
               <p>Describe the kind of San Francisco trip you want, send the prepared prompt to ChatGPT, and bring the plan back here. Your places to visit are used as starting ideas.</p>
@@ -893,6 +910,16 @@ function ExplorePage({ items, itinerary, startDate, openModal, reload, onItems }
         </TabPanel>
       )}
       {tab === "places" && <TabPanel id="places"><ProgressBlock pageKey="explore" done={items.filter(item => item.checked).length} total={items.length} inline /><ChecklistBody pageKey="explore" items={items} onItems={onItems} placeholder="Add a place you want to visit" /></TabPanel>}
+      {editing && plan.days[editing.day] && (
+        <StopModal
+          plan={plan}
+          day={editing.day}
+          stop={editing.stop}
+          onClose={() => setEditing(null)}
+          onSave={(toDay, stop) => savePlan(withStop(plan, editing, toDay, stop), editing.stop === null ? "Stop added" : "Stop saved")}
+          onDelete={() => savePlan(withStop(plan, editing, editing.day, null), "Stop removed")}
+        />
+      )}
       {confirmClear && (
         <div className="modal-backdrop" onClick={() => setConfirmClear(false)}>
           <section className="modal confirm-modal" role="dialog" aria-modal="true" onClick={event => event.stopPropagation()}>
@@ -909,7 +936,7 @@ function ExplorePage({ items, itinerary, startDate, openModal, reload, onItems }
 }
 
 // The saved plan, laid out as day cards instead of raw text. Plans that don't parse into days fall back to prose.
-function ItineraryView({ plan, raw }: { plan: ParsedPlan; raw: string }) {
+function ItineraryView({ plan, raw, onEdit }: { plan: ParsedPlan; raw: string; onEdit: (day: number, stop: number | null) => void }) {
   if (!plan.days.length) return <article className="plan-prose">{raw.split(/\n{2,}/).map((paragraph, index) => <p key={index}>{paragraph}</p>)}</article>;
   const overview = plan.intro.slice(1); // the first intro line is the plan title, shown as the page heading
   const stops = plan.days.reduce((sum, day) => sum + day.stops.length, 0);
@@ -920,15 +947,22 @@ function ItineraryView({ plan, raw }: { plan: ParsedPlan; raw: string }) {
         {overview.length ? overview.map((paragraph, index) => <p key={index}>{paragraph}</p>) : <p className="muted">Your saved plan, day by day.</p>}
       </section>
       <div className="plan-days">
-        {plan.days.map(day => (
+        {plan.days.map((day, dayIndex) => (
           <section className="plan-day" key={`${day.index}-${day.label}`}>
-            <header><span className="eyebrow">{day.key ? `Day ${day.index} · ${fmtDay(day.key)}` : day.label}</span><span className="muted">{day.stops.length} {day.stops.length === 1 ? "stop" : "stops"}</span></header>
+            <header>
+              <span className="eyebrow">{day.key ? `Day ${day.index} · ${fmtDay(day.key)}` : day.label}</span>
+              <span className="plan-day-tools"><span className="muted">{day.stops.length} {day.stops.length === 1 ? "stop" : "stops"}</span><button type="button" className="link-button" onClick={() => onEdit(dayIndex, null)}>+ Add stop</button></span>
+            </header>
             {day.stops.length ? (
               <ol className="day-list">
                 {day.stops.map((stop, index) => (
                   <li key={index} className="stop">
-                    <span className="day-time">{stop.time || "Any time"}</span>
-                    <div><strong>{stop.place}</strong>{(stop.why || stop.address) && <span>{[stop.why, stop.address].filter(Boolean).join(" · ")}</span>}</div>
+                    {/* The whole card opens the editor; the "Edit" tag is the visible hint. */}
+                    <button type="button" className="stop-open" onClick={() => onEdit(dayIndex, index)} aria-label={`Edit ${stop.place || "stop"}`}>
+                      <span className="day-time">{stop.time || "Any time"}</span>
+                      <div><strong>{stop.place}</strong>{(stop.why || stop.address) && <span>{[stop.why, stop.address].filter(Boolean).join(" · ")}</span>}</div>
+                      <em>Edit</em>
+                    </button>
                   </li>
                 ))}
               </ol>
@@ -942,6 +976,62 @@ function ItineraryView({ plan, raw }: { plan: ParsedPlan; raw: string }) {
           <ul>{plan.notes.map((note, index) => <li key={index}>{note}</li>)}</ul>
         </section>
       )}
+    </div>
+  );
+}
+
+// One itinerary stop, editable: time, place, why it fits, address, and which day it belongs to. Everything the
+// saved plan knows about the stop is here; the address gets a Maps link. Deleting asks once, inline.
+function StopModal({ plan, day, stop, onClose, onSave, onDelete }: { plan: ParsedPlan; day: number; stop: number | null; onClose: () => void; onSave: (toDay: number, stop: Stop) => Promise<void>; onDelete: () => Promise<void> }) {
+  const existing = stop === null ? null : plan.days[day]?.stops[stop] ?? null;
+  const [toDay, setToDay] = useState(day);
+  const [time, setTime] = useState(existing?.time ?? "");
+  const [place, setPlace] = useState(existing?.place ?? "");
+  const [why, setWhy] = useState(existing?.why ?? "");
+  const [address, setAddress] = useState(existing?.address ?? "");
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const dayLabel = (entry: ParsedPlan["days"][number]) => entry.key ? `Day ${entry.index} · ${fmtDay(entry.key)}` : entry.label;
+  const badTime = time.trim() !== "" && timeMinutes(time) === null;
+  useEscape(!busy, onClose);
+  const mapsHref = address.trim() ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address.trim())}` : "";
+  async function save(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!place.trim()) return setError("Give the stop a place.");
+    if (badTime) return setError("Use a clock time like 9:30 AM, or leave the time blank.");
+    setError(""); setBusy(true);
+    try { await onSave(toDay, { time: time.trim(), place: place.trim(), why: why.trim(), address: address.trim(), minutes: null }); }
+    catch (err) { setError(err instanceof Error ? err.message : "Could not save the stop"); notify.error(err, "Could not save the stop"); setBusy(false); }
+  }
+  async function remove() {
+    setBusy(true);
+    try { await onDelete(); }
+    catch (err) { setError(err instanceof Error ? err.message : "Could not remove the stop"); notify.error(err, "Could not remove the stop"); setBusy(false); }
+  }
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <section className="modal confirm-modal stop-modal" role="dialog" aria-modal="true" aria-labelledby="stop-modal-title" onClick={event => event.stopPropagation()}>
+        <button type="button" className="modal-x" onClick={onClose} aria-label="Close">×</button>
+        <p className="eyebrow">{dayLabel(plan.days[day])}</p>
+        <h2 id="stop-modal-title">{existing ? existing.place || "Edit stop" : "Add a stop"}</h2>
+        <form className="trip-form in-modal" onSubmit={save}>
+          <label>Day<select value={toDay} onChange={event => setToDay(Number(event.target.value))}>{plan.days.map((entry, index) => <option key={`${entry.index}-${entry.label}`} value={index}>{dayLabel(entry)}</option>)}</select></label>
+          <label><span>Time <Help text="A clock time such as 9:30 AM keeps the stop in order on the Overview. Leave it blank for any time." /></span><input value={time} onChange={event => setTime(event.target.value)} placeholder="9:30 AM" maxLength={40} aria-invalid={badTime || undefined} /></label>
+          <label className="wide">Place<input value={place} onChange={event => setPlace(event.target.value)} placeholder="Golden Gate Park" maxLength={160} required autoFocus={!existing} /></label>
+          <label className="wide">Why it fits<input value={why} onChange={event => setWhy(event.target.value)} placeholder="Easy walk between sessions" maxLength={300} /></label>
+          <label className="wide">Address or search phrase<input value={address} onChange={event => setAddress(event.target.value)} placeholder="501 Stanyan St, San Francisco" maxLength={300} /></label>
+          {mapsHref && <p className="muted wide"><a href={mapsHref} target="_blank" rel="noreferrer">Open in Maps ↗</a></p>}
+          {error && <p className="error wide">{error}</p>}
+          <div className="button-row wide stop-modal-actions">
+            <button type="submit" className="btn primary" disabled={busy}>{busy ? "Saving..." : existing ? "Save changes" : "Add stop"}</button>
+            <button type="button" className="btn" onClick={onClose} disabled={busy}>Cancel</button>
+            {existing && (confirmDelete
+              ? <span className="stop-delete-confirm"><span className="muted">Remove this stop?</span><button type="button" className="btn danger" onClick={remove} disabled={busy}>Remove</button><button type="button" className="link-button" onClick={() => setConfirmDelete(false)} disabled={busy}>Keep</button></span>
+              : <button type="button" className="link-button danger-link" onClick={() => setConfirmDelete(true)} disabled={busy}>Remove stop</button>)}
+          </div>
+        </form>
+      </section>
     </div>
   );
 }
@@ -1196,6 +1286,16 @@ function TrainingSchedule({ record, onCalendar }: { record?: TripInfo; onCalenda
   );
 }
 
+// Escape runs `close` while `active`; the dialogs below share it so every modal closes the same way.
+function useEscape(active: boolean, close: () => void) {
+  useEffect(() => {
+    if (!active) return;
+    function onKey(event: KeyboardEvent) { if (event.key === "Escape") close(); }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [active, close]);
+}
+
 // Shared shell for the "+ Something" add dialogs: backdrop click or Escape closes it.
 function FormModal({ title, eyebrow, onClose, children }: { title: string; eyebrow?: string; onClose: () => void; children: React.ReactNode }) {
   useEffect(() => {
@@ -1215,7 +1315,7 @@ function FormModal({ title, eyebrow, onClose, children }: { title: string; eyebr
   );
 }
 
-function Gallery({ photos, openViewer, reload }: { photos: AppState["photos"]; openViewer: (spot: string) => void; reload: () => Promise<void> }) {
+function Gallery({ photos, stockHidden, openViewer, reload }: { photos: AppState["photos"]; stockHidden: string[]; openViewer: (spot: string) => void; reload: () => Promise<void> }) {
   const [addOpen, setAddOpen] = useState(false);
   const [prepared, setPrepared] = useState<PreparedPhoto | null>(null);
   const [preparing, setPreparing] = useState(false);
@@ -1257,7 +1357,7 @@ function Gallery({ photos, openViewer, reload }: { photos: AppState["photos"]; o
   return (
     <section className="page active">
       <header className="page-header page-header-row"><div><p className="eyebrow">Photo route</p><h1>Six stops, six photos</h1></div><button className="btn primary" onClick={() => setAddOpen(true)}>+ Photo</button></header>
-      <p className="muted">One photo per stop, {count} of {photoSpots.length} filled. Tap a stop to see its photo full size or delete it. Adding a photo to a filled stop replaces the old one.</p>
+      <p className="muted">One photo per stop, {count} of {photoSpots.length} filled with your own. Stops start with a stock photo of the place; add yours to replace it. Tap a stop to see its photo full size or delete it.</p>
       {addOpen && (
         <FormModal eyebrow="Photo route" title="Add a photo" onClose={closeAdd}>
           <form className="document-form in-modal" onSubmit={upload}>
@@ -1277,7 +1377,7 @@ function Gallery({ photos, openViewer, reload }: { photos: AppState["photos"]; o
           </form>
         </FormModal>
       )}
-      <PhotoRoute photos={photos} openViewer={openViewer} />
+      <PhotoRoute photos={photos} stockHidden={stockHidden} openViewer={openViewer} />
     </section>
   );
 }
@@ -1285,7 +1385,7 @@ function Gallery({ photos, openViewer, reload }: { photos: AppState["photos"]; o
 // The stops alternate left and right and a dotted path zig-zags between them: down the inner side of each
 // card, then diagonally across the gap to the next. The path is an SVG drawn from the cards' measured
 // positions, so it follows whatever height the cards end up with on any screen.
-function PhotoRoute({ photos, openViewer }: { photos: AppState["photos"]; openViewer: (spot: string) => void }) {
+function PhotoRoute({ photos, stockHidden, openViewer }: { photos: AppState["photos"]; stockHidden: string[]; openViewer: (spot: string) => void }) {
   const ref = useRef<HTMLDivElement>(null);
   const [geometry, setGeometry] = useState<{ width: number; height: number; points: string; markers: [number, number][] }>({ width: 0, height: 0, points: "", markers: [] });
   useEffect(() => {
@@ -1319,21 +1419,44 @@ function PhotoRoute({ photos, openViewer }: { photos: AppState["photos"]; openVi
         {geometry.points && <polyline points={geometry.points} />}
         {geometry.markers.map(([x, y], index) => <circle key={index} cx={x} cy={y} r={7} className={photos[photoSpots[index][0]] ? "filled" : ""} />)}
       </svg>
-      {photoSpots.map(([id, title, hint]) => (
-        <button key={id} className="photo-stop" onClick={() => openViewer(id)}>
-          <span className="photo-frame">{photos[id] ? <img src={photos[id].imageUrl} alt={title} /> : title}</span>
-          <span><strong>{title}</strong><small>{photos[id]?.caption || hint}</small></span>
-        </button>
-      ))}
+      {photoSpots.map(([id, title, hint]) => {
+        const stock = !photos[id] && !stockHidden.includes(id) ? stockPhotos[id] : null;
+        return (
+          <button key={id} className="photo-stop" onClick={() => openViewer(id)}>
+            <span className={`photo-frame ${stock ? "stock" : ""}`}>
+              {photos[id] ? <img src={photos[id].imageUrl} alt={title} /> : stock ? <><img src={stock.src} alt={`${title} (stock photo)`} loading="lazy" /><i className="stock-tag">Stock</i></> : title}
+            </span>
+            <span><strong>{title}</strong><small>{photos[id]?.caption || (stock ? `${hint} · add yours to replace this` : hint)}</small></span>
+          </button>
+        );
+      })}
     </div>
   );
 }
 
-function PhotoViewer({ spot, photos, onClose, onDeleted }: { spot: string; photos: AppState["photos"]; onClose: () => void; onDeleted: () => Promise<void> }) {
+function PhotoViewer({ spot, photos, stockHidden, onClose, onDeleted }: { spot: string; photos: AppState["photos"]; stockHidden: string[]; onClose: () => void; onDeleted: () => Promise<void> }) {
   const meta = photoSpots.find(([id]) => id === spot);
   const photo = photos[spot];
+  const stock = !photo && !stockHidden.includes(spot) ? stockPhotos[spot] : null;
   const [confirming, setConfirming] = useState(false);
+  const [confirmStock, setConfirmStock] = useState(false);
   const [busy, setBusy] = useState(false);
+  // Escape backs out one layer at a time: the confirm first, then the viewer.
+  useEscape(!busy, () => { if (confirmStock) setConfirmStock(false); else if (confirming) setConfirming(false); else onClose(); });
+  // Deleting a stock photo is remembered on the account, so the stop stays empty until the person adds their own.
+  async function removeStock() {
+    setBusy(true);
+    try {
+      await api("/api/photos/stock", { method: "POST", body: JSON.stringify({ spot, hidden: true }) });
+      await onDeleted();
+      notify.success("Stock photo deleted");
+      onClose();
+    } catch (err) {
+      notify.error(err, "Could not delete that stock photo");
+      setBusy(false);
+      setConfirmStock(false);
+    }
+  }
   async function remove() {
     if (!photo) return;
     setBusy(true);
@@ -1353,7 +1476,13 @@ function PhotoViewer({ spot, photos, onClose, onDeleted }: { spot: string; photo
         <button className="modal-x" onClick={onClose}>×</button>
         <h2>{meta?.[1] || "Photo"}</h2>
         <p className="muted">{photo?.caption || meta?.[2]}</p>
-        <div className="viewer-media">{photo ? <img src={photo.imageUrl} alt={meta?.[1]} /> : meta?.[1]}</div>
+        <div className="viewer-media">{photo ? <img src={photo.imageUrl} alt={meta?.[1]} /> : stock ? <img src={stock.src} alt={`${meta?.[1]} (stock photo)`} /> : meta?.[1]}</div>
+        {stock && (
+          <>
+            <p className="muted stock-credit">Stock photo{stock.author ? <> by {stock.author}</> : null}{stock.license ? <>, {stock.license}</> : null}{stock.sourceUrl ? <>, via <a href={stock.sourceUrl} target="_blank" rel="noreferrer">Wikimedia Commons</a></> : null}. Add your own with &ldquo;+ Photo&rdquo; and it takes this one&apos;s place.</p>
+            <div className="button-row"><button type="button" className="btn danger" onClick={() => setConfirmStock(true)}>Delete stock photo</button></div>
+          </>
+        )}
         {photo && !confirming && <div className="button-row"><button type="button" className="btn danger" onClick={() => setConfirming(true)}>Delete photo</button></div>}
         {photo && confirming && (
           <div className="button-row viewer-confirm">
@@ -1362,8 +1491,19 @@ function PhotoViewer({ spot, photos, onClose, onDeleted }: { spot: string; photo
             <button type="button" className="btn" disabled={busy} onClick={() => setConfirming(false)}>Keep it</button>
           </div>
         )}
-        {!photo && <p className="muted">No photo here yet. Use “+ Photo” on the route to add one.</p>}
+        {!photo && !stock && <p className="muted">No photo here yet. Use “+ Photo” on the route to add one.</p>}
       </section>
+      {confirmStock && (
+        <div className="modal-backdrop" onClick={event => { event.stopPropagation(); if (!busy) setConfirmStock(false); }}>
+          <section className="modal confirm-modal" role="dialog" aria-modal="true" aria-labelledby="stock-confirm-title" onClick={event => event.stopPropagation()}>
+            <button type="button" className="modal-x" onClick={() => setConfirmStock(false)} aria-label="Close" disabled={busy}>×</button>
+            <p className="eyebrow">Photo route</p>
+            <h2 id="stock-confirm-title">Delete the stock photo?</h2>
+            <p>Once it&apos;s deleted, this stock photo is gone for good. The {meta?.[1] || "stop"} stop stays empty until you add a photo of your own.</p>
+            <div className="button-row"><button type="button" className="btn" disabled={busy} onClick={() => setConfirmStock(false)}>Keep it</button><button type="button" className="btn danger" disabled={busy} onClick={removeStock}>{busy ? "Deleting..." : "Delete for good"}</button></div>
+          </section>
+        </div>
+      )}
     </div>
   );
 }
