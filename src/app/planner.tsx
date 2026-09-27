@@ -69,7 +69,7 @@ type AppState = {
   items: Item[];
   photos: Record<string, { id: string; caption: string; imageUrl: string }>;
   stockHidden: string[]; // photo-route stops whose stock photo this person deleted
-  itinerary: null | { instructions?: string; response?: string; saved_plan?: string };
+  itinerary: null | { instructions?: string; response?: string; saved_plan?: string; cleaned_at?: string | null };
   tripInfo: TripInfo[];
   tripDocuments: TripDocument[];
   notifications: Notice[];
@@ -209,6 +209,34 @@ export default function Home() {
   // Shown on the login page after an inactivity sign-out.
   const [signOutNotice, setSignOutNotice] = useState("");
   const idle = useIdleTimeout(Boolean(data.user), () => { setSignOutNotice("You were signed out after an hour without activity."); void signOut(); });
+
+  // One pass over a plan saved before bookings were placed on the itinerary live: stops that only restate a booking
+  // are dropped, with Undo, and the plan is stamped so this never runs on it again (later stops are the person's own).
+  const tidied = useRef(false);
+  useEffect(() => {
+    const plan = data.itinerary;
+    if (!data.user || !plan?.saved_plan || plan.cleaned_at || tidied.current) return;
+    tidied.current = true;
+    const original = plan.saved_plan;
+    const answers = parseAnswers(data.settings?.planning_answers);
+    const trip = buildTripModel({ startDate: answers.startDate, endDate: answers.endDate, bookings: data.tripInfo, itinerary: original, now: new Date() });
+    const stripped = stripBookingStops(trip.plan, trip.bookings, trip.trainingKeys);
+    const save = (savedPlan: string) => api("/api/itinerary", { method: "POST", body: JSON.stringify({ instructions: plan.instructions || "", response: plan.response || "", savedPlan, cleaned: true }) });
+    (async () => {
+      try {
+        await save(stripped.removed ? serializeItinerary(stripped.plan) : original);
+        if (stripped.removed) {
+          notify.info(`${stripped.removed} itinerary ${stripped.removed === 1 ? "stop" : "stops"} that repeated a booking ${stripped.removed === 1 ? "was" : "were"} removed. Those times now come from Trip Information.`, {
+            label: "Undo",
+            run: () => save(original).then(load).then(() => notify.success("Stops put back")).catch(error => notify.error(error, "Could not put the stops back"))
+          });
+        }
+        await load();
+      } catch (error) {
+        notify.error(error, "Could not tidy the itinerary");
+      }
+    })();
+  }, [data.user, data.itinerary, data.tripInfo, data.settings?.planning_answers]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function apply(next: Partial<AppState>) {
     setData(normalizeAppState(next));
@@ -555,7 +583,7 @@ export default function Home() {
         {page === "organizer" && data.user.owner && <OrganizerPage userId={data.user.id} />}
       </main>
 
-      {itineraryOpen && <ItineraryModal items={data.items.filter(item => item.page === "explore")} itinerary={data.itinerary} answers={answers} hasTripData={Boolean(data.itinerary?.saved_plan) || data.tripInfo.length > 0} onClose={() => setItineraryOpen(false)} reload={load} />}
+      {itineraryOpen && <ItineraryModal items={data.items.filter(item => item.page === "explore")} itinerary={data.itinerary} answers={answers} tripInfo={data.tripInfo} hasTripData={Boolean(data.itinerary?.saved_plan) || data.tripInfo.length > 0} onClose={() => setItineraryOpen(false)} reload={load} />}
       {viewer && <PhotoViewer spot={viewer} photos={data.photos} stockHidden={data.stockHidden} onClose={() => setViewer(null)} onDeleted={load} />}
       {themeOpen && <ThemeModal theme={theme} fx={fx} onTheme={chooseTheme} onFx={toggleFx} onClose={() => setThemeOpen(false)} />}
       {notificationsOpen && <NotificationsModal items={data.notifications} done={tourDone} onChange={list => setData(current => ({ ...current, notifications: list }))} onClose={() => setNotificationsOpen(false)} onAction={action => {
@@ -865,8 +893,9 @@ function ChecklistItem({ item, onItems }: { item: Item; onItems: ItemsPatch }) {
 // The itinerary is the saved plan's stops plus, on each day, whatever the bookings put there (flights, hotel
 // check-in and check-out, rental pickup and return, the bootcamp agenda). The booking rows are built from Trip
 // Information on every render, so a booking that is added, changed or removed shows up, moves or disappears on
-// its own; days the plan doesn't cover but a booking lands on are shown too. Stops in the saved plan that only
-// restate a booking are dropped from it once, so nothing stale is left behind when the booking goes.
+// its own; days the plan doesn't cover but a booking lands on are shown too. ChatGPT text is stripped of stops that
+// restate a booking when it is imported (see the planner's one-time tidy for older plans); stops written here are
+// never touched.
 function ExplorePage({ items, itinerary, tripInfo, answers, openModal, reload, onItems, goTo }: { items: Item[]; itinerary: AppState["itinerary"]; tripInfo: TripInfo[]; answers: WizardAnswers; openModal: () => void; reload: () => Promise<void>; onItems: ItemsPatch; goTo: (page: string) => void }) {
   const [tab, setTab] = useState<"itinerary" | "places">("itinerary");
   const [confirmClear, setConfirmClear] = useState(false);
@@ -902,21 +931,12 @@ function ExplorePage({ items, itinerary, tripInfo, answers, openModal, reload, o
     const text = serializeItinerary(next);
     // The API slices longer plans rather than rejecting them, which would drop the last stops without a word.
     if (text.length > MAX_ITINERARY_CHARS) throw new Error("This itinerary is as long as it can be. Shorten a note or remove a stop before adding more.");
-    await api("/api/itinerary", { method: "POST", body: JSON.stringify({ instructions: itinerary?.instructions || "", response: itinerary?.response || "", savedPlan: text }) });
+    // Stops written here are the person's own: stamped cleaned so nothing ever removes them automatically.
+    await api("/api/itinerary", { method: "POST", body: JSON.stringify({ instructions: itinerary?.instructions || "", response: itinerary?.response || "", savedPlan: text, cleaned: true }) });
     setEditing(null);
     notify.success(done);
     await reload();
   }
-  // Older plans (and ChatGPT answers that ignore the instruction) carry the flights, check-ins and bootcamp days as
-  // stops. Drop them from the saved text once; the booking rows take their place and follow the booking from then on.
-  const cleaned = useRef("");
-  useEffect(() => {
-    if (!saved || cleaned.current === saved) return;
-    const { removed } = stripBookingStops(parseItinerary(saved, trip.startKey), trip.bookings, trip.trainingKeys);
-    if (!removed) return;
-    cleaned.current = saved;
-    savePlan(trip.plan, `${removed} ${removed === 1 ? "stop that repeated a booking was" : "stops that repeated bookings were"} removed; those times now come from Trip Information`).catch(error => notify.error(error, "Could not tidy the itinerary"));
-  }, [saved, trip]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <section className="page active">
       <header className="page-header page-header-row">
@@ -1090,7 +1110,7 @@ function StopModal({ plan, day, stop, onClose, onSave, onDelete }: { plan: Parse
   );
 }
 
-function ItineraryModal({ items, itinerary, answers, hasTripData, onClose, reload }: { items: Item[]; itinerary: AppState["itinerary"]; answers: WizardAnswers; hasTripData: boolean; onClose: () => void; reload: () => Promise<void> }) {
+function ItineraryModal({ items, itinerary, answers, tripInfo, hasTripData, onClose, reload }: { items: Item[]; itinerary: AppState["itinerary"]; answers: WizardAnswers; tripInfo: TripInfo[]; hasTripData: boolean; onClose: () => void; reload: () => Promise<void> }) {
   const existing = Boolean(itinerary?.saved_plan);
   const [instructions, setInstructions] = useState(itinerary?.instructions || "");
   const [response, setResponse] = useState(itinerary?.response || "");
@@ -1108,7 +1128,11 @@ function ItineraryModal({ items, itinerary, answers, hasTripData, onClose, reloa
     if (!response.trim()) return setError("Paste ChatGPT's itinerary first.");
     setError(""); setBusy(true);
     try {
-      await api("/api/itinerary", { method: "POST", body: JSON.stringify({ instructions, response, savedPlan: response }) });
+      // ChatGPT's text, with any stops that only restate a booking left out: the bookings place those moments themselves.
+      const trip = buildTripModel({ startDate: answers.startDate, endDate: answers.endDate, bookings: tripInfo, itinerary: response, now: new Date() });
+      const stripped = stripBookingStops(trip.plan, trip.bookings, trip.trainingKeys);
+      await api("/api/itinerary", { method: "POST", body: JSON.stringify({ instructions, response, savedPlan: stripped.removed ? serializeItinerary(stripped.plan) : response, cleaned: true }) });
+      if (stripped.removed) notify.success(`${stripped.removed} ${stripped.removed === 1 ? "line" : "lines"} that repeated a booking left out; those times come from Trip Information`);
       await reload();
       onClose();
       notify.success("Itinerary saved");

@@ -280,34 +280,38 @@ const bookingWords: Record<Booking["category"], RegExp> = {
   other: /(?!)/
 };
 const genericProviders = /^(united|american|delta|airline|airlines|hotel|hertz|avis|budget|enterprise|national|alamo|the|and|inc|llc)$/i;
-const near = (a: number | null, b: number | null, minutes = 120) => a !== null && b !== null && Math.abs(a - b) <= minutes;
+const near = (a: number | null, b: number | null, minutes = 60) => a !== null && b !== null && Math.abs(a - b) <= minutes;
 
-/** Whether a plan stop is only restating a booking (the flight, hotel check-in, rental pickup, or the bootcamp itself):
- *  a stop on the booking's day that names its confirmation number or provider, a flight stop that names one of its
- *  airports or sits within two hours of departure or arrival, a hotel or rental stop within two hours of its times, or a
- *  training-day stop during the agenda's hours. Such stops are dropped from the plan because Trip Information places
- *  those moments itself, so they follow the booking when it changes. */
+/** Whether a plan stop is only restating a booking (the flight, hotel check-in, rental pickup, or the bootcamp itself).
+ *  It takes two signals, so a stop that merely mentions an airport or happens near a flight is left alone:
+ *  - the stop is on the booking's day and names its confirmation number; or
+ *  - it uses a booking word (depart, arrive, check-in, pickup...) AND names the provider, one of the flight's airports,
+ *    or sits within an hour of the booking's start or end; or
+ *  - on a bootcamp day, it is timed inside the agenda's hours and uses a training word, or is untimed and its place
+ *    is simply the bootcamp ("Bootcamp, day 2").
+ *  Untimed stops otherwise never match. This only ever runs on text that came from ChatGPT (at import, or one pass over
+ *  older plans), never on stops the person wrote in the app. */
 export function stopMatchesBooking(stop: Stop, key: number | null, b: TimedBooking, trainingKeys: number[]): boolean {
   if (key === null) return false;
   const text = `${stop.place} ${stop.why} ${stop.address}`.toLowerCase();
   if (b.category === "training") {
-    if (!trainingKeys.includes(key) || !bookingWords.training.test(text)) return false;
+    if (!trainingKeys.includes(key)) return false;
+    if (stop.minutes === null) return /^(the )?(bootcamp|boot camp|training|workshop|diffusion)\b/i.test(stop.place.trim());
     const first = trainingAgenda.slots[0].minutes - 60, last = trainingAgenda.slots[trainingAgenda.slots.length - 1].minutes + 60;
-    return stop.minutes === null || (stop.minutes >= first && stop.minutes <= last);
+    return bookingWords.training.test(text) && stop.minutes >= first && stop.minutes <= last;
   }
-  const onDay = (b.start && dayKey(b.start) === key) || (b.end && dayKey(b.end) === key);
-  if (!onDay) return false;
+  const startsToday = Boolean(b.start && dayKey(b.start) === key), endsToday = Boolean(b.end && dayKey(b.end) === key);
+  if (!startsToday && !endsToday) return false;
   const conf = (b.confirmation_number || "").trim().toLowerCase();
   if (conf.length >= 4 && text.includes(conf)) return true;
-  const provider = (b.provider || "").trim().toLowerCase();
-  if (provider.length >= 4 && !genericProviders.test(provider) && text.includes(provider) && bookingWords[b.category].test(text)) return true;
   if (!bookingWords[b.category].test(text)) return false;
+  const provider = (b.provider || "").trim().toLowerCase();
+  if (provider.length >= 4 && !genericProviders.test(provider) && text.includes(provider)) return true;
   if (b.category === "flight") {
     const codes = [b.from_airport, b.to_airport, ...airportCodes(b.start_at || ""), ...airportCodes(b.end_at || "")].filter((c): c is string => Boolean(c)).map(c => c.toUpperCase());
     if (codes.some(code => new RegExp(`\\b${code}\\b`).test(`${stop.place} ${stop.why} ${stop.address}`.toUpperCase()))) return true;
   }
-  const startsToday = b.start && dayKey(b.start) === key, endsToday = b.end && dayKey(b.end) === key;
-  return (Boolean(startsToday) && near(stop.minutes, b.start!.minutes)) || (Boolean(endsToday) && near(stop.minutes, b.end!.minutes));
+  return (startsToday && near(stop.minutes, b.start!.minutes)) || (endsToday && near(stop.minutes, b.end!.minutes));
 }
 
 /** The plan without stops that only restate a booking. `removed` counts what was dropped. */
@@ -346,8 +350,7 @@ export function buildTripModel(input: { startDate?: string; endDate?: string; bo
   const endKey = endWhen ? dayKey(endWhen) : null;
   // Training days: every day the Training booking spans gets the bootcamp agenda.
   const trainingKeys = trainingDays(training);
-  // Stops that only restate a booking are left out: the bookings themselves supply those moments.
-  const plan = stripBookingStops(parseItinerary(input.itinerary, startKey), bookings, trainingKeys).plan;
+  const plan = parseItinerary(input.itinerary, startKey);
 
   const phase: Phase = !startKey ? "unknown" : todayKey < startKey ? "before" : endKey && todayKey > endKey ? "after" : "during";
   const totalDays = startKey && endKey ? daysBetween(startKey, endKey) + 1 : null;

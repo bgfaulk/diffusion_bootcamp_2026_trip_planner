@@ -52,9 +52,9 @@ export const POST = withAudit("plan.import", async (request, ctx) => {
       const stripped = stripBookingStops(parseItinerary(plan.itineraryText, start ? dayKey(start) : null), bookings, trainingKeys);
       const itineraryText = stripped.removed ? serializeItinerary(stripped.plan) : plan.itineraryText;
       queries.push(sql`
-        INSERT INTO itinerary (user_id, instructions, response, saved_plan, updated_at)
-        VALUES (${user.id}, ${encryptText("Built by the ChatGPT setup wizard")}, ${encryptText(raw)}, ${encryptText(itineraryText)}, now())
-        ON CONFLICT(user_id) DO UPDATE SET instructions = excluded.instructions, response = excluded.response, saved_plan = excluded.saved_plan, updated_at = now()
+        INSERT INTO itinerary (user_id, instructions, response, saved_plan, cleaned_at, updated_at)
+        VALUES (${user.id}, ${encryptText("Built by the ChatGPT setup wizard")}, ${encryptText(raw)}, ${encryptText(itineraryText)}, now(), now())
+        ON CONFLICT(user_id) DO UPDATE SET instructions = excluded.instructions, response = excluded.response, saved_plan = excluded.saved_plan, cleaned_at = now(), updated_at = now()
       `);
     }
 

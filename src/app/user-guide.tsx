@@ -120,7 +120,7 @@ export function UserGuide({ readAt = null, onRead }: { readAt?: string | null; o
       <h2>What&rsquo;s new</h2>
       <p className="muted">Updated {GUIDE_UPDATED}.</p>
       <ul>
-        <li>The itinerary now takes flights, hotel, rental car, and bootcamp times straight from Trip Information, so adding, changing, or removing a booking updates the right day on its own. Plan stops that only repeated a booking are removed once and replaced by the live booking rows.</li>
+        <li>The itinerary now takes flights, hotel, rental car, and bootcamp times straight from Trip Information, so adding, changing, or removing a booking updates the right day on its own. When a ChatGPT plan is imported, lines that only repeat a booking are left out. Older plans get one tidy pass with an Undo; stops you write yourself are never removed automatically.</li>
         <li>Creating an account now goes through your inbox: enter your email and the invite code, then choose your password from the link we send. If the address already has an account, the email says so and offers a reset link instead.</li>
         <li>Rankings show &ldquo;Unnamed attendee&rdquo; for anyone who has not set a display name yet, instead of part of their email.</li>
         <li>Stars: earn points for finishing checklists, filling in your profile and trip details, reading this guide, and reporting bugs or ideas the organizer acts on. The Overview shows your total, your distance to 100%, and the rankings; checklist pages show the stars waiting to unlock.</li>

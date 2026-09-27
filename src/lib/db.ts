@@ -175,6 +175,9 @@ export async function ensureSchema() {
         updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
       )
     `,
+    // Set once a plan has had booking-duplicate stops stripped (at import, or one pass over an older plan). From
+    // then on its stops are the person's own and are never removed automatically.
+    sql`ALTER TABLE itinerary ADD COLUMN IF NOT EXISTS cleaned_at TIMESTAMPTZ`,
     sql`
       CREATE TABLE IF NOT EXISTS trip_info (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
