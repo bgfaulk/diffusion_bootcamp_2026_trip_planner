@@ -183,6 +183,20 @@ function itineraryToText(itinerary: any) {
   return lines.join("\n").trim();
 }
 
+/** Pasted JSON (a whole trip-plan.json, or just its "itinerary" object) turned into the plan text the app saves.
+ *  Null when the paste isn't JSON, so plain text goes through untouched. */
+export function planTextFromJson(raw: string): string | null {
+  const trimmed = raw.trim();
+  if (!/^(```|\{)/.test(trimmed)) return null;
+  try {
+    const parsed = extractJson(trimmed);
+    const itinerary = parsed?.itinerary ?? (Array.isArray(parsed?.days) ? parsed : null);
+    return itineraryToText(itinerary) || null;
+  } catch {
+    return null;
+  }
+}
+
 export function normalizePlan(parsed: any): TripPlan {
   if (!parsed || typeof parsed !== "object") throw new AppError("The pasted response is empty");
   const plan: TripPlan = {

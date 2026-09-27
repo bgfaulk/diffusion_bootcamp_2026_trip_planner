@@ -23,7 +23,9 @@ trip data, or group links. Runtime data belongs in Neon and Vercel environment v
 **Setting up a trip**
 - "Plan with ChatGPT": answer a few questions, hand ChatGPT one prompt (paste your confirmation emails
   into it), and upload the `trip-plan.json` it returns. Bookings, itinerary, packing list, and checklists
-  are filled from it.
+  are filled from it. Importing again merges the checklists (ticked items stay ticked, hand-added items stay)
+  and replaces bookings and the itinerary. The Explore page's "Plan again with ChatGPT" prompt asks for a
+  day-by-day text answer built around the saved dates and bookings; pasting JSON works too.
 - "Set it up myself": enter dates, travelers, interests, and bookings by hand.
 - Setup can be left at any time; a banner on the Overview brings people back to it.
 

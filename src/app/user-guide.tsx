@@ -52,7 +52,7 @@ export function UserGuide({ readAt = null, onRead }: { readAt?: string | null; o
       </ul>
       <h3>Explore San Francisco</h3>
       <ul>
-        <li><strong>Itinerary</strong> shows your day-by-day plan with your bookings slotted in: flights, hotel check-in and check-out, rental pickup and return, and the bootcamp agenda appear on their days automatically and follow the booking when it is added, changed, or removed under Trip Information. Tap one to go there. &ldquo;Plan with ChatGPT&rdquo; builds a prompt from your places, dates, and interests. Open ChatGPT with it, then paste the answer back or upload the trip-plan.json file. &ldquo;Clear itinerary&rdquo; starts over.</li>
+        <li><strong>Itinerary</strong> shows your day-by-day plan with your bookings slotted in: flights, hotel check-in and check-out, rental pickup and return, and the bootcamp agenda appear on their days automatically and follow the booking when it is added, changed, or removed under Trip Information. Tap one to go there. &ldquo;Plan with ChatGPT&rdquo; builds a prompt from your places, dates, and interests. Open ChatGPT with it, then paste its text answer back (a trip-plan.json works too). Importing a file again keeps your checklist ticks. &ldquo;Clear itinerary&rdquo; starts over.</li>
         <li>Tap any stop to change its time, place, why it fits, or address, move it to another day, or remove it. &ldquo;+ Add stop&rdquo; on a day adds one. Saved changes show up on the Overview right away.</li>
         <li><strong>Places to visit</strong> is a checklist of spots you want to see. &ldquo;Use my places to visit&rdquo; feeds them into the ChatGPT prompt.</li>
       </ul>
@@ -120,6 +120,7 @@ export function UserGuide({ readAt = null, onRead }: { readAt?: string | null; o
       <h2>What&rsquo;s new</h2>
       <p className="muted">Updated {GUIDE_UPDATED}.</p>
       <ul>
+        <li>&ldquo;Plan again with ChatGPT&rdquo; on the Explore page now asks for a day-by-day answer built around your dates and bookings, and importing a trip-plan.json again keeps your checklist ticks and hand-added items.</li>
         <li>The itinerary now takes flights, hotel, rental car, and bootcamp times straight from Trip Information, so adding, changing, or removing a booking updates the right day on its own. When a ChatGPT plan is imported, lines that only repeat a booking are left out. Older plans get one tidy pass with an Undo; stops you write yourself are never removed automatically.</li>
         <li>Creating an account now goes through your inbox: enter your email and the invite code, then choose your password from the link we send. If the address already has an account, the email says so and offers a reset link instead.</li>
         <li>Rankings show &ldquo;Unnamed attendee&rdquo; for anyone who has not set a display name yet, instead of part of their email.</li>
