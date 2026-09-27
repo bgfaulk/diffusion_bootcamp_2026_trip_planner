@@ -76,6 +76,31 @@ export async function ensureSchema() {
     sql`ALTER TABLE settings ADD COLUMN IF NOT EXISTS planning_mode TEXT`,
     sql`ALTER TABLE settings ADD COLUMN IF NOT EXISTS planning_answers TEXT`,
     sql`ALTER TABLE settings ADD COLUMN IF NOT EXISTS chime_muted BOOLEAN NOT NULL DEFAULT false`,
+    sql`
+      CREATE TABLE IF NOT EXISTS notifications (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        title TEXT NOT NULL,
+        body TEXT,
+        read_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )
+    `,
+    sql`ALTER TABLE notifications ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'notice'`,
+    sql`ALTER TABLE notifications ADD COLUMN IF NOT EXISTS data TEXT`,
+    sql`
+      CREATE TABLE IF NOT EXISTS health_snapshots (
+        id BIGSERIAL PRIMARY KEY,
+        checked_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        requests INTEGER NOT NULL,
+        avg_ms INTEGER NOT NULL,
+        p95_ms INTEGER NOT NULL,
+        failures INTEGER NOT NULL,
+        db_bytes BIGINT NOT NULL,
+        growth_bytes_24h BIGINT
+      )
+    `,
+    sql`CREATE TABLE IF NOT EXISTS health_alert_state (key TEXT PRIMARY KEY, last_alert_at TIMESTAMPTZ NOT NULL)`,
     sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS suspended_at TIMESTAMPTZ`,
     sql`
       CREATE TABLE IF NOT EXISTS list_items (

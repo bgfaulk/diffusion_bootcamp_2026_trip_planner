@@ -20,7 +20,7 @@ export function windowFromParams(url: URL) {
   return { minutes, from, to, bucket: bucketMinutes(minutes) };
 }
 
-const appTables = ["users", "sessions", "settings", "list_items", "photos", "itinerary", "trip_info", "trip_documents", "audit_log"];
+const appTables = ["users", "sessions", "settings", "list_items", "photos", "itinerary", "trip_info", "trip_documents", "audit_log", "notifications", "health_snapshots"];
 
 export async function overview(window: ReturnType<typeof windowFromParams>) {
   const sql = getSql();
