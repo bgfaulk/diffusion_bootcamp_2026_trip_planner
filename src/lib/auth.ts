@@ -2,7 +2,7 @@ import { cookies } from "next/headers";
 import crypto from "node:crypto";
 import { sessionSecret as secret } from "./crypto";
 import { ensureSchema, getSql, seedStarterItems } from "./db";
-import { validateEmail, validatePassword } from "./validation";
+import { AppError, validateEmail, validatePassword } from "./validation";
 
 const cookieName = "trip_session";
 
@@ -36,8 +36,8 @@ export async function createOrLogin(emailValue: unknown, passwordValue: unknown,
   const password = validatePassword(passwordValue, intent !== "signin");
   const users = await sql`SELECT * FROM users WHERE email = ${email}`;
   let userId: string;
-  if (intent === "create" && users.length) throw new Error("An account already exists for this email. Sign in instead.");
-  if (intent !== "create" && !users.length) throw new Error("No account found for this email");
+  if (intent === "create" && users.length) throw new AppError("An account already exists for this email. Sign in instead.");
+  if (intent !== "create" && !users.length) throw new AppError("No account found for this email", 401);
   if (!users.length) {
     const { salt, hash } = hashPassword(password);
     const inserted = await sql`INSERT INTO users (email, password_hash, password_salt) VALUES (${email}, ${hash}, ${salt}) RETURNING id`;
@@ -49,7 +49,7 @@ export async function createOrLogin(emailValue: unknown, passwordValue: unknown,
       const { salt, hash } = hashPassword(password);
       await sql`UPDATE users SET password_hash = ${hash}, password_salt = ${salt}, updated_at = now() WHERE id = ${user.id}`;
     } else if (!verifyPassword(password, user.password_salt, user.password_hash)) {
-      throw new Error("Email or password did not match");
+      throw new AppError("Email or password did not match", 401);
     }
     userId = user.id;
   }
@@ -85,7 +85,7 @@ export async function getUser() {
 
 export async function requireUser() {
   const user = await getUser();
-  if (!user) throw new Error("Not authenticated");
+  if (!user) throw new AppError("Not authenticated", 401);
   return user;
 }
 

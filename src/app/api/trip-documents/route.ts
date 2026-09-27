@@ -1,7 +1,7 @@
 import { requireUser } from "@/lib/auth";
 import { encryptText } from "@/lib/crypto";
 import { getSql } from "@/lib/db";
-import { asString, jsonError, requireString } from "@/lib/validation";
+import { asString, errorResponse, fail, requireString } from "@/lib/validation";
 
 export async function POST(request: Request) {
   try {
@@ -9,9 +9,9 @@ export async function POST(request: Request) {
     const form = await request.formData();
     const label = encryptText(requireString(form.get("label"), "Document label", 120));
     const file = form.get("document");
-    if (!(file instanceof File)) throw new Error("Choose a PDF");
-    if (file.type !== "application/pdf") throw new Error("Insurance documents must be PDFs");
-    if (file.size > 10 * 1024 * 1024) throw new Error("PDF must be under 10 MB");
+    if (!(file instanceof File)) fail("Choose a PDF");
+    if (file.type !== "application/pdf") fail("Insurance documents must be PDFs");
+    if (file.size > 10 * 1024 * 1024) fail("PDF must be under 10 MB");
     const fileName = encryptText(asString(file.name, 180) || "insurance-document.pdf");
     const buffer = Buffer.from(await file.arrayBuffer());
     const rows = await getSql()`
@@ -21,7 +21,7 @@ export async function POST(request: Request) {
     `;
     return Response.json({ id: rows[0].id });
   } catch (error) {
-    return jsonError(error instanceof Error ? error.message : "Could not save PDF", 400);
+    return errorResponse(error, "Could not save PDF");
   }
 }
 
@@ -33,6 +33,6 @@ export async function DELETE(request: Request) {
     await getSql()`DELETE FROM trip_documents WHERE id = ${id} AND user_id = ${user.id}`;
     return Response.json({ ok: true });
   } catch (error) {
-    return jsonError(error instanceof Error ? error.message : "Could not delete PDF", 400);
+    return errorResponse(error, "Could not delete PDF");
   }
 }

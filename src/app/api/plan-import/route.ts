@@ -2,7 +2,7 @@ import { requireUser } from "@/lib/auth";
 import { encryptText } from "@/lib/crypto";
 import { getSql } from "@/lib/db";
 import { extractJson, normalizePlan } from "@/lib/plan";
-import { asString, jsonError } from "@/lib/validation";
+import { asString, errorResponse } from "@/lib/validation";
 
 // Takes ChatGPT's pasted JSON from the setup wizard and builds out the whole trip in one transaction.
 // Anything ChatGPT returned replaces what was there; sections it left empty are kept.
@@ -59,6 +59,6 @@ export async function POST(request: Request) {
       }
     });
   } catch (error) {
-    return jsonError(error instanceof Error ? error.message : "Could not build your trip", 400);
+    return errorResponse(error, "Could not build your trip");
   }
 }

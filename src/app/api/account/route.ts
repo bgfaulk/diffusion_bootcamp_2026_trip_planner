@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { requireUser } from "@/lib/auth";
 import { getSql } from "@/lib/db";
-import { jsonError } from "@/lib/validation";
+import { errorResponse } from "@/lib/validation";
 
 export async function DELETE() {
   try {
@@ -11,6 +11,6 @@ export async function DELETE() {
     jar.delete("trip_session");
     return Response.json({ ok: true });
   } catch (error) {
-    return jsonError(error instanceof Error ? error.message : "Could not delete account", 400);
+    return errorResponse(error, "Could not delete account");
   }
 }

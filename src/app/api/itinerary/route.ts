@@ -1,7 +1,7 @@
 import { requireUser } from "@/lib/auth";
 import { encryptText } from "@/lib/crypto";
 import { getSql } from "@/lib/db";
-import { asString, jsonError } from "@/lib/validation";
+import { asString, errorResponse } from "@/lib/validation";
 
 export async function POST(request: Request) {
   try {
@@ -21,6 +21,6 @@ export async function POST(request: Request) {
     `;
     return Response.json({ ok: true });
   } catch (error) {
-    return jsonError(error instanceof Error ? error.message : "Could not save itinerary", 400);
+    return errorResponse(error, "Could not save itinerary");
   }
 }

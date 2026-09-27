@@ -1,5 +1,5 @@
 import { requireUser } from "@/lib/auth";
-import { asString, jsonError } from "@/lib/validation";
+import { asString, errorResponse, fail } from "@/lib/validation";
 
 function googleReferer(request: Request) {
   const referer = request.headers.get("referer");
@@ -16,10 +16,10 @@ export async function POST(request: Request) {
   try {
     await requireUser();
     const key = process.env.GOOGLE_MAPS_API_KEY?.trim();
-    if (!key) throw new Error("Google Maps API key is not configured");
+    if (!key) fail("Address lookup is not configured", 503);
     const body = await request.json();
     const placeId = asString(body.placeId, 160);
-    if (!placeId) throw new Error("Missing place id");
+    if (!placeId) fail("Missing place id");
     const response = await fetch(`https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}`, {
       headers: {
         "X-Goog-Api-Key": key,
@@ -29,7 +29,7 @@ export async function POST(request: Request) {
     });
     if (!response.ok) {
       console.warn("Google Place details failed", response.status, await response.text());
-      throw new Error(`Google Place details failed (${response.status})`);
+      fail("Address lookup is unavailable right now", 502);
     }
     const data = await response.json();
     return Response.json({
@@ -39,6 +39,6 @@ export async function POST(request: Request) {
       lng: data.location?.longitude ?? null
     });
   } catch (error) {
-    return jsonError(error instanceof Error ? error.message : "Could not load address", 400);
+    return errorResponse(error, "Could not load address");
   }
 }

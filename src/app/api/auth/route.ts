@@ -1,5 +1,5 @@
 import { createOrLogin, logout } from "@/lib/auth";
-import { honeypotTripped, jsonError } from "@/lib/validation";
+import { errorResponse, honeypotTripped, jsonError } from "@/lib/validation";
 
 export async function POST(request: Request) {
   try {
@@ -9,7 +9,7 @@ export async function POST(request: Request) {
     const user = await createOrLogin(body.email, body.password, intent);
     return Response.json({ user });
   } catch (error) {
-    return jsonError(error instanceof Error ? error.message : "Could not sign in", 401);
+    return errorResponse(error, "Could not sign in");
   }
 }
 

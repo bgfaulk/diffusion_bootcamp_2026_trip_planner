@@ -1,7 +1,7 @@
 import { requireUser } from "@/lib/auth";
 import { decryptRow, encryptText } from "@/lib/crypto";
 import { getSql } from "@/lib/db";
-import { asString, jsonError, requireString } from "@/lib/validation";
+import { asString, errorResponse, fail, requireString } from "@/lib/validation";
 
 const categories = new Set(["flight", "hotel", "rental", "training", "insurance", "other"]);
 
@@ -9,7 +9,7 @@ const encryptedFields = ["title", "provider", "confirmation_number", "start_at",
 
 function readTripInfo(body: any) {
   const category = asString(body.category, 40);
-  if (!categories.has(category)) throw new Error("Choose a valid booking type");
+  if (!categories.has(category)) fail("Choose a valid booking type");
   return {
     category,
     title: encryptText(requireString(body.title, "Title", 120)),
@@ -35,7 +35,7 @@ export async function POST(request: Request) {
     `;
     return Response.json({ item: decryptRow(rows[0], encryptedFields) });
   } catch (error) {
-    return jsonError(error instanceof Error ? error.message : "Could not add trip information", 400);
+    return errorResponse(error, "Could not add trip information");
   }
 }
 
@@ -60,10 +60,10 @@ export async function PATCH(request: Request) {
       WHERE id = ${id} AND user_id = ${user.id}
       RETURNING *
     `;
-    if (!rows.length) throw new Error("Trip information not found");
+    if (!rows.length) fail("Trip information not found", 404);
     return Response.json({ item: decryptRow(rows[0], encryptedFields) });
   } catch (error) {
-    return jsonError(error instanceof Error ? error.message : "Could not update trip information", 400);
+    return errorResponse(error, "Could not update trip information");
   }
 }
 
@@ -75,6 +75,6 @@ export async function DELETE(request: Request) {
     await getSql()`DELETE FROM trip_info WHERE id = ${id} AND user_id = ${user.id}`;
     return Response.json({ ok: true });
   } catch (error) {
-    return jsonError(error instanceof Error ? error.message : "Could not delete trip information", 400);
+    return errorResponse(error, "Could not delete trip information");
   }
 }

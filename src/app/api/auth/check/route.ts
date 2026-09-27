@@ -1,5 +1,5 @@
 import { emailExists } from "@/lib/auth";
-import { honeypotTripped, jsonError } from "@/lib/validation";
+import { errorResponse, honeypotTripped, jsonError } from "@/lib/validation";
 
 export async function POST(request: Request) {
   try {
@@ -7,6 +7,6 @@ export async function POST(request: Request) {
     if (honeypotTripped(body)) return jsonError("Could not check email", 400);
     return Response.json({ exists: await emailExists(body.email) });
   } catch (error) {
-    return jsonError(error instanceof Error ? error.message : "Could not check email", 400);
+    return errorResponse(error, "Could not check email");
   }
 }

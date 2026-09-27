@@ -1,5 +1,5 @@
 import { requireUser } from "@/lib/auth";
-import { asString, jsonError } from "@/lib/validation";
+import { asString, errorResponse, fail } from "@/lib/validation";
 
 function googleReferer(request: Request) {
   const referer = request.headers.get("referer");
@@ -32,7 +32,7 @@ export async function POST(request: Request) {
     });
     if (!response.ok) {
       console.warn("Google Places autocomplete failed", response.status, await response.text());
-      throw new Error(`Google Places lookup failed (${response.status})`);
+      fail("Address search is unavailable right now", 502);
     }
     const data = await response.json();
     return Response.json({
@@ -42,6 +42,6 @@ export async function POST(request: Request) {
       })).filter((entry: any) => entry.placeId && entry.text)
     });
   } catch (error) {
-    return jsonError(error instanceof Error ? error.message : "Could not search addresses", 400);
+    return errorResponse(error, "Could not search addresses");
   }
 }

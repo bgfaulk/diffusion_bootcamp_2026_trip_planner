@@ -1,7 +1,7 @@
 import { requireUser } from "@/lib/auth";
 import { decryptText } from "@/lib/crypto";
 import { getSql } from "@/lib/db";
-import { jsonError, requireString } from "@/lib/validation";
+import { errorResponse, fail, requireString } from "@/lib/validation";
 
 export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
   try {
@@ -13,7 +13,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
       FROM trip_documents
       WHERE id = ${id} AND user_id = ${user.id}
     `;
-    if (!rows.length) throw new Error("Document not found");
+    if (!rows.length) fail("Document not found", 404);
     const document = rows[0] as { file_name: string; content_type: string; file_base64: string };
     const url = new URL(request.url);
     const disposition = url.searchParams.get("download") ? "attachment" : "inline";
@@ -25,6 +25,6 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
       }
     });
   } catch (error) {
-    return jsonError(error instanceof Error ? error.message : "Could not open PDF", 404);
+    return errorResponse(error, "Could not open PDF");
   }
 }

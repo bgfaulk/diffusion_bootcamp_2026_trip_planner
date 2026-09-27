@@ -1,7 +1,7 @@
 import { requireUser } from "@/lib/auth";
 import { encryptText } from "@/lib/crypto";
 import { getSql } from "@/lib/db";
-import { asString, jsonError } from "@/lib/validation";
+import { asString, errorResponse, fail } from "@/lib/validation";
 
 export async function POST(request: Request) {
   try {
@@ -10,8 +10,8 @@ export async function POST(request: Request) {
     const spot = asString(form.get("spot"), 80);
     const caption = encryptText(asString(form.get("caption"), 240));
     const file = form.get("photo");
-    if (!(file instanceof File) || !file.type.startsWith("image/")) throw new Error("Choose an image");
-    if (file.size > 5 * 1024 * 1024) throw new Error("Image must be under 5 MB");
+    if (!(file instanceof File) || !file.type.startsWith("image/")) fail("Choose an image");
+    if (file.size > 5 * 1024 * 1024) fail("Image must be under 5 MB");
     const buffer = Buffer.from(await file.arrayBuffer());
     await getSql()`
       INSERT INTO photos (user_id, spot, caption, content_type, image_base64)
@@ -19,6 +19,6 @@ export async function POST(request: Request) {
     `;
     return Response.json({ ok: true });
   } catch (error) {
-    return jsonError(error instanceof Error ? error.message : "Could not save photo", 400);
+    return errorResponse(error, "Could not save photo");
   }
 }
