@@ -341,7 +341,7 @@ export default function Home() {
     try { const saved = localStorage.getItem("trip-geo"); if (saved) setGeo(saved); } catch {}
     navigator.geolocation.getCurrentPosition(
       position => {
-        const next = `${position.coords.latitude.toFixed(3)},${position.coords.longitude.toFixed(3)}`;
+        const next = `${position.coords.latitude.toFixed(2)},${position.coords.longitude.toFixed(2)}`;
         setGeo(next);
         try { localStorage.setItem("trip-geo", next); } catch {}
       },

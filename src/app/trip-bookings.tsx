@@ -3,6 +3,7 @@
 import { FormEvent, useState } from "react";
 import { api } from "@/lib/client";
 import { notify } from "./toast";
+import { PlaceInput } from "./place-input";
 
 export const bookingCategories = ["flight", "hotel", "rental", "training", "insurance", "other"];
 
@@ -28,6 +29,7 @@ function tripInfoPayload(form: HTMLFormElement) {
 // Add-a-booking form shared by Trip Information and the manual setup wizard.
 export function BookingForm({ onSaved, compact = false, modal = false, category = "flight", submitLabel = "Add trip detail" }: { onSaved: () => Promise<void>; compact?: boolean; modal?: boolean; category?: string; submitLabel?: string }) {
   const [error, setError] = useState("");
+  const [address, setAddress] = useState("");
   const [busy, setBusy] = useState(false);
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -37,6 +39,7 @@ export function BookingForm({ onSaved, compact = false, modal = false, category 
     try {
       await api("/api/trip-info", { method: "POST", body: JSON.stringify(tripInfoPayload(form)) });
       form.reset();
+      setAddress("");
       await onSaved();
       notify.success("Booking saved");
     } catch (err) {
@@ -53,7 +56,7 @@ export function BookingForm({ onSaved, compact = false, modal = false, category 
       <label>Confirmation number<input name="confirmationNumber" maxLength={120} /></label>
       <label>Start<input name="startAt" placeholder="Date and time, e.g. Oct 12, 7:05 AM" maxLength={120} /></label>
       <label>End<input name="endAt" placeholder="Date and time, e.g. Oct 16, 11:00 AM" maxLength={120} /></label>
-      <label>Address<input name="address" placeholder="Address, terminal, hotel, or office" maxLength={260} /></label>
+      <label>Address<PlaceInput name="address" value={address} onChange={setAddress} placeholder="Address, terminal, hotel, or office" maxLength={260} /></label>
       <label>Phone<input name="phone" placeholder="Support or front desk number" maxLength={80} /></label>
       <label className="wide">Notes<textarea name="notes" placeholder="Cancellation rules, warnings, loyalty numbers, pickup instructions..." maxLength={1200} /></label>
       {error && <p className="error wide">{error}</p>}
