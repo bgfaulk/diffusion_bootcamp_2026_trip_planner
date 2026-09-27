@@ -840,3 +840,8 @@ a { color:var(--accent-dark); font-weight:800; }
 .accounts td, .log td { white-space:nowrap; }
 .accounts td:first-child, .log td.detail { white-space:normal; }
 .log { min-width:960px; }
+.sort-th button { all:unset; cursor:pointer; display:inline-flex; align-items:center; gap:4px; font:inherit; color:inherit; text-transform:inherit; letter-spacing:inherit; }
+.sort-th button span { font-size:9px; opacity:.45; }
+.sort-th button.on, .sort-th button:hover { color:var(--ink); }
+.sort-th button.on span { opacity:1; color:var(--accent-dark); }
+.sort-th.num button { justify-content:flex-end; }
