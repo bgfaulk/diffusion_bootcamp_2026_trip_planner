@@ -1,11 +1,12 @@
 import { requireUser } from "@/lib/auth";
+import { withAudit } from "@/lib/audit";
 import { encryptText } from "@/lib/crypto";
 import { getSql } from "@/lib/db";
-import { asString, jsonError } from "@/lib/validation";
+import { asString, errorResponse } from "@/lib/validation";
 
-export async function POST(request: Request) {
+export const POST = withAudit("itinerary.save", async (request, ctx) => {
   try {
-    const user = await requireUser();
+    const user = ctx.user = await requireUser();
     const body = await request.json();
     const instructions = encryptText(asString(body.instructions, 6000));
     const response = encryptText(asString(body.response, 12000));
@@ -21,6 +22,6 @@ export async function POST(request: Request) {
     `;
     return Response.json({ ok: true });
   } catch (error) {
-    return jsonError(error instanceof Error ? error.message : "Could not save itinerary", 400);
+    return errorResponse(error, "Could not save itinerary");
   }
-}
+});

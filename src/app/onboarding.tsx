@@ -9,7 +9,7 @@ import { passwordChecks } from "@/lib/validation";
 import { chimeEnabled, chimeReady, playChimeNote, primeChime, setChimeEnabled } from "@/lib/chime";
 import { buildWizardPrompt, extractJson, interestOptions, normalizePlan, sampleResponse, trainingAddress, trainingDetail, type EmailAccess, type WizardAnswers } from "@/lib/plan";
 
-type AuthStep = "email" | "signin" | "create" | "reset";
+type AuthStep = "signin" | "create" | "reset" | "forgot";
 
 const emailCookie = "trip_email";
 const rememberDays = 7;
@@ -19,58 +19,80 @@ function rememberedEmail() {
   return match ? decodeURIComponent(match[1]) : "";
 }
 
+// A reset link is /?reset=<token>; the token's first part is base64url JSON with the email in it. The server
+// verifies the signature; the browser only reads the email to prefill the form.
+function resetLinkFromUrl(): { token: string; email: string } | null {
+  try {
+    const token = new URLSearchParams(location.search).get("reset");
+    if (!token) return null;
+    const payload = JSON.parse(atob(token.split(".")[0].replace(/-/g, "+").replace(/_/g, "/")));
+    return typeof payload?.email === "string" ? { token, email: payload.email } : null;
+  } catch {
+    return null;
+  }
+}
+
 function rememberEmail(email: string) {
   const secure = location.protocol === "https:" ? "; Secure" : "";
   document.cookie = `${emailCookie}=${encodeURIComponent(email)}; Max-Age=${60 * 60 * 24 * rememberDays}; Path=/; SameSite=Lax${secure}`;
 }
 
+// One form for both signing in and creating an account. The server answers a bad sign-in the same way
+// whether the email is unknown or the password is wrong, so nothing here can tell people apart either.
 export function LoginScreen({ onSignedIn }: { onSignedIn: () => Promise<void> }) {
-  const [step, setStep] = useState<AuthStep>("email");
+  const [step, setStep] = useState<AuthStep>("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
+  const [inviteCode, setInviteCode] = useState("");
   const [website, setWebsite] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [resetToken, setResetToken] = useState("");
+  const [sentTo, setSentTo] = useState("");
 
-  useEffect(() => { setEmail(current => current || rememberedEmail()); }, []);
+  useEffect(() => {
+    const link = resetLinkFromUrl();
+    if (link) { setEmail(link.email); setResetToken(link.token); setStep("reset"); return; }
+    setEmail(current => current || rememberedEmail());
+  }, []);
 
   const newPassword = step === "create" || step === "reset";
   const checks = passwordChecks(password);
   const rulesMet = checks.every(check => check.ok);
   const confirmOk = step !== "create" || (confirm !== "" && confirm === password);
-  const canSubmit = !busy && password !== "" && (!newPassword || rulesMet) && confirmOk;
+  const canSubmit = !busy && email.trim() !== "" && (step === "forgot" || (password !== "" && (!newPassword || rulesMet) && confirmOk));
 
   function goTo(next: AuthStep) {
     setStep(next);
     setPassword("");
     setConfirm("");
+    setInviteCode("");
     setError("");
+    setSentTo("");
   }
 
-  async function checkEmail(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setError("");
-    setBusy(true);
-    try {
-      const result = await api("/api/auth/check", { method: "POST", body: JSON.stringify({ email, website }) });
-      goTo(result.exists ? "signin" : "create");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not check that email");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function submitPassword(event: FormEvent<HTMLFormElement>) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!canSubmit) return;
     setError("");
     setBusy(true);
+    if (step === "forgot") {
+      try {
+        await api("/api/auth/forgot", { method: "POST", body: JSON.stringify({ email, website }) });
+        setSentTo(email.trim());
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Could not send a reset link");
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
     primeChime(); // inside the submit gesture, so the loader's chime is allowed to play
     try {
-      await api("/api/auth", { method: "POST", body: JSON.stringify({ email, password, intent: step, website }) });
+      await api("/api/auth", { method: "POST", body: JSON.stringify({ email, password, intent: step, website, token: resetToken, inviteCode }) });
       rememberEmail(email);
+      if (step === "reset") history.replaceState(null, "", location.pathname);
       await onSignedIn();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not sign in");
@@ -78,48 +100,65 @@ export function LoginScreen({ onSignedIn }: { onSignedIn: () => Promise<void> })
     }
   }
 
-  const heading = { email: "", signin: "Welcome back", create: "Create your password", reset: "Reset password" }[step];
+  const heading = { signin: "Sign in", create: "Create your account", reset: "Set a new password", forgot: "Reset your password" }[step];
 
   return (
     <main className="login-page">
       <section className="login-card">
         <p className="eyebrow">ABC Diffusion Bootcamp Trip Planner</p>
         <AbcMark />
-        {heading ? <h1>{heading}</h1> : <p className="login-lede">Sign in with your email, or create an account if it's your first time.</p>}
+        <h1>{heading}</h1>
         {/* Honeypot: hidden from people and screen readers, so only bots fill it in. */}
         <label className="honeypot" aria-hidden="true">Website<input tabIndex={-1} autoComplete="off" value={website} onChange={event => setWebsite(event.target.value)} /></label>
-        {step === "email" ? (
-          <form onSubmit={checkEmail} className="stack">
-            <label>Email<input id="username" name="username" type="email" required maxLength={254} autoFocus autoComplete="username" value={email} onChange={event => setEmail(event.target.value)} /></label>
-            {error && <p className="error">{error}</p>}
-            <button className="btn primary" disabled={busy}>{busy ? "Checking..." : "Continue"}</button>
-          </form>
+        {step === "forgot" && sentTo ? (
+          <div className="stack">
+            <p className="muted">If <strong>{sentTo}</strong> has an account, a reset link is on its way. It works once and expires in 24 hours. Check spam if it doesn&apos;t show up in a minute.</p>
+          </div>
         ) : (
-          <form onSubmit={submitPassword} className="stack" key={step}>
-            {/* Two-step login: repeat the email as the username so password managers can pair the
-                saved password with it. Kept in the layout (not display:none) because some managers skip hidden fields. */}
-            <input className="visually-hidden" id="username" name="username" type="email" autoComplete="username" value={email} readOnly tabIndex={-1} aria-hidden="true" />
-            <div className="email-chip"><span>{email}</span><button type="button" className="link-button" onClick={() => goTo("email")}>Change</button></div>
-            {step === "create" && <p className="muted">No account uses this email yet. Choose a password to create one.</p>}
-            <PasswordField id={step === "signin" ? "current-password" : "new-password"} label={step === "reset" ? "New password" : "Password"} value={password} onChange={setPassword} autoFocus autoComplete={step === "signin" ? "current-password" : "new-password"} />
-            {newPassword && (
-              <ul className="password-rules" aria-live="polite">
-                {checks.map(check => <li key={check.label} className={check.ok ? "ok" : ""}><RuleIcon ok={check.ok} />{check.label}</li>)}
-                {rulesMet && <li className="ok all-set"><RuleIcon ok />Password looks good</li>}
-              </ul>
-            )}
-            {step === "create" && (
-              <>
-                <PasswordField id="confirm-password" label="Confirm password" value={confirm} onChange={setConfirm} autoComplete="new-password" />
-                {confirm !== "" && <p className={`match-note ${confirmOk ? "ok" : ""}`}><RuleIcon ok={confirmOk} />{confirmOk ? "Passwords match" : "Passwords don't match yet"}</p>}
-              </>
-            )}
-            {error && <p className="error">{error}</p>}
-            <button className="btn primary" disabled={!canSubmit}>{busy ? "One moment..." : { signin: "Sign in", create: "Create account", reset: "Update password" }[step]}</button>
-          </form>
+        <form onSubmit={submit} className="stack" key={step}>
+          {step === "forgot" ? (
+            <>
+              <p className="muted">Enter the email you signed up with and we&apos;ll send you a link to set a new password.</p>
+              <label>Email<input id="username" name="username" type="email" required maxLength={254} autoFocus autoComplete="username" value={email} onChange={event => setEmail(event.target.value)} /></label>
+            </>
+          ) : step === "reset" ? (
+            <>
+              {/* The account comes from the reset link. Repeat its email as the username so password managers pair
+                  the new password with it. Kept in the layout (not display:none) because some managers skip hidden fields. */}
+              <input className="visually-hidden" id="username" name="username" type="email" autoComplete="username" value={email} readOnly tabIndex={-1} aria-hidden="true" />
+              <div className="email-chip"><span>{email}</span></div>
+            </>
+          ) : (
+            <label>Email<input id="username" name="username" type="email" required maxLength={254} autoFocus autoComplete="username" value={email} onChange={event => setEmail(event.target.value)} /></label>
+          )}
+          {step !== "forgot" && <PasswordField id={step === "signin" ? "current-password" : "new-password"} label={step === "reset" ? "New password" : "Password"} value={password} onChange={setPassword} autoFocus={step === "reset"} autoComplete={step === "signin" ? "current-password" : "new-password"} />}
+          {newPassword && (
+            <ul className="password-rules" aria-live="polite">
+              {checks.map(check => <li key={check.label} className={check.ok ? "ok" : ""}><RuleIcon ok={check.ok} />{check.label}</li>)}
+              {rulesMet && <li className="ok all-set"><RuleIcon ok />Password looks good</li>}
+            </ul>
+          )}
+          {step === "create" && (
+            <>
+              <PasswordField id="confirm-password" label="Confirm password" value={confirm} onChange={setConfirm} autoComplete="new-password" />
+              {confirm !== "" && <p className={`match-note ${confirmOk ? "ok" : ""}`}><RuleIcon ok={confirmOk} />{confirmOk ? "Passwords match" : "Passwords don't match yet"}</p>}
+              <label>Invite code<input id="invite-code" name="inviteCode" maxLength={200} autoComplete="off" autoCapitalize="off" spellCheck={false} value={inviteCode} onChange={event => setInviteCode(event.target.value)} /></label>
+              <p className="muted">The trip organizer shares the invite code with attendees.</p>
+            </>
+          )}
+          {error && <p className="error">{error}</p>}
+          <button className="btn primary" disabled={!canSubmit}>{busy ? "One moment..." : { signin: "Sign in", create: "Create account", reset: "Update password", forgot: "Email me a reset link" }[step]}</button>
+        </form>
         )}
-        {step === "signin" && <button className="link-button" onClick={() => goTo("reset")}>Forgot password? Reset it</button>}
-        {step === "reset" && <button className="link-button" onClick={() => goTo("signin")}>Back to sign in</button>}
+        {step === "signin" && (
+          <>
+            <button type="button" className="link-button" onClick={() => goTo("forgot")}>Forgot your password? Email me a reset link</button>
+            <button type="button" className="link-button" onClick={() => goTo("create")}>First time here? Create an account</button>
+          </>
+        )}
+        {step === "create" && <button type="button" className="link-button" onClick={() => goTo("signin")}>Already have an account? Sign in</button>}
+        {step === "forgot" && <button type="button" className="link-button" onClick={() => goTo("signin")}>Back to sign in</button>}
+        {step === "reset" && <button className="link-button" onClick={() => { setResetToken(""); history.replaceState(null, "", location.pathname); goTo("signin"); }}>Back to sign in</button>}
       </section>
     </main>
   );

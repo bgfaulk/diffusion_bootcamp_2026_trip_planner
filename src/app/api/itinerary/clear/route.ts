@@ -1,14 +1,15 @@
 import { requireUser } from "@/lib/auth";
+import { withAudit } from "@/lib/audit";
 import { encryptText } from "@/lib/crypto";
 import { getSql } from "@/lib/db";
-import { jsonError } from "@/lib/validation";
+import { errorResponse } from "@/lib/validation";
 
-export async function POST() {
+export const POST = withAudit("itinerary.clear", async (_request, ctx) => {
   try {
-    const user = await requireUser();
+    const user = ctx.user = await requireUser();
     await getSql()`UPDATE itinerary SET saved_plan = ${encryptText("")}, response = ${encryptText("")}, updated_at = now() WHERE user_id = ${user.id}`;
     return Response.json({ ok: true });
   } catch (error) {
-    return jsonError(error instanceof Error ? error.message : "Could not clear itinerary", 400);
+    return errorResponse(error, "Could not clear itinerary");
   }
-}
+});

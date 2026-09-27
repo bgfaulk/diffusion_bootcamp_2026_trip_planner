@@ -1,13 +1,14 @@
 import { requireUser } from "@/lib/auth";
+import { withAudit } from "@/lib/audit";
 import { encryptText } from "@/lib/crypto";
 import { getSql } from "@/lib/db";
 import { isTheme } from "@/lib/theme";
-import { jsonError } from "@/lib/validation";
+import { errorResponse, fail } from "@/lib/validation";
 
 // Saves the AI/manual choice and the wizard's in-progress answers without touching the rest of settings.
-export async function POST(request: Request) {
+export const POST = withAudit("planning.save", async (request, ctx) => {
   try {
-    const user = await requireUser();
+    const user = ctx.user = await requireUser();
     const body = await request.json();
     const mode = body.mode === "ai" || body.mode === "manual" ? body.mode : null;
     // Only used when this call creates the settings row: a new account keeps the theme it signed up under.
@@ -15,7 +16,7 @@ export async function POST(request: Request) {
     let answers: string | null = null;
     if (body.answers && typeof body.answers === "object") {
       const json = JSON.stringify(body.answers);
-      if (json.length > 60000) throw new Error("Wizard answers are too long");
+      if (json.length > 60000) fail("Wizard answers are too long");
       answers = encryptText(json);
     }
     await getSql()`
@@ -28,6 +29,6 @@ export async function POST(request: Request) {
     `;
     return Response.json({ ok: true });
   } catch (error) {
-    return jsonError(error instanceof Error ? error.message : "Could not save planning choice", 400);
+    return errorResponse(error, "Could not save planning choice");
   }
-}
+});

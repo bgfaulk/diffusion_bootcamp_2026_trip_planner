@@ -1,5 +1,7 @@
 // Shared between the browser (wizard + prompt) and the server (plan import). No Node-only imports.
 
+import { AppError } from "./validation";
+
 export type EmailAccess = "connected" | "paste" | "skip";
 
 // Every bootcamp attendee trains at the same place, so the ChatGPT path doesn't ask for it.
@@ -143,11 +145,11 @@ export function extractJson(raw: string): any {
   } catch {
     const start = trimmed.indexOf("{");
     const end = trimmed.lastIndexOf("}");
-    if (start === -1 || end <= start) throw new Error("That doesn't look like the JSON ChatGPT returned. Paste the whole response.");
+    if (start === -1 || end <= start) throw new AppError("That doesn't look like the JSON ChatGPT returned. Paste the whole response.");
     try {
       return JSON.parse(trimmed.slice(start, end + 1));
     } catch {
-      throw new Error("The pasted response isn't valid JSON. Ask ChatGPT to return only the JSON and paste it again.");
+      throw new AppError("The pasted response isn't valid JSON. Ask ChatGPT to return only the JSON and paste it again.");
     }
   }
 }
@@ -182,7 +184,7 @@ function itineraryToText(itinerary: any) {
 }
 
 export function normalizePlan(parsed: any): TripPlan {
-  if (!parsed || typeof parsed !== "object") throw new Error("The pasted response is empty");
+  if (!parsed || typeof parsed !== "object") throw new AppError("The pasted response is empty");
   const plan: TripPlan = {
     tripName: text(parsed.tripName, 120),
     trainingLocation: text(parsed.trainingLocation, 240),
@@ -203,7 +205,7 @@ export function normalizePlan(parsed: any): TripPlan {
   };
   const listCount = Object.values(plan.lists).reduce((sum, items) => sum + items.length, 0);
   if (!plan.records.length && !plan.itineraryText && !listCount) {
-    throw new Error("Couldn't find any trip details in that response. Make sure you pasted ChatGPT's full JSON answer.");
+    throw new AppError("Couldn't find any trip details in that response. Make sure you pasted ChatGPT's full JSON answer.");
   }
   return plan;
 }

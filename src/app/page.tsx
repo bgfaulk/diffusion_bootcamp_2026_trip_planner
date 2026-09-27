@@ -11,7 +11,9 @@ import { JsonFileInput } from "./json-file-input";
 import { BookingForm, bookingCategories, categoryTitle } from "./trip-bookings";
 import { NirvanaBackdrop } from "./nirvana-backdrop";
 import { PageIcon } from "./page-icons";
+import { OrganizerPage } from "./organizer";
 import { useWeather, WeatherPanel } from "./weather";
+import { photoSpots } from "@/lib/photo-spots";
 import { applyFx, applyTheme, storedFx, storedTheme, THEMES, themeLabels, type Theme } from "@/lib/theme";
 import { buildTripModel, countdown, dayKey, daysBetween, fmtDay, fmtMinutes, fmtShort, keyToDate, parseItinerary, parseWhen, type DayEvent, type ParsedPlan, type TimedBooking, type TripModel } from "@/lib/trip-time";
 
@@ -42,25 +44,20 @@ type Settings = {
   trip_name?: string;
   home_address?: string;
   home_place_id?: string;
-  home_lat?: number;
-  home_lng?: number;
   training_location?: string;
   training_place_id?: string;
-  training_lat?: number;
-  training_lng?: number;
   theme?: Theme;
   planning_mode?: "ai" | "manual" | null;
   planning_answers?: string;
 } | null;
 type AppState = {
-  user: null | { id: string; email: string };
+  user: null | { id: string; email: string; owner?: boolean };
   settings: Settings;
   items: Item[];
   photos: Record<string, { id: string; caption: string; imageUrl: string }>;
   itinerary: null | { instructions?: string; response?: string; saved_plan?: string };
   tripInfo: TripInfo[];
   tripDocuments: TripDocument[];
-  tripImport: null | { instructions?: string; response?: string };
 };
 
 const emptyAppState: AppState = {
@@ -70,8 +67,7 @@ const emptyAppState: AppState = {
   photos: {},
   itinerary: null,
   tripInfo: [],
-  tripDocuments: [],
-  tripImport: null
+  tripDocuments: []
 };
 
 // Per-device hint that a session exists, so the loader can start before bootstrap answers.
@@ -89,18 +85,10 @@ const pageLabels: Record<string, string> = {
   tripInfo: "Trip Information",
   gallery: "Photo Route",
   return: "Return Day",
-  settings: "Settings"
+  organizer: "Organizer"
 };
 
 const listPages = ["prechecks", "packing", "departure", "return"];
-const photoSpots = [
-  ["golden-gate-overlook", "Golden Gate Overlook", "Langdon Ct, San Francisco"],
-  ["ferry-building", "Ferry Building", "1 Ferry Building, San Francisco"],
-  ["north-beach", "North Beach", "Washington Square / Columbus Ave"],
-  ["mission-district", "Mission District", "Dolores Park anchor"],
-  ["half-moon-bay", "Half Moon Bay", "Main Street / Coastside"],
-  ["wildcard", "Favorite surprise", "Something worth remembering"]
-];
 
 export default function Home() {
   const [data, setData] = useState<AppState>(emptyAppState);
@@ -128,12 +116,17 @@ export default function Home() {
   }
 
   async function loadState() {
-    const next = (await api("/api/bootstrap")) as Partial<AppState>;
+    const next = (await api("/api/bootstrap", { signal: AbortSignal.timeout(20000) })) as Partial<AppState>;
     apply(next);
     return next;
   }
 
   async function load() { await loadState(); }
+
+  // Checklist edits change one row; apply them to local state instead of refetching every table.
+  function patchItems(update: (items: Item[]) => Item[]) {
+    setData(current => ({ ...current, items: update(current.items) }));
+  }
 
   async function enterAfterSignIn() {
     setEnterDone(false);
@@ -172,7 +165,7 @@ export default function Home() {
       if (next?.user) { rememberSession(true); setEnterDone(true); setEntering(true); }
       else { rememberSession(false); setEntering(false); }
     }).catch(() => { rememberSession(false); setEntering(false); }).finally(() => setLoaded(true));
-    // Any early click (e.g. "Continue" on the email step) unlocks audio for the loader's chime.
+    // Any early click (e.g. into the email field) unlocks audio for the loader's chime.
     const prime = () => primeChime();
     document.addEventListener("pointerdown", prime, { once: true });
     return () => document.removeEventListener("pointerdown", prime);
@@ -322,7 +315,7 @@ export default function Home() {
           </button>
         </div>
         <nav className="primary-nav" aria-label="Pages">
-          {["overview", "prechecks", "packing", "departure", "explore", "tripInfo", "gallery", "return"].map(key => (
+          {["overview", "prechecks", "packing", "departure", "explore", "tripInfo", "gallery", "return", ...(data.user.owner ? ["organizer"] : [])].map(key => (
             <button key={key} className={page === key ? "active" : ""} onClick={() => setPage(key)} title={collapsed ? pageLabels[key] : undefined} aria-label={collapsed ? pageLabels[key] : undefined} aria-current={page === key ? "page" : undefined}>
               <PageIcon page={key} />
               {!collapsed && <span className="nav-label">{pageLabels[key]}</span>}
@@ -362,11 +355,12 @@ export default function Home() {
           </div>
         )}
         {page === "overview" && <Overview tripName={tripName} settings={data.settings} answers={answers} itinerary={data.itinerary} tripInfo={data.tripInfo} goTo={setPage} />}
-        {listPages.includes(page) && <ListPage pageKey={page} items={data.items} reload={load} />}
-        {page === "explore" && <ExplorePage items={data.items.filter(item => item.page === "explore")} itinerary={data.itinerary} startDate={answers.startDate} openModal={() => setItineraryOpen(true)} reload={load} />}
-        {page === "tripInfo" && <TripInfoPage tripInfo={data.tripInfo} tripDocuments={data.tripDocuments} tripImport={data.tripImport} reload={load} />}
+        {listPages.includes(page) && <ListPage pageKey={page} items={data.items} onItems={patchItems} />}
+        {page === "explore" && <ExplorePage items={data.items.filter(item => item.page === "explore")} itinerary={data.itinerary} startDate={answers.startDate} openModal={() => setItineraryOpen(true)} reload={load} onItems={patchItems} />}
+        {page === "tripInfo" && <TripInfoPage tripInfo={data.tripInfo} tripDocuments={data.tripDocuments} reload={load} />}
         {page === "gallery" && <Gallery photos={data.photos} openViewer={setViewer} reload={load} />}
         {page === "settings" && <SettingsPage settings={data.settings} saveSettings={saveSettings} reload={load} />}
+        {page === "organizer" && data.user.owner && <OrganizerPage userId={data.user.id} />}
       </main>
 
       {itineraryOpen && <ItineraryModal items={data.items.filter(item => item.page === "explore")} itinerary={data.itinerary} answers={answers} hasTripData={Boolean(data.itinerary?.saved_plan) || data.tripInfo.length > 0} onClose={() => setItineraryOpen(false)} reload={load} />}
@@ -384,8 +378,7 @@ function normalizeAppState(next: Partial<AppState>): AppState {
     photos: next.photos && typeof next.photos === "object" ? next.photos : {},
     itinerary: next.itinerary || null,
     tripInfo: Array.isArray(next.tripInfo) ? next.tripInfo : [],
-    tripDocuments: Array.isArray(next.tripDocuments) ? next.tripDocuments : [],
-    tripImport: next.tripImport || null
+    tripDocuments: Array.isArray(next.tripDocuments) ? next.tripDocuments : []
   };
 }
 
@@ -549,7 +542,9 @@ const listTaglines: Record<string, string> = {
   return: "Check out, hand back the keys, and get home."
 };
 
-function ListPage({ pageKey, items, reload }: { pageKey: string; items: Item[]; reload: () => Promise<void> }) {
+type ItemsPatch = (update: (items: Item[]) => Item[]) => void;
+
+function ListPage({ pageKey, items, onItems }: { pageKey: string; items: Item[]; onItems: ItemsPatch }) {
   const visible = items.filter(item => item.page === pageKey);
   const done = visible.filter(item => item.checked).length;
   const total = visible.length;
@@ -561,7 +556,7 @@ function ListPage({ pageKey, items, reload }: { pageKey: string; items: Item[]; 
         <div>
           <p className="eyebrow">{listTaglines[pageKey] || "Editable checklist"}</p>
           <h1>{pageLabels[pageKey]}</h1>
-          <AddItemForm pageKey={pageKey} reload={reload} />
+          <AddItemForm pageKey={pageKey} onItems={onItems} />
         </div>
         <div className="progress-block" role="group" aria-label="Progress">
           <strong>{done}<small>of {total} done</small></strong>
@@ -569,26 +564,26 @@ function ListPage({ pageKey, items, reload }: { pageKey: string; items: Item[]; 
           <span>{status}</span>
         </div>
       </header>
-      <Checklist pageKey={pageKey} items={items} reload={reload} />
+      <Checklist pageKey={pageKey} items={items} onItems={onItems} />
     </section>
   );
 }
 
-function AddItemForm({ pageKey, reload, placeholder = "Add an item" }: { pageKey: string; reload: () => Promise<void>; placeholder?: string }) {
+function AddItemForm({ pageKey, onItems, placeholder = "Add an item" }: { pageKey: string; onItems: ItemsPatch; placeholder?: string }) {
   async function add(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
     const title = String(new FormData(form).get("title") || "").trim();
     if (!title) return;
-    await api("/api/items", { method: "POST", body: JSON.stringify({ page: pageKey, title }) });
+    const { item } = await api("/api/items", { method: "POST", body: JSON.stringify({ page: pageKey, title }) });
     form.reset();
-    await reload();
+    onItems(items => [...items, item]);
   }
   return <form className="item-form" onSubmit={add}><input name="title" placeholder={placeholder} maxLength={180} aria-label={placeholder} /><button className="btn primary">Add</button></form>;
 }
 
 // Open items first; finished ones collapse into a "Done" group underneath so the list stays about what's left.
-function Checklist({ pageKey, items, reload }: { pageKey: string; items: Item[]; reload: () => Promise<void> }) {
+function Checklist({ pageKey, items, onItems }: { pageKey: string; items: Item[]; onItems: ItemsPatch }) {
   const [showDone, setShowDone] = useState(true);
   const visible = items.filter(item => item.page === pageKey);
   const open = visible.filter(item => !item.checked);
@@ -596,12 +591,12 @@ function Checklist({ pageKey, items, reload }: { pageKey: string; items: Item[];
   return (
     <div className="check-groups">
       {!visible.length && <p className="check-empty">Nothing here yet. Add your first item above.</p>}
-      {open.length > 0 && <ol className="check-list">{open.map(item => <ChecklistItem key={item.id} item={item} reload={reload} />)}</ol>}
+      {open.length > 0 && <ol className="check-list">{open.map(item => <ChecklistItem key={item.id} item={item} onItems={onItems} />)}</ol>}
       {visible.length > 0 && !open.length && <p className="check-empty all-done">Everything is checked off. Nice work.</p>}
       {done.length > 0 && (
         <section className="check-section">
           <div className="check-section-head"><h2>Done · {done.length}</h2><button type="button" className="link-button" onClick={() => setShowDone(show => !show)}>{showDone ? "Hide" : "Show"}</button></div>
-          {showDone && <ol className="check-list">{done.map(item => <ChecklistItem key={item.id} item={item} reload={reload} />)}</ol>}
+          {showDone && <ol className="check-list">{done.map(item => <ChecklistItem key={item.id} item={item} onItems={onItems} />)}</ol>}
         </section>
       )}
     </div>
@@ -609,18 +604,24 @@ function Checklist({ pageKey, items, reload }: { pageKey: string; items: Item[];
 }
 
 // Places-to-visit tab on Explore: same list with its own add form.
-function ChecklistBody({ pageKey, items, reload, placeholder = "Add an item" }: { pageKey: string; items: Item[]; reload: () => Promise<void>; placeholder?: string }) {
-  return <><AddItemForm pageKey={pageKey} reload={reload} placeholder={placeholder} /><Checklist pageKey={pageKey} items={items} reload={reload} /></>;
+function ChecklistBody({ pageKey, items, onItems, placeholder = "Add an item" }: { pageKey: string; items: Item[]; onItems: ItemsPatch; placeholder?: string }) {
+  return <><AddItemForm pageKey={pageKey} onItems={onItems} placeholder={placeholder} /><Checklist pageKey={pageKey} items={items} onItems={onItems} /></>;
 }
 
-function ChecklistItem({ item, reload }: { item: Item; reload: () => Promise<void> }) {
+function ChecklistItem({ item, onItems }: { item: Item; onItems: ItemsPatch }) {
   async function toggle() {
-    await api("/api/items", { method: "PATCH", body: JSON.stringify({ id: item.id, checked: !item.checked }) });
-    await reload();
+    const checked = !item.checked;
+    // Flip it right away and move it to the end of its new group, which is where the server puts it too.
+    onItems(items => [...items.filter(other => other.id !== item.id), { ...item, checked }]);
+    try {
+      await api("/api/items", { method: "PATCH", body: JSON.stringify({ id: item.id, checked }) });
+    } catch {
+      onItems(items => items.map(other => (other.id === item.id ? { ...other, checked: !checked } : other)));
+    }
   }
   async function remove() {
     await api("/api/items", { method: "DELETE", body: JSON.stringify({ id: item.id }) });
-    await reload();
+    onItems(items => items.filter(other => other.id !== item.id));
   }
   return (
     <li className={item.checked ? "check-card done" : "check-card"}>
@@ -634,7 +635,7 @@ function ChecklistItem({ item, reload }: { item: Item; reload: () => Promise<voi
   );
 }
 
-function ExplorePage({ items, itinerary, startDate, openModal, reload }: { items: Item[]; itinerary: AppState["itinerary"]; startDate: string; openModal: () => void; reload: () => Promise<void> }) {
+function ExplorePage({ items, itinerary, startDate, openModal, reload, onItems }: { items: Item[]; itinerary: AppState["itinerary"]; startDate: string; openModal: () => void; reload: () => Promise<void>; onItems: ItemsPatch }) {
   const [tab, setTab] = useState<"itinerary" | "places">("itinerary");
   const [confirmClear, setConfirmClear] = useState(false);
   const saved = itinerary?.saved_plan || "";
@@ -670,7 +671,7 @@ function ExplorePage({ items, itinerary, startDate, openModal, reload }: { items
           )}
         </TabPanel>
       )}
-      {tab === "places" && <TabPanel id="places"><ChecklistBody pageKey="explore" items={items} reload={reload} placeholder="Add a place you want to visit" /></TabPanel>}
+      {tab === "places" && <TabPanel id="places"><ChecklistBody pageKey="explore" items={items} onItems={onItems} placeholder="Add a place you want to visit" /></TabPanel>}
       {confirmClear && (
         <div className="modal-backdrop" onClick={() => setConfirmClear(false)}>
           <section className="modal confirm-modal" role="dialog" aria-modal="true" onClick={event => event.stopPropagation()}>
@@ -800,8 +801,7 @@ Practical notes:
 Keep it mobile-readable, specific, and ready to save into the app.`;
 }
 
-function TripInfoPage({ tripInfo, tripDocuments, tripImport, reload }: { tripInfo: TripInfo[]; tripDocuments: TripDocument[]; tripImport: AppState["tripImport"]; reload: () => Promise<void> }) {
-  const [importOpen, setImportOpen] = useState(false);
+function TripInfoPage({ tripInfo, tripDocuments, reload }: { tripInfo: TripInfo[]; tripDocuments: TripDocument[]; reload: () => Promise<void> }) {
   const [adding, setAdding] = useState<string | null>(null);
   const [pdfOpen, setPdfOpen] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<null | { kind: "booking" | "document"; id: string; label: string }>(null);
@@ -814,8 +814,9 @@ function TripInfoPage({ tripInfo, tripDocuments, tripImport, reload }: { tripInf
 
   async function uploadPdf(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    await api("/api/trip-documents", { method: "POST", body: new FormData(event.currentTarget) });
-    event.currentTarget.reset();
+    const form = event.currentTarget;
+    await api("/api/trip-documents", { method: "POST", body: new FormData(form) });
+    form.reset();
     await reload();
     setPdfOpen(false);
   }
@@ -834,7 +835,6 @@ function TripInfoPage({ tripInfo, tripDocuments, tripImport, reload }: { tripInf
       <div className="callout">
         <h2>Keep booking details in your own account</h2>
         <p>Add flights, hotels, rental cars, training addresses, insurance policy notes, and other reservations here. Nothing personal needs to live in the shared repo.</p>
-        <div className="button-row"><button className="btn primary" onClick={() => setImportOpen(true)}>Import with ChatGPT</button></div>
       </div>
 
       <Tabs label="Trip information sections" active={tab} onChange={setTab} tabs={[
@@ -884,7 +884,6 @@ function TripInfoPage({ tripInfo, tripDocuments, tripImport, reload }: { tripInf
         </TabPanel>
       )}
 
-      {importOpen && <TripImportModal tripImport={tripImport} onClose={() => setImportOpen(false)} reload={reload} />}
       {pendingDelete && (
         <div className="modal-backdrop" onClick={() => setPendingDelete(null)}>
           <section className="modal confirm-modal" role="dialog" aria-modal="true" onClick={event => event.stopPropagation()}>
@@ -954,100 +953,13 @@ function FormModal({ title, eyebrow, onClose, children }: { title: string; eyebr
   );
 }
 
-function TripImportModal({ tripImport, onClose, reload }: { tripImport: AppState["tripImport"]; onClose: () => void; reload: () => Promise<void> }) {
-  const [instructions, setInstructions] = useState(tripImport?.instructions || defaultTripImportInstructions());
-  const [response, setResponse] = useState(tripImport?.response || "");
-  const prompt = useMemo(() => buildTripImportPrompt(instructions), [instructions]);
-
-  async function persist(nextInstructions = instructions, nextResponse = response) {
-    await api("/api/trip-import", { method: "POST", body: JSON.stringify({ instructions: nextInstructions, response: nextResponse }) });
-  }
-
-  async function saveRecords() {
-    await persist();
-    const records = parseTripRecords(response);
-    if (!records.length) throw new Error("Paste the JSON records from ChatGPT before saving");
-    for (const record of records) {
-      await api("/api/trip-info", { method: "POST", body: JSON.stringify(record) });
-    }
-    await reload();
-    onClose();
-  }
-
-  return (
-    <div className="modal-backdrop">
-      <section className="modal">
-        <button className="modal-x" onClick={onClose}>×</button>
-        <h2>Import Trip Information</h2>
-        <p className="muted">Ask ChatGPT to review the travel emails you provide or connect there. It gives you a trip-bookings.json file to upload here.</p>
-        <label>Instructions<textarea value={instructions} onChange={event => setInstructions(event.target.value)} onBlur={() => persist()} /></label>
-        <div className="button-row"><button className="btn" onClick={() => setInstructions(defaultTripImportInstructions())}>Use suggested instructions</button><button className="btn primary" onClick={() => window.open(`https://chatgpt.com/?q=${encodeURIComponent(prompt)}`, "_blank")}>Open ChatGPT with prompt</button></div>
-        <JsonFileInput value={response} onChange={value => { setResponse(value); persist(instructions, value); }} fileHint="trip-bookings.json" placeholder='{"records":[{"category":"flight","title":"Outbound flight","provider":"Airline","confirmationNumber":"ABC123"}]}' />
-        <div className="button-row"><button className="btn" onClick={onClose}>Cancel</button><button className="btn primary" onClick={saveRecords}>Save imported details</button></div>
-      </section>
-    </div>
-  );
-}
-
-function defaultTripImportInstructions() {
-  return "Find flight, hotel, rental car, training, insurance, and other reservation details. Include confirmation numbers, dates/times, addresses, phone numbers, and practical warnings like pickup times that do not match flight arrival times.";
-}
-
-function buildTripImportPrompt(instructions: string) {
-  return `Review my travel details and give me a downloadable file named trip-bookings.json that I can import into my trip planner.
-
-Instructions:
-${instructions}
-
-Use this exact schema:
-{
-  "records": [
-    {
-      "category": "flight | hotel | rental | training | insurance | other",
-      "title": "Short label",
-      "provider": "Company name",
-      "confirmationNumber": "Confirmation, reservation, policy, or record locator",
-      "startAt": "Date/time text",
-      "endAt": "Date/time text",
-      "address": "Address or location text",
-      "phone": "Phone number",
-      "notes": "Important instructions or warnings"
-    }
-  ]
-}
-
-The file must contain valid JSON only, with no markdown fences. If a field is unknown, use an empty string.
-Don't paste the JSON into the chat. Just give me the download link. If you can't create files, reply with only the JSON instead.`;
-}
-
-function parseTripRecords(response: string) {
-  try {
-    const parsed = extractJson(response);
-    const source = Array.isArray(parsed) ? parsed : parsed.records;
-    if (!Array.isArray(source)) return [];
-    const valid = new Set(["flight", "hotel", "rental", "training", "insurance", "other"]);
-    return source.map((item: any) => ({
-      category: valid.has(String(item.category)) ? String(item.category) : "other",
-      title: String(item.title || "").slice(0, 120),
-      provider: String(item.provider || "").slice(0, 120),
-      confirmationNumber: String(item.confirmationNumber || item.confirmation_number || "").slice(0, 120),
-      startAt: String(item.startAt || item.start_at || "").slice(0, 120),
-      endAt: String(item.endAt || item.end_at || "").slice(0, 120),
-      address: String(item.address || "").slice(0, 260),
-      phone: String(item.phone || "").slice(0, 80),
-      notes: String(item.notes || "").slice(0, 1200)
-    })).filter((item: any) => item.title);
-  } catch {
-    return [];
-  }
-}
-
 function Gallery({ photos, openViewer, reload }: { photos: AppState["photos"]; openViewer: (spot: string) => void; reload: () => Promise<void> }) {
   const [addOpen, setAddOpen] = useState(false);
   async function upload(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    await api("/api/photos", { method: "POST", body: new FormData(event.currentTarget) });
-    event.currentTarget.reset();
+    const form = event.currentTarget;
+    await api("/api/photos", { method: "POST", body: new FormData(form) });
+    form.reset();
     await reload();
     setAddOpen(false);
   }
@@ -1099,27 +1011,26 @@ function SettingsForm({ settings, onSubmit }: { settings: Settings; onSubmit: (f
     <form className="settings-grid" onSubmit={submit}>
       <label>Display name<input name="profileName" placeholder="Shown above your email in the menu" defaultValue={settings?.profile_name || ""} maxLength={80} /></label>
       <label>Trip name<input name="tripName" defaultValue={settings?.trip_name || ""} maxLength={120} /></label>
-      <AddressField label={<span>Home address <span className="help" title="Optional. It helps personalize the route map and itinerary context.">?</span></span>} name="home" defaultAddress={settings?.home_address || ""} defaultPlaceId={settings?.home_place_id || ""} defaultLat={settings?.home_lat} defaultLng={settings?.home_lng} />
-      <AddressField label="Training location" name="training" defaultAddress={settings?.training_location || ""} defaultPlaceId={settings?.training_place_id || ""} defaultLat={settings?.training_lat} defaultLng={settings?.training_lng} />
+      <AddressField label={<span>Home address <span className="help" title="Optional. It helps personalize the route map and itinerary context.">?</span></span>} name="home" defaultAddress={settings?.home_address || ""} defaultPlaceId={settings?.home_place_id || ""} />
+      <AddressField label="Training location" name="training" defaultAddress={settings?.training_location || ""} defaultPlaceId={settings?.training_place_id || ""} />
       <input type="hidden" name="theme" value={settings?.theme || "light"} />
       <button className="btn primary">Save settings</button>
     </form>
   );
 }
 
-function AddressField({ label, name, defaultAddress, defaultPlaceId, defaultLat, defaultLng }: { label: React.ReactNode; name: "home" | "training"; defaultAddress: string; defaultPlaceId: string; defaultLat?: number; defaultLng?: number }) {
+// Only the address text and Google's place id are kept; coordinates are deliberately never stored.
+function AddressField({ label, name, defaultAddress, defaultPlaceId }: { label: React.ReactNode; name: "home" | "training"; defaultAddress: string; defaultPlaceId: string }) {
   const [query, setQuery] = useState(defaultAddress);
-  const [place, setPlace] = useState({ placeId: defaultPlaceId, lat: defaultLat ?? "", lng: defaultLng ?? "" });
-  async function choose(placeId: string) {
-    const details = await api("/api/places/details", { method: "POST", body: JSON.stringify({ placeId }) });
+  const [placeId, setPlaceId] = useState(defaultPlaceId);
+  async function choose(picked: string) {
+    const details = await api("/api/places/details", { method: "POST", body: JSON.stringify({ placeId: picked }) });
     setQuery(details.address);
-    setPlace({ placeId: details.placeId, lat: details.lat ?? "", lng: details.lng ?? "" });
+    setPlaceId(details.placeId);
   }
   return (
     <label className="address-field">{label}<PlaceInput name={name === "home" ? "homeAddress" : "trainingLocation"} value={query} onChange={setQuery} onPick={suggestion => choose(suggestion.placeId)} />
-      <input type="hidden" name={`${name}PlaceId`} value={place.placeId} />
-      <input type="hidden" name={`${name}Lat`} value={place.lat} />
-      <input type="hidden" name={`${name}Lng`} value={place.lng} />
+      <input type="hidden" name={`${name}PlaceId`} value={placeId} />
     </label>
   );
 }
@@ -1160,11 +1071,7 @@ function settingPayload(settings: Settings) {
     tripName: settings?.trip_name || "",
     homeAddress: settings?.home_address || "",
     homePlaceId: settings?.home_place_id || "",
-    homeLat: settings?.home_lat ?? null,
-    homeLng: settings?.home_lng ?? null,
     trainingLocation: settings?.training_location || "",
-    trainingPlaceId: settings?.training_place_id || "",
-    trainingLat: settings?.training_lat ?? null,
-    trainingLng: settings?.training_lng ?? null
+    trainingPlaceId: settings?.training_place_id || ""
   };
 }

@@ -1,5 +1,6 @@
 import { requireUser } from "@/lib/auth";
-import { asString, jsonError } from "@/lib/validation";
+import { withAudit } from "@/lib/audit";
+import { asString, errorResponse, fail } from "@/lib/validation";
 
 function googleReferer(request: Request) {
   const referer = request.headers.get("referer");
@@ -12,9 +13,9 @@ function googleReferer(request: Request) {
   return host ? `https://${host}/` : "http://localhost:3000/";
 }
 
-export async function POST(request: Request) {
+export const POST = withAudit("places.search", async (request, ctx) => {
   try {
-    await requireUser();
+    ctx.user = await requireUser();
     const key = process.env.GOOGLE_MAPS_API_KEY?.trim();
     if (!key) return Response.json({ suggestions: [] });
     const body = await request.json();
@@ -32,7 +33,7 @@ export async function POST(request: Request) {
     });
     if (!response.ok) {
       console.warn("Google Places autocomplete failed", response.status, await response.text());
-      throw new Error(`Google Places lookup failed (${response.status})`);
+      fail("Address search is unavailable right now", 502);
     }
     const data = await response.json();
     return Response.json({
@@ -42,6 +43,6 @@ export async function POST(request: Request) {
       })).filter((entry: any) => entry.placeId && entry.text)
     });
   } catch (error) {
-    return jsonError(error instanceof Error ? error.message : "Could not search addresses", 400);
+    return errorResponse(error, "Could not search addresses");
   }
-}
+});

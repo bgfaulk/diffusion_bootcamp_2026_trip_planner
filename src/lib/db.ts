@@ -30,12 +30,15 @@ export function hasDatabaseUrl() {
   );
 }
 
+// Neon's HTTP driver opens a fresh connection per statement, so a session-level advisory lock taken in
+// one statement is gone before the next one runs. A single transaction fixes both problems at once: the
+// transaction-scoped lock really serializes concurrent cold starts, and 14 round trips become one.
 export async function ensureSchema() {
   if (schemaReady) return;
   const sql = getSql();
-  await sql`SELECT pg_advisory_lock(2026092601)`;
-  try {
-    await sql`
+  await sql.transaction([
+    sql`SELECT pg_advisory_xact_lock(2026092601)`,
+    sql`
       CREATE TABLE IF NOT EXISTS users (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         email TEXT UNIQUE NOT NULL,
@@ -44,16 +47,16 @@ export async function ensureSchema() {
         created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
       )
-    `;
-    await sql`
+    `,
+    sql`
       CREATE TABLE IF NOT EXISTS sessions (
         token_hash TEXT PRIMARY KEY,
         user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         expires_at TIMESTAMPTZ NOT NULL,
         created_at TIMESTAMPTZ NOT NULL DEFAULT now()
       )
-    `;
-    await sql`
+    `,
+    sql`
       CREATE TABLE IF NOT EXISTS settings (
         user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
         profile_name TEXT,
@@ -69,10 +72,11 @@ export async function ensureSchema() {
         theme TEXT NOT NULL DEFAULT 'light',
         updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
       )
-    `;
-    await sql`ALTER TABLE settings ADD COLUMN IF NOT EXISTS planning_mode TEXT`;
-    await sql`ALTER TABLE settings ADD COLUMN IF NOT EXISTS planning_answers TEXT`;
-    await sql`
+    `,
+    sql`ALTER TABLE settings ADD COLUMN IF NOT EXISTS planning_mode TEXT`,
+    sql`ALTER TABLE settings ADD COLUMN IF NOT EXISTS planning_answers TEXT`,
+    sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS suspended_at TIMESTAMPTZ`,
+    sql`
       CREATE TABLE IF NOT EXISTS list_items (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -83,8 +87,8 @@ export async function ensureSchema() {
         created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
       )
-    `;
-    await sql`
+    `,
+    sql`
       CREATE TABLE IF NOT EXISTS photos (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -94,8 +98,8 @@ export async function ensureSchema() {
         image_base64 TEXT NOT NULL,
         created_at TIMESTAMPTZ NOT NULL DEFAULT now()
       )
-    `;
-    await sql`
+    `,
+    sql`
       CREATE TABLE IF NOT EXISTS itinerary (
         user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
         instructions TEXT,
@@ -103,8 +107,8 @@ export async function ensureSchema() {
         saved_plan TEXT,
         updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
       )
-    `;
-    await sql`
+    `,
+    sql`
       CREATE TABLE IF NOT EXISTS trip_info (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -120,8 +124,8 @@ export async function ensureSchema() {
         created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
       )
-    `;
-    await sql`
+    `,
+    sql`
       CREATE TABLE IF NOT EXISTS trip_documents (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -131,26 +135,39 @@ export async function ensureSchema() {
         file_base64 TEXT NOT NULL,
         created_at TIMESTAMPTZ NOT NULL DEFAULT now()
       )
-    `;
-    await sql`
-      CREATE TABLE IF NOT EXISTS trip_import (
-        user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-        instructions TEXT,
-        response TEXT,
-        updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    `,
+    // The bookings-only ChatGPT import is gone; its table only ever held draft prompt text.
+    sql`DROP TABLE IF EXISTS trip_import`,
+    // One row per API request (see src/lib/audit.ts). No FK on user_id: rows outlive deleted accounts.
+    sql`
+      CREATE TABLE IF NOT EXISTS audit_log (
+        id BIGSERIAL PRIMARY KEY,
+        at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        event TEXT NOT NULL,
+        method TEXT,
+        route TEXT,
+        status INTEGER,
+        ms INTEGER,
+        user_id UUID,
+        email TEXT,
+        target TEXT,
+        ip TEXT,
+        user_agent TEXT,
+        detail TEXT
       )
-    `;
-    schemaReady = true;
-  } finally {
-    await sql`SELECT pg_advisory_unlock(2026092601)`;
-  }
+    `,
+    sql`CREATE INDEX IF NOT EXISTS audit_log_at_idx ON audit_log (at DESC)`,
+    sql`CREATE INDEX IF NOT EXISTS audit_log_user_idx ON audit_log (user_id, at DESC)`
+  ]);
+  schemaReady = true;
 }
 
 export async function seedStarterItems(userId: string) {
   const sql = getSql();
   const existing = await sql`SELECT COUNT(*)::int AS count FROM list_items WHERE user_id = ${userId}`;
   if (Number(existing[0]?.count || 0) > 0) return;
-  const starter: Record<PageKey, string[]> = {
+  // No "gallery" entries: the Photo Route page shows its fixed stops, never list items.
+  const starter: Partial<Record<PageKey, string[]>> = {
     prechecks: [
       "Confirm traveler names match government IDs",
       "Add TSA PreCheck or Known Traveler Numbers if available",
@@ -178,7 +195,6 @@ export async function seedStarterItems(userId: string) {
       "Half Moon Bay coast drive",
       "Filoli Historic House and Garden"
     ],
-    gallery: ["Golden Gate Overlook", "Ferry Building", "North Beach", "Mission District", "Favorite surprise"],
     return: [
       "Check out on time",
       "Room sweep: chargers, closet, bathroom, safe",
