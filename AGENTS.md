@@ -23,6 +23,12 @@ conventions that are easy to break.
   them back with `decryptText` or `decryptRow`.
 - Throw `AppError` (via `fail`) for user-facing messages and let `errorResponse` shape the reply. Never
   return stack traces or database errors.
+- **API changes.** Tabs stay open across deploys, so an old bundle may call a new route. Prefer additive
+  changes: new optional fields, new routes, tolerant parsing of old request shapes. If a shape must change,
+  make the route return a clear 4xx for the old shape rather than silently doing the wrong thing. Every
+  `/api` response carries `X-App-Build` (set in `next.config.ts`) and `src/lib/client.ts` compares it with
+  the bundle's own build: the first mismatch shows a "Reload" toast, and any failure from a newer build
+  tells the person to reload instead of showing the raw error.
 - Schema changes go in `ensureSchema()` in `src/lib/db.ts` as idempotent `CREATE TABLE IF NOT EXISTS` or
   `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` statements. Add new tables to `appTables` in `src/lib/admin.ts`
   so the size chart sees them, and to `pruneAuditLog` if they need retention.
