@@ -128,6 +128,17 @@ const pageLabels: Record<string, string> = {
 
 const listPages = ["prechecks", "packing", "departure", "return"];
 
+// Sidebar groups, by when the pages matter. Overview sits above them and Organizer (owner only) below.
+const navGroups: { key: string; label: string; pages: string[] }[] = [
+  { key: "ready", label: "Get ready", pages: ["prechecks", "packing"] },
+  { key: "travel", label: "Travel days", pages: ["departure", "return"] },
+  { key: "trip", label: "On the trip", pages: ["explore", "tripInfo", "gallery"] }
+];
+const navGroupsKey = "trip-nav-groups";
+function storedClosedGroups() {
+  try { const raw = JSON.parse(localStorage.getItem(navGroupsKey) || "[]"); return new Set<string>(Array.isArray(raw) ? raw.filter(k => typeof k === "string") : []); } catch { return new Set<string>(); }
+}
+
 export default function Home() {
   const [data, setData] = useState<AppState>(emptyAppState);
   const [page, setPageState] = useState("overview");
@@ -234,6 +245,7 @@ export default function Home() {
     const effects = storedFx();
     applyFx(effects); setFx(effects);
     try { setCollapsed(localStorage.getItem("trip-sidebar") === "collapsed"); } catch {}
+    setClosedGroups(storedClosedGroups());
     // A device that signed in before starts the ABC bumper right away, while the data loads behind it.
     // If the session turns out to be gone, the bumper gives way to the login screen.
     const hinted = sessionHint();
@@ -333,6 +345,31 @@ export default function Home() {
     try { localStorage.setItem("trip-sidebar", next ? "collapsed" : "open"); } catch {}
   }
 
+  // Folded nav groups are a per-device preference. Landing on a page inside a folded group unfolds it.
+  const [closedGroups, setClosedGroups] = useState<Set<string>>(new Set());
+  function setGroupClosed(key: string, closed: boolean) {
+    setClosedGroups(current => {
+      if (current.has(key) === closed) return current;
+      const next = new Set(current);
+      if (closed) next.add(key); else next.delete(key);
+      try { localStorage.setItem(navGroupsKey, JSON.stringify([...next])); } catch {}
+      return next;
+    });
+  }
+  useEffect(() => {
+    const group = navGroups.find(g => g.pages.includes(page));
+    if (group) setGroupClosed(group.key, false);
+  }, [page]);
+  function navButton(key: string) {
+    return (
+      <button key={key} className={page === key ? "active" : ""} onClick={() => setPage(key)} title={compact ? pageLabels[key] : undefined} aria-label={compact ? pageLabels[key] : undefined} aria-current={page === key ? "page" : undefined}>
+        <PageIcon page={key} />
+        {!compact && <span className="nav-label">{pageLabels[key]}</span>}
+        {remaining[key] > 0 && <span className="nav-count" aria-label={`${remaining[key]} left`}>{remaining[key]}</span>}
+      </button>
+    );
+  }
+
   // Weather for where the person actually is (browser location, rounded to ~100 m), falling back to the
   // training location until they allow it or if they decline.
   const [geo, setGeo] = useState<string | null>(null);
@@ -413,13 +450,26 @@ export default function Home() {
           </button>
         </div>
         <nav className="primary-nav" aria-label="Pages">
-          {["overview", "prechecks", "packing", "departure", "explore", "tripInfo", "gallery", "return", ...(data.user.owner ? ["organizer"] : [])].map(key => (
-            <button key={key} className={page === key ? "active" : ""} onClick={() => setPage(key)} title={compact ? pageLabels[key] : undefined} aria-label={compact ? pageLabels[key] : undefined} aria-current={page === key ? "page" : undefined}>
-              <PageIcon page={key} />
-              {!compact && <span className="nav-label">{pageLabels[key]}</span>}
-              {remaining[key] > 0 && <span className="nav-count" aria-label={`${remaining[key]} left`}>{remaining[key]}</span>}
-            </button>
-          ))}
+          {navButton("overview")}
+          {navGroups.map(group => {
+            // Phones show the flat rail and the icon-only sidebar can't label a fold, so both always show every page.
+            const open = mobile || compact || !closedGroups.has(group.key);
+            const left = group.pages.reduce((sum, key) => sum + (remaining[key] || 0), 0);
+            return (
+              <div key={group.key} className="nav-group">
+                {!mobile && (compact
+                  ? <span className="nav-group-rule" aria-hidden="true" />
+                  : <button type="button" className="nav-group-head" aria-expanded={open} onClick={() => setGroupClosed(group.key, open)}>
+                      <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 7.5l5 5 5-5" /></svg>
+                      <span className="nav-label">{group.label}</span>
+                      {!open && left > 0 && <span className="nav-count" aria-label={`${left} left`}>{left}</span>}
+                    </button>)}
+                {open && group.pages.map(navButton)}
+              </div>
+            );
+          })}
+          {data.user.owner && (compact ? <span className="nav-group-rule" aria-hidden="true" /> : null)}
+          {data.user.owner && navButton("organizer")}
         </nav>
         <WeatherPanel weather={weather} collapsed={compact} />
         <div className="profile" ref={profileRef}>

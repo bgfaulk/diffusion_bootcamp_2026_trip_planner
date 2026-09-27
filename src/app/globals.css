@@ -75,7 +75,8 @@ h2 { font-size: 24px; }
 }
 .brand { grid-row:1; position:relative; display: flex; align-items: center; gap: 12px; padding-right:34px; }
 .sidebar > .primary-nav { grid-row:2; }
-.sidebar > .weather { grid-row:3; align-self:start; max-height:100%; }
+/* A rule separates the forecast from the page list above it. */
+.sidebar > .weather { grid-row:3; align-self:start; max-height:100%; border-top:1px solid var(--line); padding-top:16px; }
 .sidebar > .profile { grid-row:4; align-self:end; }
 .sidebar > * { min-width:0; }
 .brand div { min-width:0; }
@@ -138,6 +139,16 @@ h2 { font-size: 24px; }
 .primary-nav button { display:flex; justify-content:space-between; align-items:center; gap:10px; }
 .nav-count { min-width:24px; padding:1px 8px; border-radius:999px; background:color-mix(in srgb, var(--accent) 14%, transparent); color:var(--accent-dark); font-size:12px; font-weight:850; text-align:center; }
 .primary-nav button.active .nav-count { background:rgba(255,255,255,.22); color:#fff; }
+/* Pages are grouped by when they matter (get ready, travel days, on the trip). Each group's heading folds its
+   pages away; a folded heading carries the group's remaining-item count. Overview and Organizer stand alone. */
+.nav-group { display:grid; gap:8px; }
+.nav-group + .nav-group, .nav-group + button, button + .nav-group { margin-top:4px; }
+.primary-nav .nav-group-head { min-height:28px; padding:2px 6px; border:0; border-radius:6px; background:none; color:var(--muted); font-size:11px; font-weight:850; letter-spacing:.08em; text-transform:uppercase; }
+.primary-nav .nav-group-head:hover, .primary-nav .nav-group-head:focus-visible { color:var(--ink); background:var(--soft); }
+.nav-group-head svg { flex:none; width:14px; height:14px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; transition:transform .15s ease; }
+.nav-group-head[aria-expanded="false"] svg { transform:rotate(-90deg); }
+.nav-group-head .nav-count { margin-left:auto; }
+.nav-group-rule { display:block; height:1px; margin:4px 8px; background:var(--line); }
 .profile { position: relative; display: grid; gap: 8px; }
 .profile-button { display: grid; grid-template-columns: 38px minmax(0,1fr) auto; gap: 10px; align-items: center; }
 .profile-button small { display:block; color: var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -497,6 +508,8 @@ a { color:var(--accent-dark); font-weight:800; }
   .profile-popover { left:auto; right:0; bottom:auto; top:calc(100% + 8px); width:min(280px, calc(100vw - 28px)); }
   .sidebar > .primary-nav { position:fixed; left:0; right:0; bottom:0; z-index:20; display:flex; gap:6px; padding:8px 10px calc(8px + env(safe-area-inset-bottom)); overflow-x:auto; overscroll-behavior-x:contain; scroll-snap-type:x proximity; -webkit-overflow-scrolling:touch; scrollbar-width:none; background:color-mix(in srgb, var(--panel) 94%, transparent); backdrop-filter:blur(14px); border-top:1px solid var(--line); box-shadow:0 -10px 30px rgba(29,37,40,.08); }
   .primary-nav::-webkit-scrollbar { display:none; }
+  /* The rail is one flat row: group wrappers dissolve and headings are not rendered on phones. */
+  .nav-group { display:contents; }
   .primary-nav button, .sidebar.collapsed .primary-nav button { flex:0 0 auto; position:relative; width:auto; min-width:76px; min-height:58px; flex-direction:column; justify-content:center; gap:4px; padding:6px 10px; border-radius:10px; scroll-snap-align:center; font-size:11px; }
   .primary-nav button .page-icon { width:22px; height:22px; }
   .nav-label { flex:none; text-align:center; white-space:nowrap; overflow-wrap:normal; }
@@ -717,6 +730,12 @@ a { color:var(--accent-dark); font-weight:800; }
 :root[data-theme="nirvana"] .primary-nav button.active::before { background:var(--cyan); box-shadow:0 0 10px var(--cyan); }
 :root[data-theme="nirvana"] .nav-count { min-width:26px; padding:1px 7px; font-size:.8rem; font-weight:400; letter-spacing:0; color:var(--cyan); background:rgba(0,229,255,.12); box-shadow:inset 0 0 0 1px var(--cyan-line); text-shadow:none; }
 :root[data-theme="nirvana"] .primary-nav button.active .nav-count { color:var(--void); background:var(--cyan); box-shadow:0 0 10px rgba(0,229,255,.5); }
+:root[data-theme="nirvana"] .primary-nav .nav-group-head { min-height:26px; padding:2px 6px; color:var(--cyan-dim); font-size:.65rem; letter-spacing:.2em; }
+:root[data-theme="nirvana"] .primary-nav .nav-group-head::before { display:none; }
+:root[data-theme="nirvana"] .primary-nav .nav-group-head:hover { color:var(--orange); background:none; }
+:root[data-theme="nirvana"] .nav-group-rule { background:var(--cyan-line); }
+:root[data-theme="nirvana"] .sidebar > .weather { border-top-color:var(--cyan-line); }
+:root[data-theme="nirvana"] .row-menu-button { min-height:32px; }
 :root[data-theme="nirvana"] .profile-button { background:rgba(0,229,255,.04); border:0; box-shadow:inset 0 0 0 1px var(--cyan-line); }
 :root[data-theme="nirvana"] .profile-button:hover { box-shadow:inset 0 0 0 1px var(--cyan); }
 :root[data-theme="nirvana"] .avatar { font-family:var(--display); color:var(--cyan); background:none; border:1px solid var(--cyan-dim); box-shadow:inset 0 0 10px rgba(0,229,255,.25); }
@@ -971,6 +990,13 @@ a { color:var(--accent-dark); font-weight:800; }
 .accounts tr.suspended td { opacity:.75; }
 .row-actions { display:flex; flex-wrap:wrap; gap:4px 12px; }
 .row-actions .link-button { padding:0; font-size:13px; }
+/* Per-row Actions menu (Organizer > Accounts). The list is position:fixed so the table's scroll box can't clip it. */
+.row-menu { display:inline-block; }
+.row-menu-button { display:inline-flex; align-items:center; gap:6px; min-height:34px; padding:5px 10px; font-size:13px; white-space:nowrap; }
+.row-menu-button svg { width:14px; height:14px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; transition:transform .15s ease; }
+.row-menu-button[aria-expanded="true"] svg { transform:rotate(180deg); }
+.row-menu-list { position:fixed; z-index:30; min-width:210px; }
+.row-menu-list button:disabled { opacity:.5; cursor:not-allowed; background:transparent; }
 .link-button.danger { color:var(--danger); }
 .link-button:disabled { opacity:.5; cursor:not-allowed; }
 .filter-row { display:flex; flex-wrap:wrap; gap:10px; align-items:end; }
