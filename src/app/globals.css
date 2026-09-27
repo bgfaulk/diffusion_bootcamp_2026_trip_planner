@@ -863,8 +863,13 @@ a { color:var(--accent-dark); font-weight:800; }
   .fact-table:not(.data-table) tr:last-child { border-bottom:0; }
   .fact-table:not(.data-table) td { display:block; padding:1px 0; border:0; white-space:normal; }
   .fact-table:not(.data-table) td:empty { display:none; }
-  .organizer .page-header-row { flex-direction:column; align-items:stretch; }
+  .organizer .page-header-row.organizer-head { flex-direction:column; align-items:flex-start; gap:8px; } /* beats the desktop align-items rule below */
+  .organizer .page-header-row > * { flex:0 0 auto; }
   .pill-row { justify-content:flex-start; }
+  /* Tab strips scroll sideways in one row instead of wrapping; the active tab is kept in view. */
+  .tabs { flex-wrap:nowrap; overflow-x:auto; scroll-snap-type:x proximity; scrollbar-width:none; -webkit-overflow-scrolling:touch; }
+  .tabs::-webkit-scrollbar { display:none; }
+  .tabs button { scroll-snap-align:start; }
   .trip-bar-summary { flex-direction:column; align-items:stretch; gap:8px; }
   .trip-bar-stats { flex-wrap:wrap; overflow:visible; }
   .trip-stat { padding:4px 12px; }
@@ -906,7 +911,8 @@ a { color:var(--accent-dark); font-weight:800; }
 .login-help { margin:14px 0 0; font-size:14px; }
 
 /* ---------- Organizer page ---------- */
-.organizer .page-header-row { align-items:start; flex-wrap:wrap; }
+.organizer .page-header-row { align-items:center; flex-wrap:wrap; }
+.organizer-head .eyebrow { margin:0; font-size:14px; }
 .pill-row { display:flex; flex-wrap:wrap; gap:8px; justify-content:flex-end; }
 .window-pill { position:relative; display:inline-flex; align-items:stretch; border:1px solid var(--line); border-radius:7px; background:var(--panel); box-shadow:var(--shadow); }
 .window-pill > button { border:0; border-right:1px solid var(--line); background:transparent; color:var(--ink); font-weight:800; font-size:13px; display:inline-flex; align-items:center; gap:6px; padding:8px 10px; }
