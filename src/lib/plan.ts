@@ -215,7 +215,7 @@ function emailInstructions(answers: WizardAnswers) {
   const inbox = answers.bookingEmail ? ` (${answers.bookingEmail})` : "";
   if (answers.emailAccess === "connected") {
     return `Search my email${inbox} for this trip's confirmations: flights, hotel, rental car, bootcamp registration, and travel insurance. Put each one in "records".
-Before you search, check that you can actually read that inbox. If you can't, don't guess: stop and walk me step by step through connecting that email account to ChatGPT, then continue once it's connected. If some bookings aren't in my email, tell me which ones are missing.${hints}`;
+Before you search, check that you can actually read that inbox. If you can't (for example this is the phone app, or the Gmail connector isn't available on this plan), don't guess and don't recommend plugins, GPTs, or paid add-ons: say so in one sentence and ask me to paste my confirmation emails into this chat instead, then continue with what I paste. If some bookings aren't in my email, tell me which ones are missing.${hints}`;
   }
   if (answers.emailAccess === "paste") {
     return `I'll paste my confirmation emails after this message. Pull every flight, hotel, rental car, bootcamp, and insurance detail from them into "records". Wait for my pasted emails before answering.${hints}`;

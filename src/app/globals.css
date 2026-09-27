@@ -313,6 +313,11 @@ a { color:var(--accent-dark); font-weight:800; }
 .option-list { display:grid; gap:10px; }
 .option { display:grid; gap:4px; padding:14px 16px; text-align:left; color:var(--ink); background:var(--soft); border:2px solid var(--line); border-radius:var(--radius); }
 .option span { color:var(--muted); }
+.option-badge { display:inline-block; margin-left:8px; padding:2px 8px; border-radius:999px; background:var(--accent); color:#fff; font-size:11px; font-style:normal; font-weight:800; letter-spacing:.04em; text-transform:uppercase; vertical-align:middle; }
+.how-to { display:grid; gap:10px; margin:0; padding-left:22px; }
+.how-to li { line-height:1.45; }
+.callout.compact { display:grid; gap:10px; padding:14px 16px; }
+.callout.compact p { margin:0; font-weight:700; }
 .option.selected { border-color:var(--accent); background:color-mix(in srgb, var(--accent) 10%, var(--panel)); }
 .chip-row { display:flex; flex-wrap:wrap; gap:8px; }
 .chip { min-height:38px; padding:7px 14px; border:1px solid var(--line); border-radius:999px; background:var(--panel); color:var(--ink); font-weight:750; }
@@ -407,6 +412,12 @@ a { color:var(--accent-dark); font-weight:800; }
   .settings-grid, .trip-form, .document-form, .choice-grid, .wizard-grid { grid-template-columns:1fr; }
   .choice-card, .wizard-card { padding:20px; }
   .wizard-page { padding:16px; }
+  /* Step bars stay on one row on phones; only the current step keeps its label (the others still read to screen readers). */
+  .wizard-steps { flex-wrap:nowrap; }
+  .wizard-steps li { flex:1 1 0; min-width:0; }
+  .wizard-steps li > * { font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .wizard-steps li:not(.current) > * { text-indent:-9999px; }
+  .wizard-steps li.current > * { overflow:visible; } /* its neighbors' labels are hidden, so it may run past its own bar */
   .review-list div { grid-template-columns:1fr; gap:2px; }
   .trip-form.compact { grid-template-columns:1fr; }
   .document-row { align-items:stretch; flex-direction:column; }

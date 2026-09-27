@@ -427,6 +427,12 @@ export function SetupWizard({ mode, initial, settings, bookings, places, reload,
   const step = Math.min(answers.step, steps.length - 1);
   const furthest = Math.min(Math.max(answers.furthest || 0, step), steps.length - 1);
   const stepKey = steps[step].key;
+  // Phones and tablets can't use ChatGPT's email connector, so the paste path is preselected there. It's a
+  // default, not a lock: the other options stay one tap away.
+  useEffect(() => {
+    if (stepKey !== "email" || answers.emailAccess) return;
+    if (matchMedia("(pointer: coarse)").matches) setAnswers(current => current.emailAccess ? current : { ...current, emailAccess: "paste" });
+  }, [stepKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function set<K extends keyof WizardAnswers>(key: K, value: WizardAnswers[K]) {
     setAnswers(current => ({ ...current, [key]: value }));
@@ -584,16 +590,16 @@ export function SetupWizard({ mode, initial, settings, bookings, places, reload,
 
         {stepKey === "email" && (
           <div className="stack">
-            <h1>Can ChatGPT look through your email?</h1>
-            <p className="muted">It can find your flight, hotel, rental car, training, and insurance confirmations and fill in Trip Information for you.</p>
+            <h1>How should ChatGPT get your bookings?</h1>
+            <p className="muted">Your flight, hotel, rental car, training, and insurance confirmations fill in Trip Information for you.</p>
             <div className="option-list" role="radiogroup">
               {([
-                ["connected", "Yes, search my email", "ChatGPT checks that it can read your inbox first, and walks you through connecting it if it can't."],
-                ["paste", "I'll paste the emails into ChatGPT", "After ChatGPT opens, paste your confirmation emails into the same chat."],
-                ["skip", "Skip bookings for now", "Just plan the trip. You can add bookings later."]
-              ] as [EmailAccess, string, string][]).map(([value, title, detail]) => (
+                ["paste", "I'll paste my confirmation emails", "Works everywhere, including the ChatGPT app on your phone. After ChatGPT opens, copy each confirmation email into the same chat.", "Recommended"],
+                ["connected", "Let ChatGPT search my email", "Only works with a paid ChatGPT plan (Plus or Team) that has the Gmail connector turned on, and only from a computer. The phone app can't read email.", ""],
+                ["skip", "Skip bookings for now", "Just plan the trip. You can add bookings later on the Trip Information page.", ""]
+              ] as [EmailAccess, string, string, string][]).map(([value, title, detail, badge]) => (
                 <button type="button" key={value} role="radio" aria-checked={answers.emailAccess === value} className={`option ${answers.emailAccess === value ? "selected" : ""}`} onClick={() => set("emailAccess", value)}>
-                  <strong>{title}</strong><span>{detail}</span>
+                  <strong>{title}{badge && <em className="option-badge">{badge}</em>}</strong><span>{detail}</span>
                 </button>
               ))}
             </div>
@@ -637,15 +643,27 @@ export function SetupWizard({ mode, initial, settings, bookings, places, reload,
         {stepKey === "chatgpt" && (
           <div className="stack">
             <h1>Send it to ChatGPT</h1>
-            <p className="muted">
-              We've put everything into one prompt. Open ChatGPT and send it. When it's done, ChatGPT gives you a trip-plan.json file to download.
-              {answers.emailAccess === "connected" && " If ChatGPT can't reach your inbox, it will walk you through connecting it."}
-              {answers.emailAccess === "paste" && " Then paste your confirmation emails into the same chat."}
-            </p>
+            <p className="muted">We've put everything into one prompt. When ChatGPT is done it gives you a trip-plan.json file to download; you'll upload that on the next step.</p>
             <div className="button-row">
               <button className="btn primary" onClick={() => window.open(`https://chatgpt.com/?q=${encodeURIComponent(prompt)}`, "_blank")}>Open ChatGPT with prompt</button>
               <button className="btn" onClick={copyPrompt}>{copied ? "Copied" : "Copy prompt"}</button>
             </div>
+            <ol className="how-to">
+              <li><strong>Send the prompt.</strong> "Open ChatGPT" opens the ChatGPT website with it filled in. To use the ChatGPT app instead, tap "Copy prompt" and paste it there.</li>
+              {answers.emailAccess === "paste" && (
+                <li><strong>Paste your confirmation emails.</strong> In your email app, search for the airline, hotel, rental company, and bootcamp, open each confirmation, select all of the message, copy it, and paste it into the same ChatGPT chat. One email per message is fine.</li>
+              )}
+              {answers.emailAccess === "connected" && (
+                <li><strong>Let it search.</strong> ChatGPT reads your inbox through the Gmail connector. If it says it can't, don't buy anything it suggests: switch to pasting instead.</li>
+              )}
+              <li><strong>Answer its questions</strong>, then download the trip-plan.json file it makes.</li>
+            </ol>
+            {answers.emailAccess === "connected" && (
+              <div className="callout compact">
+                <p>Couldn't read your email, or you're on your phone?</p>
+                <button type="button" className="btn" onClick={() => set("emailAccess", "paste")}>Switch to pasting my emails</button>
+              </div>
+            )}
             <details className="prompt-preview"><summary>See the prompt</summary><pre>{prompt}</pre></details>
           </div>
         )}
@@ -771,6 +789,19 @@ export function AbcLoader({ done, failed, onFinish, onFailed, messages = loaderM
     if (!ready) { primeChime(); setReady(chimeReady()); return; } // unlock, keep it on
     setSoundPreference(false);
   }
+  // Browsers block audio until the page gets a tap or key press, so a cold load with a remembered session
+  // starts the loader silent. When the first tap lands during the loader, unlock audio and restart the letters
+  // from the top so a full A-B-C plays with sound instead of whatever notes were left in the cycle.
+  useEffect(() => {
+    if (!sound || ready) return;
+    function unlock() {
+      primeChime();
+      // resume() settles asynchronously; check just after.
+      setTimeout(() => { if (chimeReady()) { setReady(true); setBeat(0); } }, 60);
+    }
+    document.addEventListener("pointerdown", unlock);
+    return () => document.removeEventListener("pointerdown", unlock);
+  }, [sound, ready]);
   useEffect(() => {
     // Space bar flips sound on/off (a key press also counts as the gesture that unlocks audio).
     function onKey(event: KeyboardEvent) {
@@ -783,7 +814,7 @@ export function AbcLoader({ done, failed, onFinish, onFailed, messages = loaderM
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
-  const soundLabel = !sound ? "Sound off" : ready ? "Sound on" : "Sound on · tap to allow";
+  const soundLabel = !sound ? "Sound off" : ready ? "Sound on" : "Tap anywhere for sound";
 
   return (
     <main className="abc-stage" role="status" aria-live="polite">
