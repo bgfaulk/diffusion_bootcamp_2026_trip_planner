@@ -127,7 +127,7 @@ h2 { font-size: 24px; }
 .abc-logo.small { gap:4px; padding:0; }
 .abc-logo.small .abc-letters { gap:5px; }
 .abc-logo.small .abc-letter { font-size:26px; }
-.abc-logo.small .abc-letters.flash { transform:scale(1.04); }
+.abc-logo.small .abc-letters.flash { animation:none; transform:scale(1.04); }
 .abc-logo.small .abc-feathers { gap:3px; }
 .abc-logo.small .abc-feathers i { width:9px; height:3px; }
 .primary-nav { display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: 8px; }
@@ -497,7 +497,9 @@ a { color:var(--accent-dark); font-weight:800; }
 /* NBC-style chime loader. Always dark, like a broadcast bumper. */
 .abc-stage { position:fixed; inset:0; z-index:200; display:grid; place-content:center; justify-items:center; gap:26px; padding:20px; background:radial-gradient(circle at 50% 42%, #1b2430, #07090c 70%); color:#fff; }
 .abc-letters { display:flex; gap:clamp(14px, 4vw, 44px); transition:transform .35s ease; }
-.abc-letters.flash { transform:scale(1.07); }
+/* On the flash beat the letters and the word under them pop together: a quick swell that settles a little larger. */
+.abc-letters.flash, .abc-letters.flash + .abc-word { animation:abc-pop .55s cubic-bezier(.2, 1.4, .4, 1) forwards; }
+@keyframes abc-pop { 0% { transform:scale(1); } 40% { transform:scale(1.16); } 100% { transform:scale(1.07); } }
 .abc-letter { font:900 clamp(96px, 20vw, 220px)/1 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; color:rgba(255,255,255,.07); transition:color .3s ease, text-shadow .3s ease; }
 .abc-a { --glow:#fcb711; }
 .abc-b { --glow:#f37021; }
@@ -525,7 +527,7 @@ a { color:var(--accent-dark); font-weight:800; }
   .progress-star, .trip-stat.stars strong, .trip-stat.rank .rank-row, .primary-nav button:hover .page-icon, .primary-nav button:focus-visible .page-icon { animation:none; transition:none; }
   .abc-sound.attention { animation:none; }
   .abc-letters, .abc-letter, .abc-feathers i, .abc-word span { transition:none; }
-  .abc-letters.flash { transform:none; }
+  .abc-letters.flash, .abc-letters.flash + .abc-word { animation:none; transform:none; }
 }
 
 /* Phones: the sidebar becomes a slim top bar (brand + avatar) and the primary nav a bottom rail that scrolls
