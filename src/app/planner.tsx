@@ -16,6 +16,7 @@ import { useWeather, WeatherPanel } from "./weather";
 import { IdleWarning, useIdleTimeout } from "./idle-timeout";
 import { notify } from "./toast";
 import { photoSpots } from "@/lib/photo-spots";
+import { formatBytes, MAX_PHOTO_EDGE, preparePhoto, type PreparedPhoto } from "@/lib/image";
 import { applyFx, applyTheme, storedFx, storedTheme, THEMES, themeLabels, type Theme } from "@/lib/theme";
 import { buildTripModel, countdown, dayKey, daysBetween, fmtDay, fmtMinutes, fmtShort, keyToDate, parseItinerary, parseWhen, type DayEvent, type ParsedPlan, type TimedBooking, type TripModel } from "@/lib/trip-time";
 
@@ -437,7 +438,7 @@ export default function Home() {
       </main>
 
       {itineraryOpen && <ItineraryModal items={data.items.filter(item => item.page === "explore")} itinerary={data.itinerary} answers={answers} hasTripData={Boolean(data.itinerary?.saved_plan) || data.tripInfo.length > 0} onClose={() => setItineraryOpen(false)} reload={load} />}
-      {viewer && <PhotoViewer spot={viewer} photos={data.photos} onClose={() => setViewer(null)} />}
+      {viewer && <PhotoViewer spot={viewer} photos={data.photos} onClose={() => setViewer(null)} onDeleted={load} />}
     </div></>
   );
 }
@@ -1049,43 +1050,155 @@ function FormModal({ title, eyebrow, onClose, children }: { title: string; eyebr
 
 function Gallery({ photos, openViewer, reload }: { photos: AppState["photos"]; openViewer: (spot: string) => void; reload: () => Promise<void> }) {
   const [addOpen, setAddOpen] = useState(false);
+  const [prepared, setPrepared] = useState<PreparedPhoto | null>(null);
+  const [preparing, setPreparing] = useState(false);
+  const [photoError, setPhotoError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const previewUrl = useMemo(() => (prepared ? URL.createObjectURL(prepared.file) : ""), [prepared]);
+  useEffect(() => () => { if (previewUrl) URL.revokeObjectURL(previewUrl); }, [previewUrl]);
+
+  function closeAdd() { setAddOpen(false); setPrepared(null); setPhotoError(""); }
+  async function choose(file: File | undefined) {
+    setPrepared(null); setPhotoError("");
+    if (!file) return;
+    setPreparing(true);
+    try { setPrepared(await preparePhoto(file)); }
+    catch (err) { setPhotoError(err instanceof Error ? err.message : "Couldn't read that photo"); }
+    finally { setPreparing(false); }
+  }
   async function upload(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!prepared) return setPhotoError("Choose a photo first");
     const form = event.currentTarget;
+    const body = new FormData();
+    body.set("spot", String(new FormData(form).get("spot") || ""));
+    body.set("caption", String(new FormData(form).get("caption") || ""));
+    body.set("photo", prepared.file, prepared.file.name);
+    setBusy(true);
     try {
-      await api("/api/photos", { method: "POST", body: new FormData(form) });
-      form.reset();
+      await api("/api/photos", { method: "POST", body });
       await reload();
-      setAddOpen(false);
+      closeAdd();
       notify.success("Photo saved");
     } catch (err) {
       notify.error(err, "Could not save that photo");
+    } finally {
+      setBusy(false);
     }
   }
+  const count = photoSpots.filter(([id]) => photos[id]).length;
   return (
     <section className="page active">
-      <header className="page-header page-header-row"><div><p className="eyebrow">Photo route</p><h1>Dotted memory map</h1></div><button className="btn primary" onClick={() => setAddOpen(true)}>+ Photo</button></header>
+      <header className="page-header page-header-row"><div><p className="eyebrow">Photo route</p><h1>Six stops, six photos</h1></div><button className="btn primary" onClick={() => setAddOpen(true)}>+ Photo</button></header>
+      <p className="muted">One photo per stop, {count} of {photoSpots.length} filled. Tap a stop to see its photo full size or delete it. Adding a photo to a filled stop replaces the old one.</p>
       {addOpen && (
-        <FormModal eyebrow="Photo route" title="Add a photo" onClose={() => setAddOpen(false)}>
+        <FormModal eyebrow="Photo route" title="Add a photo" onClose={closeAdd}>
           <form className="document-form in-modal" onSubmit={upload}>
-            <label>Stop<select name="spot" autoFocus>{photoSpots.map(([id, title]) => <option key={id} value={id}>{title}</option>)}</select></label>
+            <label>Stop<select name="spot" autoFocus>{photoSpots.map(([id, title]) => <option key={id} value={id}>{title}{photos[id] ? " (replaces current photo)" : ""}</option>)}</select></label>
             <label>Caption<input name="caption" placeholder="Caption" maxLength={240} /></label>
-            <label>Photo<input name="photo" type="file" accept="image/*" capture="environment" required /></label>
-            <div className="button-row"><button className="btn primary">Save photo</button></div>
+            <label>Photo<input name="photo" type="file" accept="image/*" capture="environment" required onChange={event => choose(event.target.files?.[0])} /></label>
+            <p className="muted">Big photos are shrunk to {MAX_PHOTO_EDGE}px on the long side before they're saved, so they don't fill up the database.</p>
+            {preparing && <p className="muted">Preparing photo...</p>}
+            {prepared && (
+              <div className="photo-preview">
+                <img src={previewUrl} alt="" />
+                <span>{prepared.width ? `${prepared.width} × ${prepared.height}, ` : ""}{formatBytes(prepared.file.size)}{prepared.shrunk ? " after shrinking" : ""}</span>
+              </div>
+            )}
+            {photoError && <p className="error">{photoError}</p>}
+            <div className="button-row"><button className="btn primary" disabled={busy || preparing || !prepared}>{busy ? "Saving..." : "Save photo"}</button></div>
           </form>
         </FormModal>
       )}
-      <div className="photo-route">
-        {photoSpots.map(([id, title, hint]) => <button key={id} className="photo-stop" onClick={() => openViewer(id)}><span className="photo-frame">{photos[id] ? <img src={photos[id].imageUrl} alt={title} /> : title}</span><span><strong>{title}</strong><small>{photos[id]?.caption || hint}</small></span></button>)}
-      </div>
+      <PhotoRoute photos={photos} openViewer={openViewer} />
     </section>
   );
 }
 
-function PhotoViewer({ spot, photos, onClose }: { spot: string; photos: AppState["photos"]; onClose: () => void }) {
+// The stops alternate left and right and a dotted path zig-zags between them: down the inner side of each
+// card, then diagonally across the gap to the next. The path is an SVG drawn from the cards' measured
+// positions, so it follows whatever height the cards end up with on any screen.
+function PhotoRoute({ photos, openViewer }: { photos: AppState["photos"]; openViewer: (spot: string) => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [geometry, setGeometry] = useState<{ width: number; height: number; points: string; markers: [number, number][] }>({ width: 0, height: 0, points: "", markers: [] });
+  useEffect(() => {
+    const root = ref.current;
+    if (!root) return;
+    function measure() {
+      if (!root) return;
+      const box = root.getBoundingClientRect();
+      const cards = [...root.querySelectorAll<HTMLElement>(".photo-stop")];
+      const inset = 14; // distance of the path from the card's inner edge
+      const pts: [number, number][] = [];
+      const markers: [number, number][] = [];
+      cards.forEach((card, index) => {
+        const r = card.getBoundingClientRect();
+        const x = index % 2 === 0 ? r.right - box.left + inset : r.left - box.left - inset;
+        const top = r.top - box.top, bottom = r.bottom - box.top;
+        pts.push([x, top + 10], [x, bottom - 10]);
+        markers.push([x, top + (bottom - top) / 2]);
+      });
+      setGeometry({ width: box.width, height: box.height, points: pts.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(" "), markers });
+    }
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(root);
+    root.querySelectorAll("img").forEach(img => img.addEventListener("load", measure));
+    return () => observer.disconnect();
+  }, [photos]);
+  return (
+    <div className="photo-route" ref={ref}>
+      <svg className="photo-path" width={geometry.width} height={geometry.height} viewBox={`0 0 ${geometry.width || 1} ${geometry.height || 1}`} aria-hidden="true">
+        {geometry.points && <polyline points={geometry.points} />}
+        {geometry.markers.map(([x, y], index) => <circle key={index} cx={x} cy={y} r={7} className={photos[photoSpots[index][0]] ? "filled" : ""} />)}
+      </svg>
+      {photoSpots.map(([id, title, hint]) => (
+        <button key={id} className="photo-stop" onClick={() => openViewer(id)}>
+          <span className="photo-frame">{photos[id] ? <img src={photos[id].imageUrl} alt={title} /> : title}</span>
+          <span><strong>{title}</strong><small>{photos[id]?.caption || hint}</small></span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function PhotoViewer({ spot, photos, onClose, onDeleted }: { spot: string; photos: AppState["photos"]; onClose: () => void; onDeleted: () => Promise<void> }) {
   const meta = photoSpots.find(([id]) => id === spot);
   const photo = photos[spot];
-  return <div className="modal-backdrop" onClick={onClose}><section className="viewer" onClick={event => event.stopPropagation()}><button className="modal-x" onClick={onClose}>×</button><h2>{meta?.[1] || "Photo"}</h2><p className="muted">{photo?.caption || meta?.[2]}</p><div className="viewer-media">{photo ? <img src={photo.imageUrl} alt={meta?.[1]} /> : meta?.[1]}</div></section></div>;
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  async function remove() {
+    if (!photo) return;
+    setBusy(true);
+    try {
+      await api(`/api/photos/${photo.id}`, { method: "DELETE" });
+      await onDeleted();
+      notify.success("Photo deleted");
+      onClose();
+    } catch (err) {
+      notify.error(err, "Could not delete that photo");
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <section className="viewer" onClick={event => event.stopPropagation()}>
+        <button className="modal-x" onClick={onClose}>×</button>
+        <h2>{meta?.[1] || "Photo"}</h2>
+        <p className="muted">{photo?.caption || meta?.[2]}</p>
+        <div className="viewer-media">{photo ? <img src={photo.imageUrl} alt={meta?.[1]} /> : meta?.[1]}</div>
+        {photo && !confirming && <div className="button-row"><button type="button" className="btn danger" onClick={() => setConfirming(true)}>Delete photo</button></div>}
+        {photo && confirming && (
+          <div className="button-row viewer-confirm">
+            <span>Delete this photo? This can't be undone.</span>
+            <button type="button" className="btn danger" disabled={busy} onClick={remove}>{busy ? "Deleting..." : "Yes, delete"}</button>
+            <button type="button" className="btn" disabled={busy} onClick={() => setConfirming(false)}>Keep it</button>
+          </div>
+        )}
+        {!photo && <p className="muted">No photo here yet. Use “+ Photo” on the route to add one.</p>}
+      </section>
+    </div>
+  );
 }
 
 function SettingsPage({ settings, saveSettings, reload }: { settings: Settings; saveSettings: (form: HTMLFormElement) => Promise<void>; reload: () => Promise<void> }) {

@@ -25,3 +25,16 @@ export const GET = withAudit<{ params: Promise<{ id: string }> }>("photos.view",
     return errorResponse(error, "Could not load photo");
   }
 });
+
+export const DELETE = withAudit<{ params: Promise<{ id: string }> }>("photos.delete", async (_request, ctx, context) => {
+  try {
+    const user = ctx.user = await requireUser();
+    const { id: rawId } = await context.params;
+    const id = ctx.target = requireString(rawId, "Photo id", 80);
+    const rows = await getSql()`DELETE FROM photos WHERE id = ${id} AND user_id = ${user.id} RETURNING id`;
+    if (!rows.length) fail("Photo not found", 404);
+    return Response.json({ ok: true });
+  } catch (error) {
+    return errorResponse(error, "Could not delete photo");
+  }
+});

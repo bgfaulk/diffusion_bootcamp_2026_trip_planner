@@ -3,6 +3,7 @@ import { withAudit } from "@/lib/audit";
 import { encryptText } from "@/lib/crypto";
 import { getSql } from "@/lib/db";
 import { photoSpotIds } from "@/lib/photo-spots";
+import { MAX_PHOTO_BYTES } from "@/lib/image";
 import { asString, errorResponse, fail } from "@/lib/validation";
 
 export const POST = withAudit("photos.add", async (request, ctx) => {
@@ -15,10 +16,14 @@ export const POST = withAudit("photos.add", async (request, ctx) => {
     const caption = encryptText(asString(form.get("caption"), 240));
     const file = form.get("photo");
     if (!(file instanceof File) || !file.type.startsWith("image/")) fail("Choose an image");
-    if (file.size > 5 * 1024 * 1024) fail("Image must be under 5 MB");
+    // The browser shrinks photos before upload (see lib/image.ts); this is the backstop.
+    if (file.size > MAX_PHOTO_BYTES) fail("That photo is too large (1.5 MB max). Try a smaller one.");
     ctx.detail = `${file.type} · ${Math.round(file.size / 1024)} KB`;
     const buffer = Buffer.from(await file.arrayBuffer());
-    await getSql()`
+    const sql = getSql();
+    // One photo per stop: a new upload replaces the old one instead of piling up rows behind it.
+    await sql`DELETE FROM photos WHERE user_id = ${user.id} AND spot = ${spot}`;
+    await sql`
       INSERT INTO photos (user_id, spot, caption, content_type, image_base64)
       VALUES (${user.id}, ${spot}, ${caption}, ${file.type}, ${encryptText(buffer.toString("base64"))})
     `;

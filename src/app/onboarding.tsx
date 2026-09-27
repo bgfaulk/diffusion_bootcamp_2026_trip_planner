@@ -116,15 +116,13 @@ export function LoginScreen({ onSignedIn, notice = "" }: { onSignedIn: () => Pro
   return (
     <main className="login-page">
       <section className="login-card">
-        <p className="eyebrow">ABC Diffusion Bootcamp Trip Planner</p>
-        <AbcMark />
         <h1>{heading}</h1>
         {notice && <p className="notice" role="status">{notice}</p>}
         {/* Honeypot: hidden from people and screen readers, so only bots fill it in. */}
         <label className="honeypot" aria-hidden="true">Website<input tabIndex={-1} autoComplete="off" value={website} onChange={event => setWebsite(event.target.value)} /></label>
         {step === "welcome" ? (
           <div className="stack">
-            <p className="muted">Planning the ABC Diffusion Bootcamp trip starts with an account. You&apos;ll need the invite code from the trip organizer.</p>
+            <p className="muted">Planning the ABC Fitness Diffusion Bootcamp trip starts with an account. You&apos;ll need the invite code from the trip organizer.</p>
             <label>Email<input id="username" name="username" type="email" maxLength={254} autoFocus autoComplete="username" value={email} onChange={event => setEmail(event.target.value)} /></label>
             <button type="button" className="btn primary" onClick={() => goTo("create")}>Create an account</button>
             <button type="button" className="btn" onClick={() => goTo("signin")}>I already have an account</button>
@@ -184,6 +182,7 @@ export function LoginScreen({ onSignedIn, notice = "" }: { onSignedIn: () => Pro
         )}
         {step === "forgot" && <button type="button" className="link-button" onClick={() => goTo("signin")}>Back to sign in</button>}
         {step === "reset" && <button className="link-button" onClick={() => { setResetToken(""); history.replaceState(null, "", location.pathname); goTo("signin"); }}>Back to sign in</button>}
+        <footer className="login-brand"><AbcMark /><p className="eyebrow">ABC Fitness Diffusion Bootcamp Trip Planner</p></footer>
       </section>
     </main>
   );
