@@ -68,17 +68,17 @@ export function StarCells({ owner }: { owner: boolean }) {
   const left = stars.remaining.map(entry => `${entry.label} ${entry.stars}`).join(" · ");
   return (
     <>
-      <span className="trip-stat-divider" aria-hidden="true" />
+      <i className="trip-stat-divider" aria-hidden="true" />
       <span className={burst ? "trip-stat stars burst" : "trip-stat stars"} title={`${stars.balance} of ${stars.max} stars you can earn`}><span className="eyebrow">Stars</span><strong><StarGlyph />{stars.balance}</strong></span>
       <span className="trip-stat" title={left ? `Still to earn: ${left}` : "Everything in your hands is done"}><span className="eyebrow">To 100%</span><strong>{stars.percent}%</strong></span>
-      <span className="trip-stat rank" title={owner ? "Everyone with stars, best first. The organizer isn't ranked." : "Everyone with stars, best first. Refreshes every few minutes."}><span className="eyebrow">Rank</span><RankTicker rows={leaderboard} /></span>
+      <span className="trip-stat rank" title={owner ? "Everyone with stars, best first. The organizer isn't ranked." : "Everyone with stars, best first. Refreshes every few minutes."}><span className="eyebrow">Rank</span><RankTicker rows={leaderboard} owner={owner} /></span>
     </>
   );
 }
 
 // Cycles through the leaderboard from first place, a few seconds each, with the viewer's own row
 // highlighted. Pauses while the tab is hidden, and stands still on the viewer's row under reduced motion.
-function RankTicker({ rows }: { rows: LeaderRow[] }) {
+function RankTicker({ rows, owner }: { rows: LeaderRow[]; owner: boolean }) {
   const [index, setIndex] = useState(0);
   const [still, setStill] = useState(false);
   useEffect(() => {
@@ -94,7 +94,7 @@ function RankTicker({ rows }: { rows: LeaderRow[] }) {
     const timer = setInterval(() => { if (!document.hidden) setIndex(current => (current + 1) % rows.length); }, 3000);
     return () => clearInterval(timer);
   }, [rows.length, still]);
-  if (!rows.length) return <strong className="rank-row muted">No stars yet</strong>;
+  if (!rows.length) return <strong className="rank-row muted">{owner ? "No one ranked yet" : "No stars yet"}</strong>;
   const mine = rows.find(row => row.me);
   const row = still ? (mine || rows[0]) : rows[index % rows.length];
   return <strong key={still ? "still" : index} className={row.me ? "rank-row me" : "rank-row"}>#{row.rank} {row.name} · {row.stars}</strong>;

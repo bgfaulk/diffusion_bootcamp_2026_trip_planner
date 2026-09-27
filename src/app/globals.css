@@ -94,6 +94,7 @@ h2 { font-size: 24px; }
 .sidebar.collapsed .brand .abc-logo.small .abc-letter { font-size:18px; }
 .sidebar.collapsed .brand .abc-logo.small .abc-letters { gap:3px; }
 .sidebar.collapsed .brand .abc-logo.small .abc-feathers i { width:6px; height:3px; }
+.sidebar.collapsed .brand .abc-logo.small .abc-word { display:none; }
 .sidebar.collapsed .sidebar-toggle { position:static; transform:none; }
 .sidebar.collapsed .primary-nav button { position:relative; justify-content:center; padding:10px 0; }
 .sidebar.collapsed .nav-count { position:absolute; top:4px; right:4px; min-width:18px; padding:0 5px; font-size:10px; line-height:16px; }
@@ -127,9 +128,13 @@ h2 { font-size: 24px; }
 .abc-logo.small { gap:4px; padding:0; }
 .abc-logo.small .abc-letters { gap:5px; }
 .abc-logo.small .abc-letter { font-size:26px; }
-.abc-logo.small .abc-letters.flash { transform:scale(1.04); }
+.abc-logo.small .abc-letters.flash { animation:none; transform:scale(1.04); }
 .abc-logo.small .abc-feathers { gap:3px; }
 .abc-logo.small .abc-feathers i { width:9px; height:3px; }
+.abc-logo.small .abc-word { justify-self:stretch; justify-content:space-between; font-size:8.5px; letter-spacing:0; text-indent:0; }
+/* The sidebar mark lives inside .brand, whose subtitle rule (.brand div span) would otherwise recolor and resize these letters. */
+.abc-logo .abc-word span { display:inline; color:inherit; font-size:inherit; margin:0; }
+.abc-logo.small .abc-letters.flash + .abc-word { animation:none; transform:scale(1.04); }
 .primary-nav { display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: 8px; }
 .profile-button, .profile-popover button {
   min-height: 42px; width: 100%; border: 1px solid var(--line); border-radius: 7px; background: var(--panel); color: var(--ink); padding: 9px 11px; text-align: left;
@@ -321,12 +326,15 @@ a { color:var(--accent-dark); font-weight:800; }
 .login-card h1 { font-size:clamp(26px, 3.6vw, 36px); line-height:1.12; }
 .login-brand { margin-top:4px; padding-top:14px; border-top:1px solid var(--line); text-align:center; }
 .login-brand .eyebrow { margin:0; }
-.abc-logo { display:grid; justify-items:center; gap:10px; padding:6px 0 2px; }
+/* One content-sized column, centred, so the word under the letters can stretch to exactly their width. */
+.abc-logo { display:grid; grid-template-columns:max-content; justify-content:center; justify-items:center; gap:10px; padding:6px 0 2px; }
 .abc-logo .abc-letters { gap:clamp(10px, 3vw, 24px); }
 .abc-logo .abc-letter { font-size:clamp(52px, 10vw, 84px); color:color-mix(in srgb, var(--ink) 9%, transparent); }
 .abc-logo .abc-letters.flash .abc-letter { color:var(--glow); text-shadow:0 0 22px var(--glow), 0 0 60px var(--glow); }
 .abc-logo .abc-feathers { gap:8px; }
 .abc-logo .abc-feathers i { width:clamp(18px, 4vw, 30px); height:6px; background:color-mix(in srgb, var(--ink) 9%, transparent); }
+.abc-logo .abc-word { justify-self:stretch; justify-content:space-between; font-size:clamp(11px, 2.2vw, 15px); letter-spacing:0; text-indent:0; color:color-mix(in srgb, var(--ink) 9%, transparent); }
+.abc-logo .abc-letters.flash + .abc-word span { color:var(--f); text-shadow:0 0 14px var(--f), 0 0 40px var(--f); }
 .honeypot { position:absolute; left:-10000px; width:1px; height:1px; overflow:hidden; }
 .visually-hidden { position:absolute; width:1px; height:1px; margin:-1px; padding:0; border:0; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
 .password-input { position:relative; display:block; }
@@ -495,7 +503,9 @@ a { color:var(--accent-dark); font-weight:800; }
 /* NBC-style chime loader. Always dark, like a broadcast bumper. */
 .abc-stage { position:fixed; inset:0; z-index:200; display:grid; place-content:center; justify-items:center; gap:26px; padding:20px; background:radial-gradient(circle at 50% 42%, #1b2430, #07090c 70%); color:#fff; }
 .abc-letters { display:flex; gap:clamp(14px, 4vw, 44px); transition:transform .35s ease; }
-.abc-letters.flash { transform:scale(1.07); }
+/* On the flash beat the letters and the word under them pop together: a quick swell that settles a little larger. */
+.abc-letters.flash, .abc-letters.flash + .abc-word { animation:abc-pop .55s cubic-bezier(.2, 1.4, .4, 1) forwards; }
+@keyframes abc-pop { 0% { transform:scale(1); } 40% { transform:scale(1.16); } 100% { transform:scale(1.07); } }
 .abc-letter { font:900 clamp(96px, 20vw, 220px)/1 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; color:rgba(255,255,255,.07); transition:color .3s ease, text-shadow .3s ease; }
 .abc-a { --glow:#fcb711; }
 .abc-b { --glow:#f37021; }
@@ -507,6 +517,12 @@ a { color:var(--accent-dark); font-weight:800; }
 .abc-feathers i:nth-child(1) { --f:#fcb711; } .abc-feathers i:nth-child(2) { --f:#f37021; } .abc-feathers i:nth-child(3) { --f:#cc004c; }
 .abc-feathers i:nth-child(4) { --f:#6460aa; } .abc-feathers i:nth-child(5) { --f:#0089d0; } .abc-feathers i:nth-child(6) { --f:#0db14b; }
 .abc-feathers i.lit { background:var(--f); box-shadow:0 0 14px var(--f); }
+/* "FITNESS" under the letters (login card and loader): each letter takes a peacock color as its third of the
+   word lights up, and the whole word goes white on the flash. */
+.abc-word { display:flex; gap:.05em; font:850 clamp(22px, 5vw, 46px)/1 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; letter-spacing:.34em; text-indent:.34em; text-transform:uppercase; color:rgba(255,255,255,.1); }
+.abc-word span { transition:color .3s ease, text-shadow .3s ease; }
+.abc-word span.lit { color:var(--f); text-shadow:0 0 12px var(--f), 0 0 30px color-mix(in srgb, var(--f) 55%, transparent); }
+.abc-letters.flash + .abc-word span { color:#fff; text-shadow:0 0 16px var(--f), 0 0 50px var(--f); }
 .abc-caption { color:rgba(255,255,255,.72); font-size:17px; font-weight:750; letter-spacing:.02em; }
 .abc-sound { position:absolute; right:22px; bottom:22px; display:inline-flex; align-items:center; gap:8px; min-height:38px; padding:8px 14px; border:1px solid rgba(255,255,255,.28); border-radius:999px; background:rgba(255,255,255,.06); color:rgba(255,255,255,.8); font-size:13px; font-weight:750; }
 .abc-sound:hover, .abc-sound:focus-visible { border-color:rgba(255,255,255,.6); color:#fff; }
@@ -516,8 +532,8 @@ a { color:var(--accent-dark); font-weight:800; }
 @media (prefers-reduced-motion: reduce) {
   .progress-star, .trip-stat.stars strong, .trip-stat.rank .rank-row, .primary-nav button:hover .page-icon, .primary-nav button:focus-visible .page-icon { animation:none; transition:none; }
   .abc-sound.attention { animation:none; }
-  .abc-letters, .abc-letter, .abc-feathers i { transition:none; }
-  .abc-letters.flash { transform:none; }
+  .abc-letters, .abc-letter, .abc-feathers i, .abc-word span { transition:none; }
+  .abc-letters.flash, .abc-letters.flash + .abc-word { animation:none; transform:none; }
 }
 
 /* Phones: the sidebar becomes a slim top bar (brand + avatar) and the primary nav a bottom rail that scrolls
@@ -744,6 +760,7 @@ a { color:var(--accent-dark); font-weight:800; }
 :root[data-theme="nirvana"] .brand-divider { background:var(--cyan-line); }
 :root[data-theme="nirvana"] .brand strong { display:block; font-family:var(--display); font-size:.74rem; letter-spacing:.12em; text-transform:uppercase; }
 :root[data-theme="nirvana"] .brand div span { font-size:.84rem; margin-top:3px; }
+:root[data-theme="nirvana"] .brand .abc-logo .abc-word span { font-size:inherit; margin-top:0; }
 :root[data-theme="nirvana"] .primary-nav { gap:4px; }
 :root[data-theme="nirvana"] .sidebar-toggle { border-radius:0; border-color:var(--cyan-line); background:rgba(2,7,13,.9); color:var(--cyan-dim); }
 :root[data-theme="nirvana"] .sidebar-toggle:hover { color:var(--orange); border-color:var(--orange); }
@@ -839,6 +856,9 @@ a { color:var(--accent-dark); font-weight:800; }
 :root[data-theme="nirvana"] .abc-letter.lit, :root[data-theme="nirvana"] .abc-letters.flash .abc-letter { -webkit-text-stroke-color:transparent; }
 :root[data-theme="nirvana"] .abc-caption { font-family:var(--mono); font-weight:400; letter-spacing:.08em; }
 :root[data-theme="nirvana"] .abc-feathers i { border-radius:0; height:6px; }
+:root[data-theme="nirvana"] .abc-word { font-family:var(--display); font-weight:700; letter-spacing:.4em; text-indent:.4em; }
+:root[data-theme="nirvana"] .abc-logo .abc-word { letter-spacing:0; text-indent:0; }
+:root[data-theme="nirvana"] .abc-logo.small .abc-word { font-size:7px; letter-spacing:0; text-indent:0; }
 :root[data-theme="nirvana"] .abc-sound { border-radius:0; border-color:var(--cyan-line); color:var(--cyan-dim); background:rgba(0,229,255,.05); font-family:var(--display); font-size:.66rem; letter-spacing:.16em; text-transform:uppercase; clip-path:var(--cut-xs); }
 :root[data-theme="nirvana"] .abc-sound.attention { border-color:var(--orange); color:var(--orange); }
 
@@ -950,11 +970,21 @@ a { color:var(--accent-dark); font-weight:800; }
   .tabs { flex-wrap:nowrap; overflow-x:auto; scroll-snap-type:x proximity; scrollbar-width:none; -webkit-overflow-scrolling:touch; }
   .tabs::-webkit-scrollbar { display:none; }
   .tabs button { scroll-snap-align:start; }
-  .trip-bar-summary { flex-direction:column; align-items:stretch; gap:8px; }
-  .trip-bar-stats { flex-wrap:wrap; overflow:visible; }
-  .trip-stat { padding:4px 12px; }
+  /* The stats become a two-column grid of equal cells with hairlines between them, so every row lines up
+     whatever the cell count. The divider before the star cells is an <i>, so nth-of-type counts only cells. */
+  .trip-bar-summary { flex-direction:column; align-items:stretch; gap:10px; padding:4px 16px 10px; }
+  .trip-bar-stats { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); overflow:visible; }
+  .trip-stat, .trip-stat:first-child { padding:10px 12px; border-left:0; border-top:1px solid var(--line); }
+  .trip-stat:nth-of-type(-n+2) { border-top:0; }
+  .trip-stat:nth-of-type(odd) { padding-left:0; }
+  .trip-stat:nth-of-type(even) { border-left:1px solid var(--line); }
+  .trip-stat .eyebrow { white-space:normal; }
+  .trip-stat strong { white-space:normal; overflow-wrap:anywhere; }
   .trip-stat-divider { display:none; }
   .trip-stat.rank { min-width:0; }
+  .trip-bar-toggle { align-self:center; }
+  :root[data-theme="nirvana"] .trip-bar-stats .trip-stat { padding:10px 12px; border-top-color:var(--cyan-line); }
+  :root[data-theme="nirvana"] .trip-bar-stats .trip-stat:nth-of-type(odd) { padding-left:0; }
 }
 
 :root[data-theme="nirvana"] :is(.hero-card, .trip-bar, .day-list li) { position:relative; background:var(--panel); border:1px solid var(--cyan-line); box-shadow:inset 0 0 18px rgba(0,229,255,.06); backdrop-filter:blur(6px); }

@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { CSSProperties, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/lib/client";
 import { notify } from "./toast";
 import { PlaceInput } from "./place-input";
@@ -806,7 +806,7 @@ export function AbcLoader({ done, failed, onFinish, onFailed, messages = loaderM
 
   return (
     <main className="abc-stage" role="status" aria-live="polite">
-      <AbcLetters beat={beat} />
+      <AbcLetters beat={beat} word />
       <p className="abc-caption">{messages[loop % messages.length]}...</p>
       <button type="button" className={`abc-sound ${sound && !ready ? "attention" : ""}`} onClick={toggleSound} aria-pressed={sound}>
         <svg viewBox="0 0 24 24" aria-hidden="true">{sound ? <path d="M4 9v6h4l5 4V5L8 9H4zM16 8a5 5 0 0 1 0 8M18.5 5.5a9 9 0 0 1 0 13" /> : <path d="M4 9v6h4l5 4V5L8 9H4zM17 9l4 6M21 9l-4 6" />}</svg>
@@ -816,14 +816,19 @@ export function AbcLoader({ done, failed, onFinish, onFailed, messages = loaderM
   );
 }
 
-// The letters and peacock feathers at a given beat (0 = dark, 1-3 = A, B, C lit, 4 = flash).
-function AbcLetters({ beat }: { beat: number }) {
+// The letters at a given beat (0 = dark, 1-3 = A, B, C lit, 4 = flash). Under them, the word FITNESS, whose
+// letters light up in thirds as A, B and C do (the older six-feather bar is kept for anything that asks for it).
+const peacock = ["#fcb711", "#f37021", "#cc004c", "#6460aa", "#0089d0", "#0db14b"];
+const fitness = "FITNESS".split("");
+function AbcLetters({ beat, word = false }: { beat: number; word?: boolean }) {
   return (
     <>
       <div className={`abc-letters ${beat === 4 ? "flash" : ""}`}>
         {["A", "B", "C"].map((letter, index) => <span key={letter} className={`abc-letter abc-${letter.toLowerCase()} ${beat > index ? "lit" : ""}`}>{letter}</span>)}
       </div>
-      <div className="abc-feathers" aria-hidden="true">{Array.from({ length: 6 }, (_, index) => <i key={index} className={beat > Math.floor(index / 2) ? "lit" : ""} />)}</div>
+      {word
+        ? <div className="abc-word" aria-hidden="true">{fitness.map((letter, index) => <span key={index} className={beat > Math.floor((index * 3) / fitness.length) ? "lit" : ""} style={{ "--f": peacock[Math.min(index, peacock.length - 1)] } as CSSProperties}>{letter}</span>)}</div>
+        : <div className="abc-feathers" aria-hidden="true">{Array.from({ length: 6 }, (_, index) => <i key={index} className={beat > Math.floor(index / 2) ? "lit" : ""} />)}</div>}
     </>
   );
 }
@@ -839,5 +844,5 @@ export function AbcMark({ small = false }: { small?: boolean }) {
     const timer = setTimeout(() => setBeat(beat < beatMs.length - 1 ? beat + 1 : 0), beat === 0 ? 1100 : Math.round(beatMs[beat] * 1.25));
     return () => clearTimeout(timer);
   }, [beat, still]);
-  return <div className={small ? "abc-logo small" : "abc-logo"} aria-hidden="true"><AbcLetters beat={still ? 3 : beat} /></div>;
+  return <div className={small ? "abc-logo small" : "abc-logo"} aria-hidden="true"><AbcLetters beat={still ? 3 : beat} word /></div>;
 }
