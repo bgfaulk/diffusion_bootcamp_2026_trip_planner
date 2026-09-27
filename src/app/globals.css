@@ -971,7 +971,6 @@ a { color:var(--accent-dark); font-weight:800; }
   .fact-table:not(.data-table) td:empty { display:none; }
   .organizer .page-header-row.organizer-head { flex-direction:column; align-items:flex-start; gap:8px; } /* beats the desktop align-items rule below */
   .organizer .page-header-row > * { flex:0 0 auto; }
-  .pill-row { justify-content:flex-start; }
   /* Tab strips scroll sideways in one row instead of wrapping; the active tab is kept in view. */
   .tabs { flex-wrap:nowrap; overflow-x:auto; scroll-snap-type:x proximity; scrollbar-width:none; -webkit-overflow-scrolling:touch; }
   .tabs::-webkit-scrollbar { display:none; }
@@ -1039,9 +1038,12 @@ a { color:var(--accent-dark); font-weight:800; }
 /* ---------- Organizer page ---------- */
 .organizer .page-header-row { align-items:center; flex-wrap:wrap; }
 .organizer-head .eyebrow { margin:0; font-size:14px; }
-.pill-row { display:flex; flex-wrap:wrap; gap:8px; justify-content:flex-end; }
+/* The pill row is a div inside .page-header-row, whose generic rule would make it a stretched one-column grid;
+   the child selector below outranks it so the two pills sit side by side at their natural width. */
+.page-header-row > .pill-row, .pill-row { display:flex; flex:0 0 auto; flex-wrap:nowrap; gap:8px; justify-content:flex-end; align-items:stretch; }
 .window-pill { position:relative; display:inline-flex; align-items:stretch; border:1px solid var(--line); border-radius:7px; background:var(--panel); box-shadow:var(--shadow); }
-.window-pill > button { border:0; border-right:1px solid var(--line); background:transparent; color:var(--ink); font-weight:800; font-size:13px; display:inline-flex; align-items:center; gap:6px; padding:8px 10px; }
+.window-pill > button { border:0; border-right:1px solid var(--line); background:transparent; color:var(--ink); font-weight:800; font-size:13px; display:inline-flex; align-items:center; gap:6px; padding:8px 10px; white-space:nowrap; }
+.pill-label-short { display:none; }
 .window-pill > button:last-of-type { border-right:0; }
 .window-pill > button:hover:not(:disabled) { background:var(--soft); }
 .window-pill > button:disabled { opacity:.45; cursor:not-allowed; }
@@ -1065,6 +1067,18 @@ a { color:var(--accent-dark); font-weight:800; }
 .pill-custom input { width:64px; }
 .pill-custom select { flex:1; }
 .pill-custom .btn { min-height:34px; padding:5px 10px; }
+/* Phones: both pills share one row under the title, with tighter buttons, short labels ("Last 1h", icon-only Refresh),
+   and the time menu opening from the left edge of its pill so it stays on screen. Placed after the desktop rules above
+   so it wins at equal specificity. */
+@media (max-width: 900px) {
+  .page-header-row > .pill-row, .pill-row { justify-content:flex-start; }
+  .window-pill > button { font-size:12px; gap:5px; }
+  .window-pill .pill-icon { padding:7px; }
+  .window-pill .pill-main { padding:7px 9px; }
+  .pill-label { display:none; }
+  .pill-label-short { display:inline; }
+  .pill-row .window-pill:first-child .pill-menu { left:0; right:auto; }
+}
 
 .stat-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(170px, 1fr)); gap:12px; }
 .stat-tile { display:grid; gap:4px; padding:14px 16px; background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow); }

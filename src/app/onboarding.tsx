@@ -71,7 +71,10 @@ export function LoginScreen({ onSignedIn, notice = "" }: { onSignedIn: () => Pro
   const checks = passwordChecks(password);
   const rulesMet = checks.every(check => check.ok);
   const confirmOk = step !== "create" || (confirm !== "" && confirm === password);
-  const canSubmit = !busy && email.trim() !== "" && (step === "forgot" || (password !== "" && (!newPassword || rulesMet) && confirmOk));
+  const fieldsOk = email.trim() !== "" && (step === "forgot" || (password !== "" && (!newPassword || rulesMet) && confirmOk));
+  // Sign in and Forgot keep their button live whenever not busy, so Enter always submits: password managers can fill the
+  // fields without React hearing about it, which would otherwise leave the button disabled and swallow the key.
+  const buttonDisabled = busy || (newPassword && !fieldsOk);
 
   function goTo(next: AuthStep) {
     setStep(next);
@@ -84,13 +87,22 @@ export function LoginScreen({ onSignedIn, notice = "" }: { onSignedIn: () => Pro
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!canSubmit) return;
+    if (busy) return;
+    // Take autofilled values straight from the form when state hasn't caught up (password managers can fill the
+    // fields without firing the change events React listens for).
+    const fields = event.currentTarget.elements;
+    const typedEmail = (fields.namedItem("username") as HTMLInputElement | null)?.value?.trim() || email.trim();
+    const typedPassword = newPassword ? password : ((fields.namedItem("current-password") as HTMLInputElement | null)?.value || password);
+    if (typedEmail !== email) setEmail(typedEmail);
+    if (typedPassword !== password) setPassword(typedPassword);
+    const ready = typedEmail !== "" && (step === "forgot" || (typedPassword !== "" && (!newPassword || rulesMet) && confirmOk));
+    if (!ready) { setError(step === "forgot" ? "Enter your email" : "Enter your email and password"); return; }
     setError("");
     setBusy(true);
     if (step === "forgot") {
       try {
-        await api("/api/auth/forgot", { method: "POST", body: JSON.stringify({ email, website }) });
-        setSentTo(email.trim());
+        await api("/api/auth/forgot", { method: "POST", body: JSON.stringify({ email: typedEmail, website }) });
+        setSentTo(typedEmail);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Could not send a reset link");
       } finally {
@@ -100,8 +112,8 @@ export function LoginScreen({ onSignedIn, notice = "" }: { onSignedIn: () => Pro
     }
     primeChime(); // inside the submit gesture, so the loader's chime is allowed to play
     try {
-      await api("/api/auth", { method: "POST", body: JSON.stringify({ email, password, intent: step, website, token: resetToken, inviteCode }) });
-      rememberEmail(email);
+      await api("/api/auth", { method: "POST", body: JSON.stringify({ email: typedEmail, password: typedPassword, intent: step, website, token: resetToken, inviteCode }) });
+      rememberEmail(typedEmail);
       rememberKnown();
       if (step === "reset") history.replaceState(null, "", location.pathname);
       await onSignedIn();
@@ -165,7 +177,7 @@ export function LoginScreen({ onSignedIn, notice = "" }: { onSignedIn: () => Pro
             </>
           )}
           {error && <p className="error">{error}</p>}
-          <button className="btn primary" disabled={!canSubmit}>{busy ? "One moment..." : { signin: "Sign in", create: "Create account", reset: "Update password", forgot: "Email me a reset link" }[step]}</button>
+          <button className="btn primary" disabled={buttonDisabled}>{busy ? "One moment..." : { signin: "Sign in", create: "Create account", reset: "Update password", forgot: "Email me a reset link" }[step]}</button>
         </form>
         )}
         {step === "signin" && (
