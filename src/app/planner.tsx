@@ -68,7 +68,8 @@ type AppState = {
   links: { whatsapp: string };
 };
 type Notice = { id: string; kind: string; title: string; body: string | null; data: string | null; read_at: string | null; created_at: string };
-type NoticeData = { rows?: [string, string][]; advice?: string[] };
+type NoticeAction = "setup" | "settings" | "guide" | "whatsapp" | "tripInfo" | "theme" | "photos" | "bug";
+type NoticeData = { rows?: [string, string][]; advice?: string[]; steps?: { text: string; action?: NoticeAction; label?: string }[] };
 function noticeData(notice: Notice): NoticeData | null { try { return notice.data ? JSON.parse(notice.data) : null; } catch { return null; } }
 
 const emptyAppState: AppState = {
@@ -174,6 +175,7 @@ export default function Home() {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [bugOpen, setBugOpen] = useState(false);
   const [whatsAppOpen, setWhatsAppOpen] = useState(false);
+  const [settingsTab, setSettingsTab] = useState<"profile" | "details" | "account" | "guide">("profile");
   // Theme mirrors the account setting once loaded; before that (and on the login screen) it is the
   // last theme used on this device. Grid effects are a per-device preference.
   const [theme, setThemeState] = useState<Theme>("light");
@@ -443,14 +445,25 @@ export default function Home() {
         {page === "explore" && <ExplorePage items={data.items.filter(item => item.page === "explore")} itinerary={data.itinerary} startDate={answers.startDate} openModal={() => setItineraryOpen(true)} reload={load} onItems={patchItems} />}
         {page === "tripInfo" && <TripInfoPage tripInfo={data.tripInfo} tripDocuments={data.tripDocuments} reload={load} />}
         {page === "gallery" && <Gallery photos={data.photos} openViewer={setViewer} reload={load} />}
-        {page === "settings" && <SettingsPage settings={data.settings} saveSettings={saveSettings} reload={load} />}
+        {page === "settings" && <SettingsPage settings={data.settings} saveSettings={saveSettings} reload={load} tab={settingsTab} onTab={setSettingsTab} />}
         {page === "organizer" && data.user.owner && <OrganizerPage userId={data.user.id} />}
       </main>
 
       {itineraryOpen && <ItineraryModal items={data.items.filter(item => item.page === "explore")} itinerary={data.itinerary} answers={answers} hasTripData={Boolean(data.itinerary?.saved_plan) || data.tripInfo.length > 0} onClose={() => setItineraryOpen(false)} reload={load} />}
       {viewer && <PhotoViewer spot={viewer} photos={data.photos} onClose={() => setViewer(null)} onDeleted={load} />}
       {themeOpen && <ThemeModal theme={theme} fx={fx} onTheme={chooseTheme} onFx={toggleFx} onClose={() => setThemeOpen(false)} />}
-      {notificationsOpen && <NotificationsModal items={data.notifications} onChange={list => setData(current => ({ ...current, notifications: list }))} onClose={() => setNotificationsOpen(false)} />}
+      {notificationsOpen && <NotificationsModal items={data.notifications} onChange={list => setData(current => ({ ...current, notifications: list }))} onClose={() => setNotificationsOpen(false)} onAction={action => {
+        setNotificationsOpen(false);
+        if (action === "setup") void resumeSetup();
+        else if (action === "settings") { setSettingsTab("profile"); setPage("settings"); }
+        else if (action === "guide") { setSettingsTab("guide"); setPage("settings"); }
+        else if (action === "whatsapp") setWhatsAppOpen(true);
+        else if (action === "tripInfo") setPage("tripInfo");
+        else if (action === "theme") setThemeOpen(true);
+        else if (action === "photos") setPage("gallery");
+        else if (action === "bug") setBugOpen(true);
+        window.scrollTo({ top: 0 });
+      }} />}
       {bugOpen && <ReportBugModal onClose={() => setBugOpen(false)} />}
       {whatsAppOpen && <WhatsAppModal url={data.links.whatsapp} onClose={() => setWhatsAppOpen(false)} />}
     </div></>
@@ -1247,7 +1260,7 @@ function fmtWhen(value: string) {
   return new Date(value).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
-function NotificationsModal({ items, onChange, onClose }: { items: Notice[]; onChange: (list: Notice[]) => void; onClose: () => void }) {
+function NotificationsModal({ items, onChange, onClose, onAction }: { items: Notice[]; onChange: (list: Notice[]) => void; onClose: () => void; onAction: (action: NoticeAction) => void }) {
   const [busy, setBusy] = useState("");
   const [openId, setOpenId] = useState<string | null>(null);
   const unread = items.filter(notice => !notice.read_at).length;
@@ -1271,11 +1284,21 @@ function NotificationsModal({ items, onChange, onClose }: { items: Notice[]; onC
   }
   if (open) {
     const details = noticeData(open);
-    const kindLabel = open.kind === "health" ? "Application health" : open.kind === "signup" ? "New attendee" : "Notice";
+    const kindLabel = open.kind === "health" ? "Application health" : open.kind === "signup" ? "New attendee" : open.kind === "welcome" ? "Getting started" : "Notice";
     return (
       <FormModal eyebrow={kindLabel} title={open.title} onClose={onClose}>
         <p className="muted">{fmtWhen(open.created_at)}</p>
         {open.body && <p className="notice-body">{open.body}</p>}
+        {details?.steps?.length ? (
+          <ol className="notice-steps">
+            {details.steps.map((step, index) => (
+              <li key={index}>
+                <span>{step.text}</span>
+                {step.action && <button type="button" className="btn" onClick={() => onAction(step.action!)}>{step.label || "Open"}</button>}
+              </li>
+            ))}
+          </ol>
+        ) : null}
         {details?.rows?.length ? <dl className="notice-rows">{details.rows.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl> : null}
         {details?.advice?.length ? <div><h3 className="notice-h3">What to do</h3><ul className="how-to">{details.advice.map(line => <li key={line}>{line}</li>)}</ul></div> : null}
         <div className="button-row">
@@ -1298,7 +1321,7 @@ function NotificationsModal({ items, onChange, onClose }: { items: Notice[]; onC
               <button type="button" className="notice-open" onClick={() => show(notice)} aria-label={`Open ${notice.title}`}>
                 <strong>{notice.title}</strong>
                 {notice.body && <p>{notice.body}</p>}
-                <time dateTime={notice.created_at}>{fmtWhen(notice.created_at)}{notice.read_at ? "" : " · New"}{notice.kind === "health" ? " · Health" : notice.kind === "signup" ? " · New attendee" : ""}</time>
+                <time dateTime={notice.created_at}>{fmtWhen(notice.created_at)}{notice.read_at ? "" : " · New"}{notice.kind === "health" ? " · Health" : notice.kind === "signup" ? " · New attendee" : notice.kind === "welcome" ? " · Getting started" : ""}</time>
               </button>
               <button type="button" className="check-remove" aria-label={`Delete ${notice.title}`} disabled={Boolean(busy)} onClick={() => run(notice.id, () => api("/api/notifications", { method: "DELETE", body: JSON.stringify({ id: notice.id }) }))}>×</button>
             </li>
@@ -1345,8 +1368,11 @@ function ReportBugModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-function SettingsPage({ settings, saveSettings, reload }: { settings: Settings; saveSettings: (form: HTMLFormElement) => Promise<void>; reload: () => Promise<void> }) {
-  const [tab, setTab] = useState<"profile" | "details" | "account" | "guide">("profile");
+type SettingsTab = "profile" | "details" | "account" | "guide";
+function SettingsPage({ settings, saveSettings, reload, tab: controlledTab, onTab }: { settings: Settings; saveSettings: (form: HTMLFormElement) => Promise<void>; reload: () => Promise<void>; tab?: SettingsTab; onTab?: (tab: SettingsTab) => void }) {
+  const [ownTab, setOwnTab] = useState<SettingsTab>("profile");
+  const tab = controlledTab ?? ownTab;
+  const setTab = onTab ?? setOwnTab;
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteText, setDeleteText] = useState("");
   async function deleteAccount() {

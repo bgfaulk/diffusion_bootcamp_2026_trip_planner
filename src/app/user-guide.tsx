@@ -65,7 +65,7 @@ export function UserGuide() {
       <h3>Organizer</h3>
       <p>
         Only the trip organizer sees this page. It lists attendee accounts, sends password reset links, can suspend or remove an account,
-        sends a notice to everyone, and shows request performance, stored data size, and an activity log. The organizer is also
+        sends a notice to everyone from its own tab, and shows request performance, stored data size, and an activity log. The organizer is also
         notified when someone new joins and when the app crosses a health threshold: slow responses, server errors, or a database
         that is large or growing quickly. Opening one of those notifications shows the numbers behind it and what to do.
       </p>

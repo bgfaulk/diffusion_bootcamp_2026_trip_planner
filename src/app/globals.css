@@ -351,6 +351,11 @@ a { color:var(--accent-dark); font-weight:800; }
 .notice-rows dt { color:var(--muted); font-weight:750; }
 .notice-rows dd { margin:0; overflow-wrap:anywhere; }
 .notice-h3 { margin:6px 0 8px; font-size:16px; }
+.notice-steps { display:grid; gap:8px; margin:0; padding-left:22px; }
+.notice-steps li { display:grid; grid-template-columns:minmax(0, 1fr) auto; gap:8px 14px; align-items:center; padding:8px 0; border-bottom:1px solid var(--line); }
+.notice-steps li:last-child { border-bottom:0; }
+.notice-steps .btn { white-space:nowrap; }
+@media (max-width: 560px) { .notice-steps li { grid-template-columns:1fr; } .notice-steps .btn { justify-self:start; } }
 .health-card { display:grid; gap:12px; margin-bottom:14px; }
 .whatsapp { justify-items:center; text-align:center; }
 .whatsapp .qr { width:min(260px, 70vw); height:auto; border-radius:12px; background:#fff; padding:8px; border:1px solid var(--line); }
