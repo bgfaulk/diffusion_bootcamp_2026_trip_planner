@@ -18,6 +18,8 @@ export function PlaceInput({ value, onChange, onPick, name, placeholder, maxLeng
 }) {
   const [suggestions, setSuggestions] = useState<PlaceSuggestion[]>([]);
   const [open, setOpen] = useState(false);
+  // Set when the lookup itself fails (key restrictions, quota, network), so the field doesn't look broken.
+  const [unavailable, setUnavailable] = useState(false);
   // Only search after the person types here, not for saved values or a picked suggestion.
   const typed = useRef(false);
 
@@ -25,9 +27,15 @@ export function PlaceInput({ value, onChange, onPick, name, placeholder, maxLeng
     if (!typed.current) return;
     const timeout = setTimeout(async () => {
       if (value.trim().length < 3) return setSuggestions([]);
-      const result = await api("/api/places/autocomplete", { method: "POST", body: JSON.stringify({ input: value }) }).catch(() => ({ suggestions: [] }));
-      setSuggestions(result.suggestions || []);
-      setOpen(true);
+      try {
+        const result = await api("/api/places/autocomplete", { method: "POST", body: JSON.stringify({ input: value }) });
+        setSuggestions(result.suggestions || []);
+        setUnavailable(false);
+        setOpen(true);
+      } catch {
+        setSuggestions([]);
+        setUnavailable(true);
+      }
     }, 250);
     return () => clearTimeout(timeout);
   }, [value]);
@@ -54,6 +62,7 @@ export function PlaceInput({ value, onChange, onPick, name, placeholder, maxLeng
         onBlur={() => setTimeout(() => setOpen(false), 150)}
         onKeyDown={event => { if (event.key === "Escape") setOpen(false); }}
       />
+      {unavailable && <small className="place-note">Address suggestions aren&rsquo;t available right now. Type the full address and it will save as written.</small>}
       {open && suggestions.length > 0 && (
         <span className="suggestions" role="listbox">
           {suggestions.map(suggestion => (

@@ -20,7 +20,7 @@ export function windowFromParams(url: URL) {
   return { minutes, from, to, bucket: bucketMinutes(minutes) };
 }
 
-const appTables = ["users", "sessions", "settings", "list_items", "photos", "itinerary", "trip_info", "trip_documents", "audit_log", "notifications", "health_snapshots"];
+const appTables = ["users", "sessions", "settings", "list_items", "photos", "itinerary", "trip_info", "trip_documents", "audit_log", "notifications", "health_snapshots", "weather_cache"];
 
 // Activity rows live a year (the widest window the picker offers); traffic rows only feed the request and
 // latency charts and go after a week.
@@ -28,6 +28,7 @@ export async function pruneAuditLog() {
   const sql = getSql();
   await sql`DELETE FROM audit_log WHERE at < now() - interval '400 days'`;
   await sql`DELETE FROM audit_log WHERE kind = 'traffic' AND at < now() - interval '7 days'`;
+  await sql`DELETE FROM weather_cache WHERE fetched_at < now() - interval '1 day'`;
 }
 
 export async function overview(window: ReturnType<typeof windowFromParams>) {

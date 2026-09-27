@@ -1,17 +1,36 @@
 import { requireUser } from "@/lib/auth";
 import { withQuiet } from "@/lib/audit";
+import { getSql } from "@/lib/db";
 import { errorResponse, fail } from "@/lib/validation";
 
-// Proxies weatherapi.com so the key stays on the server. Responses are cached per location for 30 minutes
-// to stay well inside the plan's request quota; the client refreshes on the same cadence. The query is
-// free text (a rounded lat,lng or a place name), so the cache is capped to keep a long-lived instance honest.
-const cache = new Map<string, { at: number; data: unknown }>();
+// Proxies weatherapi.com so the key stays on the server. A forecast is fetched at most once per location
+// per 30 minutes for everyone: the shared copy lives in the weather_cache table (serverless instances don't
+// share memory and don't live long), with a small in-memory layer in front of it for repeat hits on the same
+// instance. Locations are normalized so nearby people share an entry: place names are lower-cased and
+// coordinates rounded to two decimals (about a kilometer). X-Weather-Source says where an answer came from.
+const memory = new Map<string, { at: number; data: unknown }>();
 const TTL = 30 * 60 * 1000;
-const MAX_ENTRIES = 500;
+const MAX_ENTRIES = 200;
+
+function cacheKey(q: string) {
+  const coords = q.match(/^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/);
+  if (coords) return `${Number(coords[1]).toFixed(2)},${Number(coords[2]).toFixed(2)}`;
+  return q.toLowerCase().replace(/\s+/g, " ").trim();
+}
+function respond(data: unknown, source: "memory" | "shared" | "upstream") {
+  return Response.json(data, { headers: { "X-Weather-Source": source, "Cache-Control": "private, max-age=300" } });
+}
 // The free tier returns three forecast days; asking for more only makes the response bigger.
 const DAYS = 3;
 
 function secure(url: string) { return url.startsWith("//") ? `https:${url}` : url; }
+function remember(key: string, data: unknown) {
+  if (memory.size >= MAX_ENTRIES) {
+    for (const [k, entry] of memory) if (Date.now() - entry.at >= TTL) memory.delete(k);
+    if (memory.size >= MAX_ENTRIES) memory.delete(memory.keys().next().value as string);
+  }
+  memory.set(key, { at: Date.now(), data });
+}
 
 export const GET = withQuiet("weather", async (request, ctx) => {
   try {
@@ -19,9 +38,17 @@ export const GET = withQuiet("weather", async (request, ctx) => {
     const key = process.env.WEATHER_API_KEY?.trim();
     if (!key) return Response.json({ configured: false });
     const q = (new URL(request.url).searchParams.get("q") || "San Francisco, CA").trim().slice(0, 120);
-    ctx.target = q;
-    const hit = cache.get(q);
-    if (hit && Date.now() - hit.at < TTL) return Response.json(hit.data);
+    const key_ = cacheKey(q);
+    ctx.target = key_;
+    const hit = memory.get(key_);
+    if (hit && Date.now() - hit.at < TTL) return respond(hit.data, "memory");
+    const sql = getSql();
+    const shared = await sql`SELECT data, fetched_at FROM weather_cache WHERE key = ${key_}`;
+    if (shared[0] && Date.now() - new Date(shared[0].fetched_at).getTime() < TTL) {
+      const data = JSON.parse(String(shared[0].data));
+      remember(key_, data);
+      return respond(data, "shared");
+    }
     const upstream = await fetch(`https://api.weatherapi.com/v1/forecast.json?key=${encodeURIComponent(key)}&q=${encodeURIComponent(q)}&days=${DAYS}&aqi=no&alerts=no`, { cache: "no-store" });
     if (!upstream.ok) fail("Weather is unavailable right now", 502);
     const raw = await upstream.json();
@@ -43,12 +70,12 @@ export const GET = withQuiet("weather", async (request, ctx) => {
         rain: Number(day.day?.daily_chance_of_rain ?? 0)
       }))
     };
-    if (cache.size >= MAX_ENTRIES) {
-      for (const [key, entry] of cache) if (Date.now() - entry.at >= TTL) cache.delete(key);
-      if (cache.size >= MAX_ENTRIES) cache.delete(cache.keys().next().value as string);
-    }
-    cache.set(q, { at: Date.now(), data });
-    return Response.json(data);
+    await sql`
+      INSERT INTO weather_cache (key, data, fetched_at) VALUES (${key_}, ${JSON.stringify(data)}, now())
+      ON CONFLICT (key) DO UPDATE SET data = excluded.data, fetched_at = now()
+    `;
+    remember(key_, data);
+    return respond(data, "upstream");
   } catch (error) {
     return errorResponse(error, "Could not load the weather");
   }
