@@ -180,6 +180,9 @@ const AIRPORTS: Record<string, [number, number]> = {
   FSD: [43.58, -96.74], FAR: [46.92, -96.82], BIL: [45.81, -108.54], MSO: [46.92, -114.09], EUG: [44.12, -123.22]
 };
 
+/** Every airport the miles table knows, for the booking form's suggestions. */
+export const AIRPORT_CODES = Object.keys(AIRPORTS).sort();
+
 export function airportCodes(text: string): string[] {
   const codes: string[] = [];
   for (const match of text.matchAll(/\b([A-Z]{3})\b/g)) if (AIRPORTS[match[1]] && !codes.includes(match[1])) codes.push(match[1]);
@@ -208,6 +211,8 @@ export type Booking = {
   address?: string;
   phone?: string;
   notes?: string;
+  from_airport?: string; // flights: three-letter codes, entered on the booking form
+  to_airport?: string;
 };
 export type TimedBooking = Booking & { start: When | null; end: When | null };
 export type DayEvent = { minutes: number | null; time: string; title: string; detail: string; kind: "booking" | "stop" | "training" };
@@ -326,9 +331,11 @@ export function buildTripModel(input: { startDate?: string; endDate?: string; bo
   }
   let miles = 0; const legs: string[] = [];
   const bayArea = ["SFO", "OAK", "SJC"];
-  // Origin comes from the start field and destination from the end field, so a layover mentioned in the
-  // notes doesn't get chained into the route. Notes are never used.
+  // The From/To fields win. Older bookings fall back to codes written into the start and end text, then to the
+  // title and address, so a layover mentioned in the notes never gets chained into the route.
   const codesOf = (f: TimedBooking) => {
+    if (f.from_airport && f.to_airport && f.from_airport !== f.to_airport) return [f.from_airport, f.to_airport];
+    if (f.from_airport || f.to_airport) return [f.from_airport || f.to_airport!];
     const from = airportCodes(f.start_at || ""), to = airportCodes(f.end_at || "");
     if (from.length && to.length) return [from[0], to[0]];
     return airportCodes([f.start_at, f.end_at, f.address, f.title].filter(Boolean).join(" ")).slice(0, 2);

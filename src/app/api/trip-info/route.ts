@@ -6,7 +6,10 @@ import { asString, errorResponse, fail, requireString } from "@/lib/validation";
 
 const categories = new Set(["flight", "hotel", "rental", "training", "insurance", "other"]);
 
-const encryptedFields = ["title", "provider", "confirmation_number", "start_at", "end_at", "address", "phone", "notes"];
+const encryptedFields = ["title", "provider", "confirmation_number", "start_at", "end_at", "address", "phone", "notes", "from_airport", "to_airport"];
+
+// Airport codes are three letters or nothing; anything else is dropped rather than stored.
+const airportCode = (value: unknown) => { const code = asString(value, 8).toUpperCase(); return /^[A-Z]{3}$/.test(code) ? code : ""; };
 
 function readTripInfo(body: any) {
   const category = asString(body.category, 40);
@@ -20,7 +23,9 @@ function readTripInfo(body: any) {
     endAt: encryptText(asString(body.endAt, 120)),
     address: encryptText(asString(body.address, 260)),
     phone: encryptText(asString(body.phone, 80)),
-    notes: encryptText(asString(body.notes, 1200))
+    notes: encryptText(asString(body.notes, 1200)),
+    fromAirport: encryptText(airportCode(body.fromAirport)),
+    toAirport: encryptText(airportCode(body.toAirport))
   };
 }
 
@@ -31,8 +36,8 @@ export const POST = withAudit("bookings.add", async (request, ctx) => {
     const item = readTripInfo(body);
     ctx.detail = item.category;
     const rows = await getSql()`
-      INSERT INTO trip_info (user_id, category, title, provider, confirmation_number, start_at, end_at, address, phone, notes)
-      VALUES (${user.id}, ${item.category}, ${item.title}, ${item.provider}, ${item.confirmationNumber}, ${item.startAt}, ${item.endAt}, ${item.address}, ${item.phone}, ${item.notes})
+      INSERT INTO trip_info (user_id, category, title, provider, confirmation_number, start_at, end_at, address, phone, notes, from_airport, to_airport)
+      VALUES (${user.id}, ${item.category}, ${item.title}, ${item.provider}, ${item.confirmationNumber}, ${item.startAt}, ${item.endAt}, ${item.address}, ${item.phone}, ${item.notes}, ${item.fromAirport}, ${item.toAirport})
       RETURNING *
     `;
     return Response.json({ item: decryptRow(rows[0], encryptedFields) });
@@ -58,6 +63,8 @@ export const PATCH = withAudit("bookings.update", async (request, ctx) => {
           address = ${item.address},
           phone = ${item.phone},
           notes = ${item.notes},
+          from_airport = ${item.fromAirport},
+          to_airport = ${item.toAirport},
           updated_at = now()
       WHERE id = ${id} AND user_id = ${user.id}
       RETURNING *

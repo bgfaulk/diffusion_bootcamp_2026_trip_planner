@@ -5,6 +5,7 @@ import { api } from "@/lib/client";
 import { notify } from "./toast";
 import { PlaceInput } from "./place-input";
 import { Help } from "./help";
+import { AIRPORT_CODES } from "@/lib/trip-time";
 
 export const bookingCategories = ["flight", "hotel", "rental", "training", "insurance", "other"];
 
@@ -20,7 +21,7 @@ const PROVIDERS: Record<string, string[]> = {
   insurance: ["Allianz Travel", "AIG Travel Guard", "Travelex", "World Nomads", "Generali Global Assistance", "Seven Corners", "Credit card coverage"]
 };
 const PROVIDER_HINT: Record<string, string> = { flight: "Airline", hotel: "Hotel or chain", rental: "Rental company", training: "Host or venue", insurance: "Insurer", other: "Company" };
-const TITLE_HINT: Record<string, string> = { flight: "Outbound flight, ORD to SFO", hotel: "Hotel stay downtown", rental: "Rental car at SFO", training: "Diffusion Bootcamp", insurance: "Trip protection", other: "What this is" };
+const TITLE_HINT: Record<string, string> = { flight: "Outbound flight", hotel: "Hotel stay downtown", rental: "Rental car at SFO", training: "Diffusion Bootcamp", insurance: "Trip protection", other: "What this is" };
 const START_LABEL: Record<string, string> = { flight: "Departs", hotel: "Check in", rental: "Pick up", training: "Starts", insurance: "Coverage starts", other: "Start" };
 const END_LABEL: Record<string, string> = { flight: "Arrives", hotel: "Check out", rental: "Return", training: "Ends", insurance: "Coverage ends", other: "End" };
 
@@ -62,7 +63,9 @@ function tripInfoPayload(form: HTMLFormElement) {
     endAt: friendlyWhen(String(data.get("endAt") || "")),
     address: String(data.get("address") || ""),
     phone: String(data.get("phone") || "").trim(),
-    notes: String(data.get("notes") || "")
+    notes: String(data.get("notes") || ""),
+    fromAirport: String(data.get("fromAirport") || "").trim().toUpperCase(),
+    toAirport: String(data.get("toAirport") || "").trim().toUpperCase()
   };
 }
 
@@ -72,6 +75,9 @@ export function BookingForm({ onSaved, compact = false, modal = false, category,
   const [error, setError] = useState("");
   const [address, setAddress] = useState("");
   const [phone, setPhone] = useState("");
+  const [fromAirport, setFromAirport] = useState("");
+  const [toAirport, setToAirport] = useState("");
+  const airportField = (value: string) => value.replace(/[^a-z]/gi, "").toUpperCase().slice(0, 3);
   const [picked, setPicked] = useState(category ?? "flight");
   const [busy, setBusy] = useState(false);
   const kind = category ?? picked;
@@ -87,6 +93,7 @@ export function BookingForm({ onSaved, compact = false, modal = false, category,
       form.reset();
       setAddress("");
       setPhone("");
+      setFromAirport(""); setToAirport("");
       await onSaved();
       notify.success("Booking saved");
     } catch (err) {
@@ -105,6 +112,14 @@ export function BookingForm({ onSaved, compact = false, modal = false, category,
         {providers.length > 0 && <datalist id={listId}>{providers.map(name => <option key={name} value={name} />)}</datalist>}
       </label>
       <label>Confirmation number<input name="confirmationNumber" maxLength={120} /></label>
+      {kind === "flight" && (
+        <>
+          {/* Airport codes feed the Overview's route and miles; each is three letters, with the miles table's airports as suggestions. */}
+          <label><span>From airport <Help text="Three-letter code such as ORD. It drives the route and miles on the Overview." /></span><input name="fromAirport" list="airport-codes" value={fromAirport} onChange={event => setFromAirport(airportField(event.target.value))} placeholder="ORD" maxLength={3} autoCapitalize="characters" autoComplete="off" spellCheck={false} pattern="[A-Za-z]{3}" title="Three letters, like ORD" /></label>
+          <label>To airport<input name="toAirport" list="airport-codes" value={toAirport} onChange={event => setToAirport(airportField(event.target.value))} placeholder="SFO" maxLength={3} autoCapitalize="characters" autoComplete="off" spellCheck={false} pattern="[A-Za-z]{3}" title="Three letters, like SFO" /></label>
+          <datalist id="airport-codes">{AIRPORT_CODES.map(code => <option key={code} value={code} />)}</datalist>
+        </>
+      )}
       <label>{START_LABEL[kind] ?? START_LABEL.other}<input type="datetime-local" name="startAt" step={60} /></label>
       <label>{END_LABEL[kind] ?? END_LABEL.other}<input type="datetime-local" name="endAt" step={60} /></label>
       <label>Address<PlaceInput name="address" value={address} onChange={setAddress} placeholder="Address, terminal, hotel, or office" maxLength={260} /></label>

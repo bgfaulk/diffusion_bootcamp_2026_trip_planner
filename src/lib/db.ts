@@ -77,7 +77,9 @@ export async function ensureSchema() {
     sql`ALTER TABLE settings ADD COLUMN IF NOT EXISTS planning_answers TEXT`,
     sql`ALTER TABLE settings ADD COLUMN IF NOT EXISTS chime_muted BOOLEAN NOT NULL DEFAULT false`,
     sql`ALTER TABLE settings ADD COLUMN IF NOT EXISTS calendar_guest TEXT`,
-    sql`ALTER TABLE settings ADD COLUMN IF NOT EXISTS hidden_stock_spots TEXT`, // JSON list of photo-route spot ids whose stock photo this person deleted
+    sql`ALTER TABLE settings ADD COLUMN IF NOT EXISTS hidden_stock_spots TEXT`,
+    sql`ALTER TABLE trip_info ADD COLUMN IF NOT EXISTS from_airport TEXT`, // flights: three-letter codes for the Overview's route and miles
+    sql`ALTER TABLE trip_info ADD COLUMN IF NOT EXISTS to_airport TEXT`, // JSON list of photo-route spot ids whose stock photo this person deleted
     sql`
       CREATE TABLE IF NOT EXISTS notifications (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

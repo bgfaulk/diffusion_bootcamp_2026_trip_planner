@@ -38,6 +38,8 @@ type TripInfo = {
   address?: string;
   phone?: string;
   notes?: string;
+  from_airport?: string;
+  to_airport?: string;
 };
 type TripDocument = {
   id: string;
@@ -1199,6 +1201,7 @@ function TripInfoPage({ tripInfo, tripDocuments, reload, answers, settings, emai
               <article className="booking-card" key={item.id}>
                 <div><strong>{item.title}</strong>{item.provider && <span>{item.provider}</span>}</div>
                 {item.confirmation_number && <p><b>Confirmation:</b> {item.confirmation_number}</p>}
+                {(item.from_airport || item.to_airport) && <p><b>Route:</b> {[item.from_airport, item.to_airport].filter(Boolean).join(" → ")}</p>}
                 {(item.start_at || item.end_at) && <p><b>When:</b> {[item.start_at, item.end_at].filter(Boolean).join(" to ")}</p>}
                 {item.address && <p><b>Address:</b> <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.address)}`} target="_blank" rel="noreferrer">{item.address}</a></p>}
                 {item.phone && <p><b>Phone:</b> <a href={`tel:${item.phone}`}>{item.phone}</a></p>}
