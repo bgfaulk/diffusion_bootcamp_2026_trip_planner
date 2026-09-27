@@ -22,11 +22,18 @@ export function windowFromParams(url: URL) {
 
 const appTables = ["users", "sessions", "settings", "list_items", "photos", "itinerary", "trip_info", "trip_documents", "audit_log", "notifications", "health_snapshots"];
 
+// Activity rows live a year (the widest window the picker offers); traffic rows only feed the request and
+// latency charts and go after a week.
+export async function pruneAuditLog() {
+  const sql = getSql();
+  await sql`DELETE FROM audit_log WHERE at < now() - interval '400 days'`;
+  await sql`DELETE FROM audit_log WHERE kind = 'traffic' AND at < now() - interval '7 days'`;
+}
+
 export async function overview(window: ReturnType<typeof windowFromParams>) {
   const sql = getSql();
   const { from, to, bucket, minutes } = window;
-  // Keep the log to a year, which is also the widest window the picker offers.
-  await sql`DELETE FROM audit_log WHERE at < now() - interval '400 days'`;
+  await pruneAuditLog();
   const [totals, routes, series, tables, dbSize, growthRows] = await Promise.all([
     sql`
       SELECT count(*)::int AS calls,
@@ -173,16 +180,17 @@ export async function actOnUser(actorId: string, id: string, action: UserAction)
   return email;
 }
 
-export async function activity(window: ReturnType<typeof windowFromParams>, filters: { event: string | null; q: string | null; limit: number }) {
+export async function activity(window: ReturnType<typeof windowFromParams>, filters: { event: string | null; q: string | null; limit: number; traffic: boolean }) {
   const like = filters.q ? `%${filters.q}%` : null;
   const rows = await getSql()`
-    SELECT id, at, event, method, route, status, ms, email, target, ip, user_agent, detail
+    SELECT id, at, event, method, route, status, ms, email, target, ip, user_agent, detail, kind
     FROM audit_log
     WHERE at >= ${window.from} AND at < ${window.to}
+      AND (${filters.traffic} OR kind = 'activity')
       AND (${filters.event}::text IS NULL OR event = ${filters.event})
       AND (${like}::text IS NULL OR email ILIKE ${like} OR ip ILIKE ${like} OR target ILIKE ${like} OR detail ILIKE ${like} OR route ILIKE ${like})
     ORDER BY at DESC LIMIT ${filters.limit}
   `;
-  const events = await getSql()`SELECT DISTINCT event FROM audit_log WHERE at >= ${window.from} ORDER BY 1`;
+  const events = await getSql()`SELECT DISTINCT event FROM audit_log WHERE at >= ${window.from} AND (${filters.traffic} OR kind = 'activity') ORDER BY 1`;
   return { rows: rows.map((row: any) => ({ ...row, id: String(row.id) })), events: events.map((row: any) => String(row.event)) };
 }

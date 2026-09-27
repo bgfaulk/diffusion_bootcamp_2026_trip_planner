@@ -1,5 +1,5 @@
 import { requireUser } from "@/lib/auth";
-import { withAudit } from "@/lib/audit";
+import { withQuiet } from "@/lib/audit";
 import { errorResponse, fail } from "@/lib/validation";
 
 // Proxies weatherapi.com so the key stays on the server. Responses are cached per location for 30 minutes
@@ -13,7 +13,7 @@ const DAYS = 3;
 
 function secure(url: string) { return url.startsWith("//") ? `https:${url}` : url; }
 
-export const GET = withAudit("weather", async (request, ctx) => {
+export const GET = withQuiet("weather", async (request, ctx) => {
   try {
     ctx.user = await requireUser();
     const key = process.env.WEATHER_API_KEY?.trim();

@@ -495,7 +495,8 @@ function ActivityTab(shared: Shared) {
   const [q, setQ] = useState("");
   const [applied, setApplied] = useState("");
   const [limit, setLimit] = useState(200);
-  const path = `/api/admin/log?minutes=${shared.minutes}&limit=${limit}${event ? `&event=${encodeURIComponent(event)}` : ""}${applied ? `&q=${encodeURIComponent(applied)}` : ""}`;
+  const [traffic, setTraffic] = useState(false);
+  const path = `/api/admin/log?minutes=${shared.minutes}&limit=${limit}${traffic ? "&traffic=1" : ""}${event ? `&event=${encodeURIComponent(event)}` : ""}${applied ? `&q=${encodeURIComponent(applied)}` : ""}`;
   const { data, error, loading } = useAdmin<{ rows: LogRow[]; events: string[] }>(path, shared);
   const log = useSort(data?.rows ?? noRows, { key: "at", dir: -1 }, logCell);
   function search(formEvent: FormEvent<HTMLFormElement>) { formEvent.preventDefault(); setApplied(q.trim()); }
@@ -506,6 +507,7 @@ function ActivityTab(shared: Shared) {
         <label>Search<input value={q} onChange={e => setQ(e.target.value)} placeholder="email, IP, route, detail" /></label>
         <label>Rows<select value={limit} onChange={e => setLimit(Number(e.target.value))}>{[100, 200, 500, 1000].map(n => <option key={n} value={n}>{n}</option>)}</select></label>
         <button className="btn">Apply</button>
+        <label className="check-inline"><input type="checkbox" checked={traffic} onChange={e => setTraffic(e.target.checked)} /> Include page loads and other traffic</label>
       </form>
       {error && <p className="error">{error}</p>}
       {!data ? <p className="muted">Loading...</p> : !data.rows.length ? <p className="check-empty">Nothing recorded for these filters.</p> : (

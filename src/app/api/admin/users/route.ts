@@ -1,8 +1,8 @@
 import { actOnUser, listUsers, requireOwner, userActions, type UserAction } from "@/lib/admin";
-import { withAudit } from "@/lib/audit";
+import { withAudit, withQuiet } from "@/lib/audit";
 import { errorResponse, fail, requireString } from "@/lib/validation";
 
-export const GET = withAudit("admin.users", async (_request, ctx) => {
+export const GET = withQuiet("admin.users", async (_request, ctx) => {
   try {
     ctx.user = await requireOwner();
     return Response.json({ users: await listUsers() });

@@ -1,6 +1,7 @@
 import { encryptText } from "./crypto";
 import { getSql } from "./db";
 import { mailConfigured, sendMail } from "./mail";
+import { pruneAuditLog } from "./admin";
 
 // Application health for the organizer. A check reads the last hour of the audit log and the database size,
 // stores a snapshot, compares against the thresholds below, and for each one crossed sends the owner an
@@ -86,6 +87,7 @@ export async function runHealthCheck(trigger: "cron" | "owner" | "manual", optio
     RETURNING checked_at, requests, avg_ms, p95_ms, failures, db_bytes, growth_bytes_24h
   `;
   await sql`DELETE FROM health_snapshots WHERE checked_at < now() - interval '90 days'`;
+  await pruneAuditLog().catch(() => {});
   const snapshot = toSnapshot(inserted[0]);
 
   // Outside production, ?demo=1 sets every threshold to zero so the alert path can be exercised.

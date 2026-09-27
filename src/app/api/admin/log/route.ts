@@ -1,8 +1,8 @@
 import { activity, requireOwner, windowFromParams } from "@/lib/admin";
-import { withAudit } from "@/lib/audit";
+import { withQuiet } from "@/lib/audit";
 import { asString, errorResponse } from "@/lib/validation";
 
-export const GET = withAudit("admin.log", async (request, ctx) => {
+export const GET = withQuiet("admin.log", async (request, ctx) => {
   try {
     ctx.user = await requireOwner();
     const url = new URL(request.url);
@@ -10,7 +10,8 @@ export const GET = withAudit("admin.log", async (request, ctx) => {
     return Response.json(await activity(windowFromParams(url), {
       event: asString(url.searchParams.get("event"), 80) || null,
       q: asString(url.searchParams.get("q"), 120) || null,
-      limit
+      limit,
+      traffic: url.searchParams.get("traffic") === "1"
     }));
   } catch (error) {
     return errorResponse(error, "Could not load the activity log");
