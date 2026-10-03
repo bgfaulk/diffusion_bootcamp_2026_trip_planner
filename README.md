@@ -4,7 +4,8 @@ A Vercel-hosted trip planner for the San Francisco training trip. Each attendee 
 account holding their bookings, checklists, itinerary, PDFs, and photo route. The trip organizer has an
 extra Organizer page with accounts, activity, health checks, and broadcast notices.
 
-Live at https://diffusion-bootcamp-2026-trip-planne.vercel.app. Next.js 16, React 19, Neon Postgres.
+Next.js 16, React 19, Neon Postgres. Deployed at https://diffusion-bootcamp-2026-trip-planne.vercel.app,
+which is **paused since 2026-10-03** after the trip; see [Bringing it back](#bringing-it-back).
 
 This repository intentionally contains no personal booking information, traveler names, PDFs, private
 trip data, or group links. Runtime data belongs in Neon and Vercel environment variables, not git.
@@ -153,6 +154,38 @@ work: sessions and data live in Neon, and open tabs keep running until they relo
 API responses with `X-App-Build`; an open tab from an older build shows a "Reload" toast the first time it
 notices, reloads itself when it comes back from the background with nothing typed, and if one of its requests
 fails against the newer build the error says to reload.
+
+## Bringing it back
+
+On 2026-10-03, after the trip, the site was shut down so it stops using Vercel resources. Nothing was
+deleted:
+
+- The Vercel project `diffusion-bootcamp-2026-trip-planner` (id `prj_mi2RE1NhZNPGhpdtulaNt0kee8iN`) is
+  **paused**. Visitors get an error page, no functions or crons run, and its deployments, domain, and
+  environment variables are kept.
+- The GitHub repository was **disconnected** from the project, so pushes to `main` no longer build.
+- The Neon database is untouched and holds all accounts and trip data. Its compute suspends when idle.
+
+To restore it, from a checkout linked to the project (`vercel link` if `.vercel/` is missing):
+
+```bash
+vercel api /v1/projects/prj_mi2RE1NhZNPGhpdtulaNt0kee8iN/unpause -X POST --input - <<<'{}'
+vercel git connect https://github.com/bgfaulk/diffusion_bootcamp_2026_trip_planner
+```
+
+Or use the dashboard: the project page offers Resume, and Settings > Git connects the repository. Then:
+
+1. Check the environment variables listed under [Setup](#setup) are still present for Production and
+   Preview (`vercel env ls`). Keep `SESSION_SECRET` unchanged: it derives the encryption key, and a new one
+   makes every stored record unreadable.
+2. If the Gmail app password or the Google Places key was revoked, create new ones and update
+   `GMAIL_APP_PASSWORD` / `GOOGLE_MAPS_API_KEY`.
+3. Redeploy (`vercel --prod`, or push to `main` once Git is connected) and open the site. The daily health
+   check in `vercel.json` resumes on its own.
+
+If the Vercel project was deleted instead, create a new one from the repository, reconnect Neon (Vercel
+Marketplace integration or `DIFFUSION_DATABASE_URL`), and set every variable from `.env.example` again using
+the original `SESSION_SECRET`.
 
 ## Layout
 

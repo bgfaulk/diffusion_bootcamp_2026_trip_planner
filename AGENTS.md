@@ -3,6 +3,9 @@
 Read `README.md` first for what the app does and how it is configured. This file is the short list of
 conventions that are easy to break.
 
+**The site is paused (since 2026-10-03).** The Vercel project is paused and the repository is disconnected
+from it, so pushing to `main` deploys nothing. Restore it with the steps in "Bringing it back" in the README.
+
 ## Ground rules
 
 - **No personal data in git.** No traveler names, bookings, PDFs, photos, group links, or credentials.
